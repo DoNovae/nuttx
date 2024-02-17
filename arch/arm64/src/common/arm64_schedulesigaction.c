@@ -46,17 +46,11 @@
  * Public Functions
  ****************************************************************************/
 
-void arm64_init_signal_process(struct tcb_s *tcb, struct regs_context *regs)
+void arm64_init_signal_process(struct tcb_s *tcb)
 {
-/****************************************************************************
- * if regs != NULL We are interrupting the context,
- * we should modify the regs
- ****************************************************************************/
-
-  struct regs_context  *pctx = (regs != NULL) ? regs :
-  (struct regs_context *)tcb->xcp.regs;
+  struct regs_context  *pctx = (struct regs_context *)tcb->xcp.regs;
   struct regs_context  *psigctx;
-  char *stack_ptr = (char *)pctx->sp_elx - sizeof(struct regs_context);
+  char   *stack_ptr = (char *)pctx->sp_elx;
 
 #ifdef CONFIG_ARCH_FPU
   struct fpu_reg      *pfpuctx;
@@ -75,7 +69,7 @@ void arm64_init_signal_process(struct tcb_s *tcb, struct regs_context *regs)
   /* Keep using SP_EL1 */
 
   psigctx->spsr      = SPSR_MODE_EL1H | DAIF_FIQ_BIT | DAIF_IRQ_BIT;
-  psigctx->sp_elx    = (uint64_t)stack_ptr;
+  psigctx->sp_elx    = (uint64_t)psigctx;
   psigctx->sp_el0    = (uint64_t)psigctx;
   psigctx->exe_depth = 1;
   psigctx->tpidr_el0 = (uint64_t)tcb;
@@ -126,8 +120,6 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
 
   if (!tcb->xcp.sigdeliver)
     {
-      tcb->xcp.sigdeliver = sigdeliver;
-
       /* First, handle some special cases when the signal is being delivered
        * to task that is currently executing on this CPU.
        */
@@ -145,7 +137,6 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                */
 
               sigdeliver(tcb);
-              tcb->xcp.sigdeliver = NULL;
             }
 
           /* CASE 2:  We are in an interrupt handler AND the interrupted
@@ -167,14 +158,15 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                * the signals have been delivered.
                */
 
+              tcb->xcp.sigdeliver     = sigdeliver;
+
               /* create signal process context */
 
-              tcb->xcp.saved_reg = (uint64_t *)CURRENT_REGS;
+              tcb->xcp.saved_reg = tcb->xcp.regs;
 #ifdef CONFIG_ARCH_FPU
               tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
-              arm64_init_signal_process(tcb,
-              (struct regs_context *)CURRENT_REGS);
+              arm64_init_signal_process(tcb);
 
               /* trigger switch to signal process */
 
@@ -194,13 +186,14 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
            * have been delivered.
            */
 
+          tcb->xcp.sigdeliver      = sigdeliver;
 #ifdef CONFIG_ARCH_FPU
           tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
           /* create signal process context */
 
           tcb->xcp.saved_reg = tcb->xcp.regs;
-          arm64_init_signal_process(tcb, NULL);
+          arm64_init_signal_process(tcb);
         }
     }
 }
@@ -218,8 +211,6 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
 
   if (!tcb->xcp.sigdeliver)
     {
-      tcb->xcp.sigdeliver = sigdeliver;
-
       /* First, handle some special cases when the signal is being delivered
        * to task that is currently executing on any CPU.
        */
@@ -242,7 +233,6 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                */
 
               sigdeliver(tcb);
-              tcb->xcp.sigdeliver = NULL;
             }
 
           /* CASE 2:  The task that needs to receive the signal is running.
@@ -278,13 +268,15 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                    * been delivered.
                    */
 
+                  tcb->xcp.sigdeliver      = sigdeliver;
+
 #ifdef CONFIG_ARCH_FPU
                   tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
                   /* create signal process context */
 
                   tcb->xcp.saved_reg = tcb->xcp.regs;
-                  arm64_init_signal_process(tcb, NULL);
+                  arm64_init_signal_process(tcb);
                 }
               else
                 {
@@ -296,19 +288,27 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                    * has been delivered.
                    */
 
+                  tcb->xcp.sigdeliver      = (void *)sigdeliver;
+
                   /* create signal process context */
 
-                  tcb->xcp.saved_reg = (uint64_t *)CURRENT_REGS;
+                  tcb->xcp.saved_reg = tcb->xcp.regs;
 #ifdef CONFIG_ARCH_FPU
-                  tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
+                  tcb->xcp.sig_save_fpu_regs = tcb->xcp.fpu_regs;
 #endif
-                  arm64_init_signal_process(tcb,
-                  (struct regs_context *)CURRENT_REGS);
+                  arm64_init_signal_process(tcb);
 
                   /* trigger switch to signal process */
 
                   CURRENT_REGS = tcb->xcp.regs;
                 }
+
+              /* Increment the IRQ lock count so that when the task is
+               * restarted, it will hold the IRQ spinlock.
+               */
+
+              DEBUGASSERT(tcb->irqcount < INT16_MAX);
+              tcb->irqcount++;
 
               /* NOTE: If the task runs on another CPU(cpu), adjusting
                * global IRQ controls will be done in the pause handler
@@ -338,14 +338,23 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
            * have been delivered.
            */
 
+          tcb->xcp.sigdeliver      = sigdeliver;
+
 #ifdef CONFIG_ARCH_FPU
-          tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
+          tcb->xcp.sig_save_fpu_regs = tcb->xcp.fpu_regs;
 #endif
           tcb->xcp.saved_reg = tcb->xcp.regs;
 
           /* create signal process context */
 
-          arm64_init_signal_process(tcb, NULL);
+          arm64_init_signal_process(tcb);
+
+          /* Increment the IRQ lock count so that when the task is restarted,
+           * it will hold the IRQ spinlock.
+           */
+
+          DEBUGASSERT(tcb->irqcount < INT16_MAX);
+          tcb->irqcount++;
         }
     }
 }

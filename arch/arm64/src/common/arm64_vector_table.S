@@ -65,7 +65,7 @@
     stp    x28, x29, [sp, #8 * REG_X28]
 
     /* Save the current task's SP_ELx and x30 */
-    add    \xreg0, sp, #8 * XCPTCONTEXT_GP_REGS
+    mov    \xreg0, sp
     stp    x30, \xreg0,  [sp, #8 * REG_X30]
 
     /* ELR and SPSR */
@@ -151,7 +151,7 @@ SECTION_SUBSEC_FUNC(exc_vector_table,_vector_table_section,_vector_table)
 
     .align 7
     arm64_enter_exception x0, x1
-    b     arm64_fiq_handler
+    b     arm64_irq_spurious
 
     /* Current EL with SP0 / SError */
 
@@ -175,7 +175,7 @@ SECTION_SUBSEC_FUNC(exc_vector_table,_vector_table_section,_vector_table)
 
     .align 7
     arm64_enter_exception x0, x1
-    b     arm64_fiq_handler
+    b     arm64_irq_spurious
 
     /* Current EL with SPx / SError */
 
@@ -199,7 +199,7 @@ SECTION_SUBSEC_FUNC(exc_vector_table,_vector_table_section,_vector_table)
 
     .align 7
     arm64_enter_exception x0, x1
-    b     arm64_fiq_handler
+    b     arm64_irq_spurious
 
     /* Lower EL using AArch64 / SError */
 
@@ -257,7 +257,6 @@ arm64_exit_exc_fpu_done:
     msr    tpidrro_el0, x0
 
     ldp    x30, x0,  [sp, #8 * REG_X30]
-    sub    x0,  x0, #8 * XCPTCONTEXT_GP_REGS
     ldp    x0,  x1,  [sp, #8 * REG_X0]
     ldp    x2,  x3,  [sp, #8 * REG_X2]
     ldp    x4,  x5,  [sp, #8 * REG_X4]

@@ -109,15 +109,15 @@ struct stm32_bbsram_s
 static int     stm32_bbsram_open(struct file *filep);
 static int     stm32_bbsram_close(struct file *filep);
 static off_t   stm32_bbsram_seek(struct file *filep, off_t offset,
-                                 int whence);
+                 int whence);
 static ssize_t stm32_bbsram_read(struct file *filep, char *buffer,
-                                 size_t len);
+                 size_t len);
 static ssize_t stm32_bbsram_write(struct file *filep,
-                                  const char *buffer, size_t len);
+                 const char *buffer, size_t len);
 static int stm32_bbsram_ioctl(struct file *filep, int cmd,
-                              unsigned long arg);
+                 unsigned long arg);
 static int     stm32_bbsram_poll(struct file *filep,
-                                 struct pollfd *fds, bool setup);
+                 struct pollfd *fds, bool setup);
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int     stm32_bbsram_unlink(struct inode *inode);
 #endif
@@ -130,7 +130,7 @@ static int     stm32_bbsram_unlink(struct inode *inode);
 static uint8_t debug[STM32F7_BBSRAM_SIZE];
 #endif
 
-static const struct file_operations g_stm32_bbsram_fops =
+static const struct file_operations stm32_bbsram_fops =
 {
   .open   = stm32_bbsram_open,
   .close  = stm32_bbsram_close,
@@ -254,8 +254,8 @@ static int stm32_bbsram_open(struct file *filep)
   struct stm32_bbsram_s *bbr;
   int ret;
 
-  DEBUGASSERT(inode->i_private);
-  bbr = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bbr = (struct stm32_bbsram_s *)inode->i_private;
 
   /* Increment the reference count */
 
@@ -309,8 +309,8 @@ static int stm32_bbsram_close(struct file *filep)
   struct stm32_bbsram_s *bbr;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  bbr = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bbr = (struct stm32_bbsram_s *)inode->i_private;
 
   ret = nxmutex_lock(&bbr->lock);
   if (ret < 0)
@@ -357,8 +357,8 @@ static off_t stm32_bbsram_seek(struct file *filep, off_t offset,
   off_t newpos;
   int ret;
 
-  DEBUGASSERT(inode->i_private);
-  bbr = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bbr = (struct stm32_bbsram_s *)inode->i_private;
 
   ret = nxmutex_lock(&bbr->lock);
   if (ret < 0)
@@ -427,8 +427,8 @@ static ssize_t stm32_bbsram_read(struct file *filep, char *buffer,
   struct stm32_bbsram_s *bbr;
   int ret;
 
-  DEBUGASSERT(inode->i_private);
-  bbr = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bbr = (struct stm32_bbsram_s *)inode->i_private;
 
   ret = nxmutex_lock(&bbr->lock);
   if (ret < 0)
@@ -473,8 +473,8 @@ static ssize_t stm32_bbsram_write(struct file *filep,
   struct stm32_bbsram_s *bbr;
   int ret = -EFBIG;
 
-  DEBUGASSERT(inode->i_private);
-  bbr = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bbr = (struct stm32_bbsram_s *)inode->i_private;
 
   /* Forbid writes past the end of the device */
 
@@ -537,8 +537,8 @@ static int stm32_bbsram_ioctl(struct file *filep, int cmd,
   struct stm32_bbsram_s *bbr;
   int ret = -ENOTTY;
 
-  DEBUGASSERT(inode->i_private);
-  bbr = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bbr = (struct stm32_bbsram_s *)inode->i_private;
 
   if (cmd == STM32F7_BBSRAM_GETDESC_IOCTL)
     {
@@ -590,8 +590,8 @@ static int stm32_bbsram_unlink(struct inode *inode)
   struct stm32_bbsram_s *bbr;
   int ret;
 
-  DEBUGASSERT(inode->i_private);
-  bbr = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bbr = (struct stm32_bbsram_s *)inode->i_private;
 
   ret = nxmutex_lock(&bbr->lock);
   if (ret < 0)
@@ -752,8 +752,7 @@ int stm32_bbsraminitialize(char *devpath, int *sizes)
   for (i = 0; i < fcnt && ret >= OK; i++)
     {
       snprintf(devname, sizeof(devname), "%s%d", devpath, i);
-      ret = register_driver(devname, &g_stm32_bbsram_fops,
-                            0666, &g_bbsram[i]);
+      ret = register_driver(devname, &stm32_bbsram_fops, 0666, &g_bbsram[i]);
     }
 
   /* Disallow Access */

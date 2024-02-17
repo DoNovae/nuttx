@@ -183,11 +183,11 @@
 /* Debug ********************************************************************/
 
 #ifdef CONFIG_SST26_DEBUG
-#  define ssterr(format, ...)    _err(format, ##__VA_ARGS__)
-#  define sstinfo(format, ...)   _info(format, ##__VA_ARGS__)
+# define ssterr(format, ...)    _err(format, ##__VA_ARGS__)
+# define sstinfo(format, ...)   _info(format, ##__VA_ARGS__)
 #else
-#  define ssterr(x...)
-#  define sstinfo(x...)
+# define ssterr(x...)
+# define sstinfo(x...)
 #endif
 
 /****************************************************************************
@@ -965,7 +965,7 @@ FAR struct mtd_dev_s *sst26_initialize_spi(FAR struct spi_dev_s *dev,
    * have to be extended to handle multiple FLASH parts on the same SPI bus.
    */
 
-  priv = kmm_zalloc(sizeof(struct sst26_dev_s));
+  priv = (FAR struct sst26_dev_s *)kmm_zalloc(sizeof(struct sst26_dev_s));
   if (priv)
     {
       /* Initialize the allocated structure. (unsupported methods were

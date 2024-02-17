@@ -34,7 +34,7 @@
  ****************************************************************************/
 
 /* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  It is non-NULL only during interrupt
+ * register storage structure.  If is non-NULL only during interrupt
  * processing.  Access to g_current_regs[] must be through the macro
  * CURRENT_REGS for portability.
  */
@@ -78,13 +78,6 @@ uint32_t *ceva_doirq(int irq, uint32_t *regs)
 
       if (regs != CURRENT_REGS)
         {
-          /* Record the new "running" task when context switch occurred.
-           * g_running_tasks[] is only used by assertion logic for reporting
-           * crashes.
-           */
-
-          g_running_tasks[this_cpu()] = this_task();
-
           restore_critical_section();
           regs = CURRENT_REGS;
         }

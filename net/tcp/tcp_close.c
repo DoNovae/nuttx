@@ -53,8 +53,7 @@ static void tcp_close_work(FAR void *param)
 
   net_lock();
 
-  conn->flags &= ~TCP_CLOSE_ARRANGED;
-  if (conn->crefs == 0)
+  if (conn && conn->crefs == 0)
     {
       /* Stop the network monitor for all sockets */
 
@@ -187,7 +186,6 @@ end_wait:
 
   /* Free network resources */
 
-  conn->flags |= TCP_CLOSE_ARRANGED;
   work_queue(LPWORK, &conn->clswork, tcp_close_work, conn, 0);
 
   return flags;
@@ -219,7 +217,8 @@ static inline int tcp_close_disconnect(FAR struct socket *psock)
 
   net_lock();
 
-  conn = psock->s_conn;
+  conn = (FAR struct tcp_conn_s *)psock->s_conn;
+  DEBUGASSERT(conn != NULL);
 
   /* Discard our reference to the connection */
 

@@ -39,6 +39,8 @@
 #include <nuttx/config.h>
 #include <nuttx/mtd/nand_config.h>
 
+#include <sys/types.h>
+#include <stdint.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
@@ -88,8 +90,11 @@ int nandecc_readpage(FAR struct nand_dev_s *nand, off_t block,
   unsigned int sparesize;
   int ret;
 
-  finfo("block=%" PRIdOFF " page=%d data=%p spare=%p\n",
-        block, page, data, spare);
+  finfo("block=%d page=%d data=%p spare=%d\n",
+        (int)block,
+         page,
+         data,
+         spare);
 
   /* Get convenience pointers */
 
@@ -117,7 +122,7 @@ int nandecc_readpage(FAR struct nand_dev_s *nand, off_t block,
   ret = NAND_RAWREAD(raw, block, page, 0, spare);
   if (ret < 0)
     {
-      ferr("ERROR: Failed to read page:%d\n", ret);
+      ferr("ERROR: Failed to read page:d\n", ret);
       return ret;
     }
 
@@ -126,7 +131,7 @@ int nandecc_readpage(FAR struct nand_dev_s *nand, off_t block,
   ret = NAND_RAWREAD(nand->raw, block, page, data, 0);
   if (ret < 0)
     {
-      ferr("ERROR: Failed to read page:%d\n", ret);
+      ferr("ERROR: Failed to read page:d\n", ret);
       return ret;
     }
 
@@ -138,19 +143,14 @@ int nandecc_readpage(FAR struct nand_dev_s *nand, off_t block,
   /* Use the ECC data to verify the page */
 
   ret = hamming_verify256x(data, pagesize, raw->ecc);
-  switch (ret)
+  if (ret && (ret != HAMMING_ERROR_SINGLEBIT))
     {
-      case HAMMING_SUCCESS:
-        return OK;
-
-      case HAMMING_ERROR_SINGLEBIT:
-        return -EUCLEAN;
-
-      default:
-      ferr("ERROR: Block=%" PRIdOFF " page=%d Unrecoverable error: %d\n",
+      ferr("ERROR: Block=%d page=%d Unrecoverable error: %d\n",
            block, page, ret);
-      return -EBADMSG;
+      return -EIO;
     }
+
+  return OK;
 }
 
 /****************************************************************************
@@ -186,8 +186,11 @@ int nandecc_writepage(FAR struct nand_dev_s *nand, off_t block,
   unsigned int sparesize;
   int ret;
 
-  finfo("block=%" PRIdOFF " page=%d data=%p spare=%p\n",
-        block, page, data, spare);
+  finfo("block=%d page=%d data=%p spare=%d\n",
+        (int)block,
+         page,
+         data,
+         spare);
 
   /* Get convenience pointers */
 
@@ -233,7 +236,7 @@ int nandecc_writepage(FAR struct nand_dev_s *nand, off_t block,
   ret = NAND_RAWWRITE(nand->raw, block, page, data, spare);
   if (ret < 0)
     {
-      ferr("ERROR: Failed to write page:%d\n", ret);
+      ferr("ERROR: Failed to write page:d\n", ret);
     }
 
   return ret;

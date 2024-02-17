@@ -550,8 +550,8 @@ struct stm32l4_usbdev_s
 static uint32_t    stm32l4_getreg(uint32_t addr);
 static void        stm32l4_putreg(uint32_t val, uint32_t addr);
 #else
-#  define stm32l4_getreg(addr)     getreg32(addr)
-#  define stm32l4_putreg(val,addr) putreg32(val,addr)
+# define stm32l4_getreg(addr)     getreg32(addr)
+# define stm32l4_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Request queue operations *************************************************/
@@ -1437,19 +1437,6 @@ static void stm32l4_epin_request(struct stm32l4_usbdev_s *priv,
           uint32_t empmsk = stm32l4_getreg(STM32L4_OTGFS_DIEPEMPMSK);
           empmsk |= OTGFS_DIEPEMPMSK(privep->epphy);
           stm32l4_putreg(empmsk, STM32L4_OTGFS_DIEPEMPMSK);
-
-#ifdef CONFIG_DEBUG_FEATURES
-          /* Check if the configured TXFIFO size is sufficient for a given
-           * request. If not, raise an assertion here.
-           */
-
-          regval = stm32l4_getreg(STM32L4_OTG_DIEPTXF(privep->epphy));
-          regval &= OTGFS_DIEPTXF_INEPTXFD_MASK;
-          regval >>= OTGFS_DIEPTXF_INEPTXFD_SHIFT;
-          uerr("EP%" PRId8 " TXLEN=%" PRId32 " nwords=%d\n",
-               privep->epphy, regval, nwords);
-          DEBUGASSERT(regval >= nwords);
-#endif
 
           /* Terminate the transfer.  We will try again when the TxFIFO empty
            * interrupt is received.
@@ -3811,7 +3798,6 @@ static int stm32l4_usbinterrupt(int irq, void *context, void *arg)
         {
           usbtrace(TRACE_INTDECODE(STM32L4_TRACEINTID_SOF),
                   (uint16_t)regval);
-          usbdev_sof_irq(&priv->usbdev, stm32l4_getframe(&priv->usbdev));
         }
 #endif
 
@@ -5418,22 +5404,22 @@ static void stm32l4_hwinitialize(struct stm32l4_usbdev_s *priv)
 
   regval  = OTGFS_GCCFG_PWRDWN;
 
-#ifdef CONFIG_USBDEV_VBUSSENSING
+# ifdef CONFIG_USBDEV_VBUSSENSING
   /* Enable Vbus sensing */
 
   regval |= OTGFS_GCCFG_VBDEN;
-#endif
+# endif
 
   stm32l4_putreg(regval, STM32L4_OTGFS_GCCFG);
   up_mdelay(20);
 
   /* When VBUS sensing is not used we need to force the B session valid */
 
-#ifndef CONFIG_USBDEV_VBUSSENSING
+# ifndef CONFIG_USBDEV_VBUSSENSING
   regval  =  stm32l4_getreg(STM32L4_OTGFS_GOTGCTL);
   regval |= (OTGFS_GOTGCTL_BVALOEN | OTGFS_GOTGCTL_BVALOVAL);
   stm32l4_putreg(regval, STM32L4_OTGFS_GOTGCTL);
-#endif
+# endif
 
   /* Force Device Mode */
 

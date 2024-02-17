@@ -24,29 +24,15 @@
 
 #include <nuttx/config.h>
 
-#include <errno.h>
 #include <sys/types.h>
 #include <syslog.h>
-
-#include <nuttx/fs/fs.h>
 
 #ifdef CONFIG_USERLED
 #  include <nuttx/leds/userled.h>
 #endif
-#ifdef CONFIG_RPMSG_UART
-#  include <nuttx/serial/uart_rpmsg.h>
-#endif
 
 #ifdef CONFIG_INPUT_BUTTONS
 #  include <nuttx/input/buttons.h>
-#endif
-
-#ifdef CONFIG_USBMONITOR
-#  include <nuttx/usb/usbmonitor.h>
-#endif
-
-#ifdef CONFIG_RNDIS
-#  include <nuttx/usb/rndis.h>
 #endif
 
 #ifdef CONFIG_NRF53_SOFTDEVICE_CONTROLLER
@@ -54,22 +40,7 @@
 #endif
 
 #ifdef CONFIG_RPTUN
-#  include <nuttx/wireless/bluetooth/bt_rpmsghci.h>
-#  ifdef CONFIG_UART_BTH4
-#    include <nuttx/serial/uart_bth4.h>
-#  endif
-#  ifdef CONFIG_NET_BLUETOOTH
-#    include <nuttx/wireless/bluetooth/bt_driver.h>
-#  endif
 #  include "nrf53_rptun.h"
-#endif
-
-#ifdef CONFIG_NRF53_PROGMEM
-#  include "nrf53_progmem.h"
-#endif
-
-#ifdef CONFIG_TIMER
-#  include "nrf53_timer.h"
 #endif
 
 #include "nrf5340-dk.h"
@@ -81,99 +52,8 @@
 #define NRF53_TIMER (0)
 
 /****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-#ifdef CONFIG_NRF53_APPCORE
-
-/****************************************************************************
- * Name: nrf53_appcore_bleinit
- ****************************************************************************/
-
-static int nrf53_appcore_bleinit(void)
-{
-  int ret = OK;
-
-#ifdef CONFIG_BLUETOOTH_RPMSG
-  struct bt_driver_s *bt_dev = NULL;
-
-  bt_dev = rpmsghci_register("appcore", "bthci");
-  if (bt_dev == NULL)
-    {
-      syslog(LOG_ERR, "ERROR: rpmsghci_register() failed: %d\n", -errno);
-      return -ENOMEM;
-    }
-
-#  ifdef CONFIG_UART_BTH4
-  /* Register UART BT H4 device */
-
-  ret = uart_bth4_register("/dev/ttyHCI", bt_dev);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "bt_bth4_register error: %d\n", ret);
-    }
-#  elif defined(CONFIG_NET_BLUETOOTH)
-  /* Register network device */
-
-  ret = bt_netdev_register(bt_dev);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "bt_netdev_register error: %d\n", ret);
-    }
-#  else
-#    error
-#  endif
-#endif
-
-  return ret;
-}
-
-#else
-
-/****************************************************************************
- * Name: nrf53_netcore_bleinit
- ****************************************************************************/
-
-static int nrf53_netcore_bleinit(void)
-{
-  int ret = OK;
-
-#ifdef CONFIG_NRF53_SOFTDEVICE_CONTROLLER
-#  ifdef CONFIG_BLUETOOTH_RPMSG_SERVER
-  ret = nrf53_rpmsghci_server_initialize("bthci");
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: nrf53_rpmsghci_server_initialize() failed: %d\n",
-             ret);
-    }
-#  else
-  ret = nrf53_sdc_initialize();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: nrf53_sdc_initialize() failed: %d\n", ret);
-    }
-#  endif
-#endif
-
-  return ret;
-}
-#endif
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void)
-{
-#ifdef CONFIG_NRF53_APPCORE
-  uart_rpmsg_init("appcore", "proxy", 4096, false);
-#else
-  uart_rpmsg_init("netcore", "proxy", 4096, true);
-#endif
-}
-#endif
 
 /****************************************************************************
  * Name: nrf53_bringup
@@ -192,17 +72,6 @@ void rpmsg_serialinit(void)
 int nrf53_bringup(void)
 {
   int ret;
-
-#ifdef CONFIG_FS_PROCFS
-  /* Mount the procfs file system */
-
-  ret = nx_mount(NULL, NRF53_PROCFS_MOUNTPOINT, "procfs", 0, NULL);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to mount the PROC filesystem: %d\n",  ret);
-    }
-#endif /* CONFIG_FS_PROCFS */
 
 #ifdef CONFIG_USERLED
   /* Register the LED driver */
@@ -226,9 +95,9 @@ int nrf53_bringup(void)
 
 #ifdef CONFIG_RPTUN
 #ifdef CONFIG_NRF53_APPCORE
-  nrf53_rptun_init("appcore");
+  nrf53_rptun_init("nrf53-shmem", "appcore");
 #else
-  nrf53_rptun_init("netcore");
+  nrf53_rptun_init("nrf53-shmem", "netcore");
 #endif
 #endif
 
@@ -268,60 +137,14 @@ int nrf53_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_USBMONITOR
-  /* Start the USB Monitor */
+#ifdef CONFIG_NRF53_SOFTDEVICE_CONTROLLER
+  ret = nrf53_sdc_initialize();
 
-  ret = usbmonitor_start();
-  if (ret != OK)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to start USB monitor: %d\n", ret);
-    }
-#endif
-
-#if defined(CONFIG_RNDIS) && !defined(CONFIG_RNDIS_COMPOSITE)
-  uint8_t mac[6];
-  mac[0] = 0xa0; /* TODO */
-  mac[1] = (CONFIG_NETINIT_MACADDR_2 >> (8 * 0)) & 0xff;
-  mac[2] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 3)) & 0xff;
-  mac[3] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 2)) & 0xff;
-  mac[4] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 1)) & 0xff;
-  mac[5] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 0)) & 0xff;
-  usbdev_rndis_initialize(mac);
-#endif
-
-#ifdef CONFIG_NRF53_QSPI
-  /* Initialize the MX25 QSPU memory */
-
-  ret = nrf53_mx25_initialize();
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: nrf53_mx25_initialize() failed: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: nrf53_sdc_initialize() failed: %d\n", ret);
     }
 #endif
-
-  /* Initialize BLE */
-
-#ifdef CONFIG_NRF53_APPCORE
-  ret = nrf53_appcore_bleinit();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: nrf53_appcore_bleinit failed: %d\n", ret);
-    }
-#else
-  ret = nrf53_netcore_bleinit();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: nrf53_netcore_bleinit failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_NRF53_PROGMEM
-  ret = nrf53_progmem_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize MTD progmem: %d\n", ret);
-    }
-#endif /* CONFIG_MTD */
 
   UNUSED(ret);
   return OK;

@@ -27,7 +27,7 @@
 
 #include <nuttx/config.h>
 #ifndef __ASSEMBLY__
-#  include <stdint.h>
+# include <stdint.h>
 #endif
 
 /* Clocking *****************************************************************/
@@ -90,9 +90,13 @@
 #  define GPIO_USART1_TX GPIO_USART1_TX_2    /* PB6  */
 #endif
 
-/* USART2: Connected to STLInk Debug via PA2(TX), PA3(RX) */
+/* USART2: Connected to STLInk Debug via PA2(TX), PA15(RX) */
 
-#define GPIO_USART2_RX   GPIO_USART2_RX_1    /* PA3 */
+#if defined(CONFIG_ARCH_BOARD_USART2_RX_PA3)
+#  define GPIO_USART2_RX   GPIO_USART2_RX_1  /* PA3 */
+#elif defined(CONFIG_ARCH_BOARD_USART2_RX_PA15)
+#  define GPIO_USART2_RX   GPIO_USART2_RX_2  /* PA15 */
+#endif
 #define GPIO_USART2_TX   GPIO_USART2_TX_1    /* PA2 */
 #define GPIO_USART2_RTS  GPIO_USART2_RTS_2
 #define GPIO_USART2_CTS  GPIO_USART2_CTS_2
@@ -122,10 +126,10 @@
  * but are normally-high GPIOs.
  */
 
-#define GPIO_I2C1_A4 \
-   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTA | GPIO_PIN5)
-#define GPIO_I2C1_A5 \
-   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTA | GPIO_PIN6)
+#define GPIO_I2C1_D4 \
+   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTB | GPIO_PIN7)
+#define GPIO_I2C1_D5 \
+   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTB | GPIO_PIN6)
 #define GPIO_I2C1_SCL \
    (GPIO_I2C1_SCL_1 | GPIO_OPENDRAIN | GPIO_SPEED_50MHz | GPIO_OUTPUT_SET)
 #define GPIO_I2C1_SDA \

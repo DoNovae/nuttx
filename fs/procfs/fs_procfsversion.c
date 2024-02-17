@@ -95,13 +95,12 @@ static int     version_stat(FAR const char *relpath, FAR struct stat *buf);
  * with any compiler.
  */
 
-const struct procfs_operations g_version_operations =
+const struct procfs_operations version_operations =
 {
   version_open,       /* open */
   version_close,      /* close */
   version_read,       /* read */
   NULL,               /* write */
-  NULL,               /* poll */
 
   version_dup,        /* dup */
 

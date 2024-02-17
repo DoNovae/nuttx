@@ -109,7 +109,7 @@ FAR struct local_conn_s *local_peerconn(FAR struct local_conn_s *conn)
 FAR struct local_conn_s *local_alloc(void)
 {
   FAR struct local_conn_s *conn =
-    kmm_zalloc(sizeof(struct local_conn_s));
+    (FAR struct local_conn_s *)kmm_zalloc(sizeof(struct local_conn_s));
 
   if (conn != NULL)
     {
@@ -120,6 +120,7 @@ FAR struct local_conn_s *local_alloc(void)
 
 #ifdef CONFIG_NET_LOCAL_STREAM
       nxsem_init(&conn->lc_waitsem, 0, 0);
+      nxsem_init(&conn->lc_donesem, 0, 0);
 
 #endif
 
@@ -128,7 +129,6 @@ FAR struct local_conn_s *local_alloc(void)
        */
 
       nxmutex_init(&conn->lc_sendlock);
-      nxmutex_init(&conn->lc_polllock);
 
 #ifdef CONFIG_NET_LOCAL_SCM
       conn->lc_cred.pid = nxsched_getpid();
@@ -144,87 +144,6 @@ FAR struct local_conn_s *local_alloc(void)
     }
 
   return conn;
-}
-
-/****************************************************************************
- * Name: local_alloc_accept
- *
- * Description:
- *    Called when a client calls connect and can find the appropriate
- *    connection in LISTEN. In that case, this function will create
- *    a new connection and initialize it.
- *
- ****************************************************************************/
-
-int local_alloc_accept(FAR struct local_conn_s *server,
-                       FAR struct local_conn_s *client,
-                       FAR struct local_conn_s **accept)
-{
-  FAR struct local_conn_s *conn;
-  int ret;
-
-  /* Create a new connection structure for the server side of the
-   * connection.
-   */
-
-  conn = local_alloc();
-  if (conn == NULL)
-    {
-      nerr("ERROR:  Failed to allocate new connection structure\n");
-      return -ENOMEM;
-    }
-
-  /* Initialize the new connection structure */
-
-  local_addref(conn);
-
-  conn->lc_proto  = SOCK_STREAM;
-  conn->lc_type   = LOCAL_TYPE_PATHNAME;
-  conn->lc_state  = LOCAL_STATE_CONNECTED;
-  conn->lc_peer   = client;
-  client->lc_peer = conn;
-
-  strlcpy(conn->lc_path, client->lc_path, sizeof(conn->lc_path));
-  conn->lc_instance_id = client->lc_instance_id;
-
-  /* Open the server-side write-only FIFO.  This should not
-   * block.
-   */
-
-  ret = local_open_server_tx(conn, false);
-  if (ret < 0)
-    {
-      nerr("ERROR: Failed to open write-only FIFOs for %s: %d\n",
-           conn->lc_path, ret);
-      goto err;
-    }
-
-  /* Do we have a connection?  Is the write-side FIFO opened? */
-
-  DEBUGASSERT(conn->lc_outfile.f_inode != NULL);
-
-  /* Open the server-side read-only FIFO.  This should not
-   * block because the client side has already opening it
-   * for writing.
-   */
-
-  ret = local_open_server_rx(conn, false);
-  if (ret < 0)
-    {
-      nerr("ERROR: Failed to open read-only FIFOs for %s: %d\n",
-           conn->lc_path, ret);
-      goto err;
-    }
-
-  /* Do we have a connection?  Are the FIFOs opened? */
-
-  DEBUGASSERT(conn->lc_infile.f_inode != NULL);
-  *accept = conn;
-  return OK;
-
-err:
-  local_free(conn);
-  return ret;
 }
 
 /****************************************************************************
@@ -249,11 +168,13 @@ void local_free(FAR struct local_conn_s *conn)
   net_lock();
   dq_rem(&conn->lc_conn.node, &g_local_connections);
 
+#ifdef CONFIG_NET_LOCAL_SCM
   if (local_peerconn(conn) && conn->lc_peer)
     {
       conn->lc_peer->lc_peer = NULL;
       conn->lc_peer = NULL;
     }
+#endif /* CONFIG_NET_LOCAL_SCM */
 
   net_unlock();
 
@@ -287,68 +208,21 @@ void local_free(FAR struct local_conn_s *conn)
     }
 #endif /* CONFIG_NET_LOCAL_SCM */
 
+#ifdef CONFIG_NET_LOCAL_STREAM
   /* Destroy all FIFOs associted with the connection */
 
   local_release_fifos(conn);
-#ifdef CONFIG_NET_LOCAL_STREAM
   nxsem_destroy(&conn->lc_waitsem);
+  nxsem_destroy(&conn->lc_donesem);
 #endif
 
   /* Destory sem associated with the connection */
 
   nxmutex_destroy(&conn->lc_sendlock);
-  nxmutex_destroy(&conn->lc_polllock);
 
   /* And free the connection structure */
 
   kmm_free(conn);
-}
-
-/****************************************************************************
- * Name: local_addref
- *
- * Description:
- *   Increment the reference count on the underlying connection structure.
- *
- * Input Parameters:
- *   psock - Socket structure of the socket whose reference count will be
- *           incremented.
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void local_addref(FAR struct local_conn_s *conn)
-{
-  DEBUGASSERT(conn->lc_crefs >= 0 && conn->lc_crefs < 255);
-  conn->lc_crefs++;
-}
-
-/****************************************************************************
- * Name: local_subref
- *
- * Description:
- *   Subtract the reference count on the underlying connection structure.
- *
- * Input Parameters:
- *   psock - Socket structure of the socket whose reference count will be
- *           incremented.
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void local_subref(FAR struct local_conn_s *conn)
-{
-  DEBUGASSERT(conn->lc_crefs > 0 && conn->lc_crefs < 255);
-
-  conn->lc_crefs--;
-  if (conn->lc_crefs == 0)
-    {
-      local_release(conn);
-    }
 }
 
 #endif /* CONFIG_NET && CONFIG_NET_LOCAL */

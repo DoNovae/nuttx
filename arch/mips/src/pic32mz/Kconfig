@@ -1128,7 +1128,7 @@ config PIC32MZ_ETH_PRIORITY
 
 config PIC32MZ_MULTICAST
 	bool "Multicast"
-	default NET_MCASTGROUP
+	default y if NET_MCASTGROUP
 	depends on PIC32MZ_ETHERNET
 	---help---
 		Enable receipt of multicast (and unicast) frames. Automatically set if
@@ -1147,7 +1147,8 @@ menu "Device Configuration 0 (DEVCFG0)"
 
 config PIC32MZ_DEBUGGER_ENABLE
 	bool "Background debugger enable"
-	default DEBUG_FEATURES
+	default y if DEBUG_FEATURES
+	default n if !DEBUG_FEATURES
 	---help---
 		Background Debugger Enable
 
@@ -1165,7 +1166,8 @@ config PIC32MZ_ICESEL_CH2
 
 config PIC32MZ_TRACE_ENABLE
 	bool "Trace enable"
-	default DEBUG_FEATURES
+	default y if DEBUG_FEATURES
+	default n if !DEBUG_FEATURES
 	---help---
 		Trace Enable
 

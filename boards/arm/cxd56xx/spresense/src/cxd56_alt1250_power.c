@@ -39,6 +39,19 @@
 #include "cxd56_pinconfig.h"
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#define RESET_INTERVAL_TIMEOUT MSEC2TICK(1)
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+static struct wdog_s g_reset_wd;
+static sem_t g_wd_wait;
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -52,6 +65,14 @@
 
 void board_alt1250_poweron(void)
 {
+  /* Power on altair modem device */
+
+  cxd56_gpio_config(ALT1250_LTE_POWER_BUTTON, false);
+  cxd56_gpio_write(ALT1250_LTE_POWER_BUTTON, false);
+
+  cxd56_gpio_config(ALT1250_SHUTDOWN, false);
+  cxd56_gpio_write(ALT1250_SHUTDOWN, true);
+
   board_power_control(POWER_LTE, true);
 }
 
@@ -65,40 +86,59 @@ void board_alt1250_poweron(void)
 
 void board_alt1250_poweroff(void)
 {
+  /* Power off Altair modem device */
+
   board_power_control(POWER_LTE, false);
+
+  cxd56_gpio_write(ALT1250_SHUTDOWN, false);
+  cxd56_gpio_write(ALT1250_LTE_POWER_BUTTON, false);
 }
 
 /****************************************************************************
- * Name: board_alt1250_powerstatus
+ * Name: board_alt1250_timeout
  *
  * Description:
- *   Get the power status for the Altair modem device on the board.
+ *   Watchdog timer for timeout of reset interval.
  *
  ****************************************************************************/
 
-bool board_alt1250_powerstatus(void)
+static void board_alt1250_timeout(wdparm_t arg)
 {
-  return board_power_monitor(POWER_LTE);
+  sem_t *wd_wait = (sem_t *)arg;
+
+  nxsem_post(wd_wait);
 }
 
 /****************************************************************************
- * Name: board_alt1250_powerkeep
+ * Name: board_alt1250_reset
  *
  * Description:
- *   Set Modem power keep mode when turning off the board.
+ *   Reset the Altair modem device on the board.
  *
  ****************************************************************************/
 
-int board_alt1250_powerkeep(bool enable)
+void board_alt1250_reset(void)
 {
-  if (enable)
-    {
-      return board_unset_reset_gpo(POWER_LTE);
-    }
-  else
-    {
-      return board_set_reset_gpo(POWER_LTE);
-    }
+  memset(&g_reset_wd, 0, sizeof(struct wdog_s));
+  nxsem_init(&g_wd_wait, 0, 0);
+
+  /* Reset Altair modem device */
+
+  cxd56_gpio_write(ALT1250_SHUTDOWN, false);
+
+  /* ALT1250_SHUTDOWN should be low in the range 101usec to 100msec */
+
+  wd_start(&g_reset_wd, RESET_INTERVAL_TIMEOUT,
+           board_alt1250_timeout, (wdparm_t)&g_wd_wait);
+
+  /* Wait for the watchdog timer to expire */
+
+  nxsem_wait_uninterruptible(&g_wd_wait);
+
+  cxd56_gpio_write(ALT1250_SHUTDOWN, true);
+
+  nxsem_destroy(&g_wd_wait);
 }
+
 #endif
 

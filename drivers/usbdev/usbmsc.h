@@ -173,7 +173,7 @@
 #  ifndef CONFIG_USBMSC_VENDORSTR
 #    warning "No Vendor string specified"
 #    define CONFIG_USBMSC_VENDORSTR  "NuttX"
-#  endif
+# endif
 
 #  ifndef CONFIG_USBMSC_PRODUCTSTR
 #    warning "No Product string specified"
@@ -458,7 +458,7 @@ extern "C"
 #ifndef CONFIG_USBMSC_COMPOSITE
 EXTERN const char g_mscvendorstr[];
 EXTERN const char g_mscproductstr[];
-#ifndef CONFIG_BOARD_USBDEV_SERIALSTR
+#ifndef CONFIG_USBMSC_BOARD_SERIALSTR
 EXTERN const char g_mscserialstr[];
 #endif
 
@@ -469,13 +469,13 @@ EXTERN const char g_mscserialstr[];
 #else
 EXTERN const char g_compvendorstr[];
 EXTERN const char g_compproductstr[];
-#ifndef CONFIG_BOARD_USBDEV_SERIALSTR
+#ifndef CONFIG_COMPOSITE_BOARD_SERIALSTR
 EXTERN const char g_compserialstr[];
 #endif
 
 #define g_mscvendorstr  g_compvendorstr
 #define g_mscproductstr g_compproductstr
-#ifndef CONFIG_BOARD_USBDEV_SERIALSTR
+#ifndef CONFIG_USBMSC_BOARD_SERIALSTR
 #define g_mscserialstr  g_compserialstr
 #endif
 #endif

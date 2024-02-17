@@ -204,7 +204,7 @@ static inline int bt_addr_le_to_str(FAR const bt_addr_le_t *addr, char *str,
       break;
 
     default:
-      snprintf(type, sizeof(type), "0x%02x", addr->type);
+      sprintf(type, "0x%02x", addr->type);
       break;
   }
 
@@ -216,21 +216,5 @@ static inline int bt_addr_le_to_str(FAR const bt_addr_le_t *addr, char *str,
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
-
-/****************************************************************************
- * Name: bt_add_services
- *
- * Description:
- *   Register services and start advertising.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   Zero in case of success or negative value in case of error.
- *
- ****************************************************************************/
-
-int bt_add_services(void);
 
 #endif /* __INCLUDE_NUTTX_WIRELESS_BLUETOOTH_BT_CORE_H */

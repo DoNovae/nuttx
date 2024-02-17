@@ -26,7 +26,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
-#include <errno.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <sys/ipc.h>
@@ -38,29 +37,6 @@
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-typedef union
-{
-  struct
-    {
-      uint16_t blue : 5;
-      uint16_t green : 6;
-      uint16_t red : 5;
-    };
-  uint16_t full;
-} x11_color16_t;
-
-typedef union
-{
-  struct
-    {
-      uint8_t blue;
-      uint8_t green;
-      uint8_t red;
-      uint8_t alpha;
-    };
-  uint32_t full;
-} x11_color32_t;
 
 /* Also used in sim_x11eventloop */
 
@@ -78,16 +54,11 @@ static XShmSegmentInfo g_xshminfo;
 static int g_xerror;
 #endif
 static XImage *g_image;
-static char *g_framebuffer;
+static unsigned char *g_framebuffer;
 static unsigned short g_fbpixelwidth;
 static unsigned short g_fbpixelheight;
-static int g_fbbpp;
-static int g_fblen;
-static int g_fbcount;
 static int g_shmcheckpoint = 0;
 static int b_useshm;
-
-static unsigned char *g_trans_framebuffer;
 
 /****************************************************************************
  * Private Functions
@@ -134,8 +105,8 @@ static inline Display *sim_x11createframe(void)
 
   XSetWMProperties(display, g_window, &winprop, &iconprop, argv, 1,
                    &hints, NULL, NULL);
-  XFree(winprop.value);
-  XFree(iconprop.value);
+
+  XMapWindow(display, g_window);
 
   /* Select window input events */
 
@@ -234,9 +205,6 @@ static void sim_x11uninit(void)
 
   if (g_shmcheckpoint > 1)
     {
-#ifdef CONFIG_SIM_X11NOSHM
-      g_image->data = g_framebuffer;
-#endif
       XDestroyImage(g_image);
     }
 
@@ -278,8 +246,7 @@ static void sim_x11uninitialize(void)
  ****************************************************************************/
 
 static inline int sim_x11mapsharedmem(Display *display,
-                                      int depth, unsigned int fblen,
-                                      int fbcount)
+                                      int depth, unsigned int fblen)
 {
 #ifndef CONFIG_SIM_X11NOSHM
   Status result;
@@ -314,9 +281,8 @@ static inline int sim_x11mapsharedmem(Display *display,
       g_shmcheckpoint++;
 
       g_xshminfo.shmid = shmget(IPC_PRIVATE,
-                                g_image->bytes_per_line *
-                                g_image->height * fbcount,
-                                IPC_CREAT | 0777);
+                              g_image->bytes_per_line * g_image->height,
+                              IPC_CREAT | 0777);
       if (g_xshminfo.shmid < 0)
         {
           sim_x11uninitialize();
@@ -345,7 +311,7 @@ static inline int sim_x11mapsharedmem(Display *display,
           goto shmerror;
         }
 
-      g_framebuffer = g_image->data;
+      g_framebuffer = (unsigned char *)g_image->data;
       g_shmcheckpoint++;
     }
   else
@@ -357,10 +323,10 @@ shmerror:
 #endif
       b_useshm = 0;
 
-      g_framebuffer = malloc(fblen * fbcount);
+      g_framebuffer = (unsigned char *)malloc(fblen);
 
       g_image = XCreateImage(display, DefaultVisual(display, g_screen),
-                             depth, ZPixmap, 0, g_framebuffer,
+                             depth, ZPixmap, 0, (char *)g_framebuffer,
                              g_fbpixelwidth, g_fbpixelheight,
                              8, 0);
 
@@ -377,27 +343,6 @@ shmerror:
 }
 
 /****************************************************************************
- * Name: sim_x11depth16to32
- ****************************************************************************/
-
-static inline void sim_x11depth16to32(void *d_mem, size_t size,
-                                      const void *s_mem)
-{
-  x11_color32_t *dst = d_mem;
-  const x11_color16_t *src = s_mem;
-
-  for (size /= 4; size; size--)
-    {
-      dst->red = (src->red * 263 + 7) >> 5;
-      dst->green = (src->green * 259 + 3) >> 6;
-      dst->blue = (src->blue * 263 + 7) >> 5;
-      dst->alpha = 0xff;
-      dst++;
-      src++;
-    }
-}
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -411,7 +356,7 @@ static inline void sim_x11depth16to32(void *d_mem, size_t size,
 
 int sim_x11initialize(unsigned short width, unsigned short height,
                      void **fbmem, size_t *fblen, unsigned char *bpp,
-                     unsigned short *stride, int fbcount)
+                     unsigned short *stride)
 {
   XWindowAttributes windowattributes;
   Display *display;
@@ -422,17 +367,12 @@ int sim_x11initialize(unsigned short width, unsigned short height,
   g_fbpixelwidth  = width;
   g_fbpixelheight = height;
 
-  if (fbcount < 1)
-    {
-      return -EINVAL;
-    }
-
   /* Create the X11 window */
 
   display = sim_x11createframe();
   if (display == NULL)
     {
-      return -ENODEV;
+      return -1;
     }
 
   /* Determine the supported pixel bpp of the current window */
@@ -450,103 +390,16 @@ int sim_x11initialize(unsigned short width, unsigned short height,
       depth = 32;
     }
 
-  if (depth != CONFIG_SIM_FBBPP && depth != 32 && CONFIG_SIM_FBBPP != 16)
-    {
-      return -1;
-    }
-
   *bpp    = depth;
   *stride = (depth * width / 8);
   *fblen  = (*stride * height);
 
   /* Map the window to shared memory */
 
-  sim_x11mapsharedmem(display, windowattributes.depth, *fblen, fbcount);
+  sim_x11mapsharedmem(display, windowattributes.depth, *fblen);
 
-  g_fbbpp = depth;
-  g_fblen = *fblen;
-  g_fbcount = fbcount;
-
-  /* Create conversion framebuffer */
-
-  if (depth == 32 && CONFIG_SIM_FBBPP == 16)
-    {
-      *bpp = CONFIG_SIM_FBBPP;
-      *stride = (CONFIG_SIM_FBBPP * width / 8);
-      *fblen = (*stride * height);
-
-      g_trans_framebuffer = malloc((*fblen) * fbcount);
-      if (g_trans_framebuffer == NULL)
-        {
-          syslog(LOG_ERR, "Failed to allocate g_trans_framebuffer\n");
-          return -1;
-        }
-
-      *fbmem = g_trans_framebuffer;
-    }
-  else
-    {
-      *fbmem = g_framebuffer;
-    }
-
+  *fbmem  = (void *)g_framebuffer;
   g_display = display;
-  return 0;
-}
-
-/****************************************************************************
- * Name: sim_x11openwindow
- ****************************************************************************/
-
-int sim_x11openwindow(void)
-{
-  if (g_display == NULL)
-    {
-      return -ENODEV;
-    }
-
-  XMapWindow(g_display, g_window);
-  XSync(g_display, 0);
-
-  return 0;
-}
-
-/****************************************************************************
- * Name: sim_x11closewindow
- ****************************************************************************/
-
-int sim_x11closewindow(void)
-{
-  if (g_display == NULL)
-    {
-      return -ENODEV;
-    }
-
-  XUnmapWindow(g_display, g_window);
-  XSync(g_display, 0);
-
-  return 0;
-}
-
-/****************************************************************************
- * Name: sim_x11setoffset
- ****************************************************************************/
-
-int sim_x11setoffset(unsigned int offset)
-{
-  if (g_display == NULL)
-    {
-      return -ENODEV;
-    }
-
-  if (g_fbbpp == 32 && CONFIG_SIM_FBBPP == 16)
-    {
-      g_image->data = g_framebuffer + (offset << 1);
-    }
-  else
-    {
-      g_image->data = g_framebuffer + offset;
-    }
-
   return 0;
 }
 
@@ -563,7 +416,7 @@ int sim_x11cmap(unsigned short first, unsigned short len,
 
   if (g_display == NULL)
     {
-      return -ENODEV;
+      return -1;
     }
 
   /* Convert each color to X11 scaling */
@@ -602,7 +455,7 @@ int sim_x11update(void)
 {
   if (g_display == NULL)
     {
-      return -ENODEV;
+      return -1;
     }
 
 #ifndef CONFIG_SIM_X11NOSHM
@@ -616,13 +469,6 @@ int sim_x11update(void)
     {
       XPutImage(g_display, g_window, g_gc, g_image, 0, 0, 0, 0,
                 g_fbpixelwidth, g_fbpixelheight);
-    }
-
-  if (g_fbbpp == 32 && CONFIG_SIM_FBBPP == 16)
-    {
-      sim_x11depth16to32(g_framebuffer,
-                         g_fblen * g_fbcount,
-                         g_trans_framebuffer);
     }
 
   XSync(g_display, 0);

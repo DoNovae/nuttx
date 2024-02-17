@@ -21,10 +21,6 @@
 #ifndef ___ARCH_RISC_V_SRC_COMMON_RISCV_MMU_H_
 #define ___ARCH_RISC_V_SRC_COMMON_RISCV_MMU_H_
 
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
 /* RV32/64 page size */
 
 #define RV_MMU_PAGE_SHIFT       (12)
@@ -62,10 +58,6 @@
 /* I/O region flags */
 
 #define MMU_IO_FLAGS            (PTE_R | PTE_W | PTE_G)
-
-/* Flags for kernel page tables */
-
-#define MMU_KPGT_FLAGS          (PTE_G)
 
 /* Kernel FLASH and RAM are mapped globally */
 
@@ -155,16 +147,6 @@
 extern uintptr_t g_kernel_pgt_pbase;
 
 /****************************************************************************
- * Public Function Prototypes
- ****************************************************************************/
-
-void weak_function mmu_flush_cache(uintptr_t);
-
-/****************************************************************************
- * Inline Functions
- ****************************************************************************/
-
-/****************************************************************************
  * Name: mmu_satp_reg
  *
  * Description:
@@ -205,19 +187,11 @@ static inline void mmu_write_satp(uintptr_t reg)
     (
       "csrw satp, %0\n"
       "sfence.vma x0, x0\n"
-      "fence rw, rw\n"
-      "fence.i\n"
+      "fence\n"
       :
       : "rK" (reg)
       : "memory"
     );
-
-  /* Flush the MMU Cache if needed (T-Head C906) */
-
-  if (mmu_flush_cache != NULL)
-    {
-      mmu_flush_cache(reg);
-    }
 }
 
 /****************************************************************************
@@ -334,29 +308,10 @@ static inline uintptr_t mmu_pte_to_paddr(uintptr_t pte)
 }
 
 /****************************************************************************
- * Name: mmu_satp_to_paddr
- *
- * Description:
- *   Extract physical address from SATP
- *
- * Returned Value:
- *   Physical address from SATP value
- *
- ****************************************************************************/
-
-static inline uintptr_t mmu_satp_to_paddr(uintptr_t satp)
-{
-  uintptr_t ppn;
-  ppn = satp;
-  ppn = ((ppn >> SATP_PPN_SHIFT) & SATP_PPN_MASK);
-  return SATP_PPN_TO_ADDR(ppn);
-}
-
-/****************************************************************************
  * Name: mmu_get_satp_pgbase
  *
  * Description:
- *   Utility function to read the current base page table physical address
+ *   Utility function to read the base page table physical address
  *
  * Returned Value:
  *   Physical address of the current base page table
@@ -365,7 +320,10 @@ static inline uintptr_t mmu_satp_to_paddr(uintptr_t satp)
 
 static inline uintptr_t mmu_get_satp_pgbase(void)
 {
-  return mmu_satp_to_paddr(mmu_read_satp());
+  uintptr_t ppn;
+  ppn = mmu_read_satp();
+  ppn = ((ppn >> SATP_PPN_SHIFT) & SATP_PPN_MASK);
+  return SATP_PPN_TO_ADDR(ppn);
 }
 
 /****************************************************************************
@@ -388,7 +346,7 @@ static inline uintptr_t mmu_get_satp_pgbase(void)
  ****************************************************************************/
 
 void mmu_ln_setentry(uint32_t ptlevel, uintptr_t lnvaddr, uintptr_t paddr,
-                     uintptr_t vaddr, uint64_t mmuflags);
+                     uintptr_t vaddr, uint32_t mmuflags);
 
 /****************************************************************************
  * Name: mmu_ln_getentry
@@ -469,10 +427,10 @@ void mmu_ln_restore(uint32_t ptlevel, uintptr_t lnvaddr, uintptr_t vaddr,
  ****************************************************************************/
 
 void mmu_ln_map_region(uint32_t ptlevel, uintptr_t lnvaddr, uintptr_t paddr,
-                       uintptr_t vaddr, size_t size, uint64_t mmuflags);
+                       uintptr_t vaddr, size_t size, uint32_t mmuflags);
 
 /****************************************************************************
- * Name: mmu_get_region_size
+ * Name: mmu_ln_map_region
  *
  * Description:
  *   Get (giga/mega) page size for level n.

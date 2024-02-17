@@ -210,8 +210,8 @@ static void nrf24l01_worker(FAR void *arg);
 #endif
 
 #ifdef CONFIG_DEBUG_WIRELESS
-static void binarycvt(FAR char *deststr, size_t destlen,
-                      FAR const uint8_t *srcbin, size_t srclen);
+static void binarycvt(FAR char *deststr, FAR const uint8_t *srcbin,
+                      size_t srclen);
 #endif
 
 /* POSIX API */
@@ -231,7 +231,7 @@ static int nrf24l01_poll(FAR struct file *filep, FAR struct pollfd *fds,
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_nrf24l01_fops =
+static const struct file_operations nrf24l01_fops =
 {
   nrf24l01_open,    /* open */
   nrf24l01_close,   /* close */
@@ -912,13 +912,13 @@ out:
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_WIRELESS
-static void binarycvt(FAR char *deststr, size_t destlen,
-                      FAR const uint8_t *srcbin, size_t srclen)
+static void binarycvt(FAR char *deststr, FAR const uint8_t *srcbin,
+                      size_t srclen)
 {
   int i = 0;
-  while (i < srclen && 2 * (i + 1) < destlen)
+  while (i < srclen)
     {
-      snprintf(deststr + i * 2, destlen - i * 2, "%02x", srcbin[i]);
+      sprintf(deststr + i * 2, "%02x", srcbin[i]);
       ++i;
     }
 
@@ -942,10 +942,11 @@ static int nrf24l01_open(FAR struct file *filep)
 
   wlinfo("Opening nRF24L01 dev\n");
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev = (FAR struct nrf24l01_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -985,10 +986,11 @@ static int nrf24l01_close(FAR struct file *filep)
   int ret;
 
   wlinfo("Closing nRF24L01 dev\n");
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  dev  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev  = (FAR struct nrf24l01_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -1019,10 +1021,11 @@ static ssize_t nrf24l01_read(FAR struct file *filep, FAR char *buffer,
   FAR struct inode *inode;
   int ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev = (FAR struct nrf24l01_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
@@ -1069,10 +1072,11 @@ static ssize_t nrf24l01_write(FAR struct file *filep, FAR const char *buffer,
   FAR struct inode *inode;
   int ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev = (FAR struct nrf24l01_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
@@ -1097,10 +1101,11 @@ static int nrf24l01_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   int ret;
 
   wlinfo("cmd: %d arg: %ld\n", cmd, arg);
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  dev  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev  = (FAR struct nrf24l01_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -1357,11 +1362,11 @@ static int nrf24l01_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int ret;
 
   wlinfo("setup: %d\n", (int)setup);
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  dev  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev  = (FAR struct nrf24l01_dev_s *)inode->i_private;
 
   /* Exclusive access */
 
@@ -1403,7 +1408,7 @@ static int nrf24l01_poll(FAR struct file *filep, FAR struct pollfd *fds,
       nxmutex_lock(&dev->lock_fifo);
       if (dev->fifo_len > 0)
         {
-          poll_notify(&fds, 1, POLLIN);
+          poll_notify(&dev->pfd, 1, POLLIN);
         }
 
       nxmutex_unlock(&dev->lock_fifo);
@@ -1502,7 +1507,7 @@ int nrf24l01_register(FAR struct spi_dev_s *spi,
 
   wlinfo("Registering " DEV_NAME "\n");
 
-  ret = register_driver(DEV_NAME, &g_nrf24l01_fops, 0666, dev);
+  ret = register_driver(DEV_NAME, &nrf24l01_fops, 0666, dev);
   if (ret < 0)
     {
       wlerr("ERROR: register_driver() failed: %d\n", ret);
@@ -1805,10 +1810,10 @@ int nrf24l01_settxpower(FAR struct nrf24l01_dev_s *dev, int outpower)
 
   /* RF_PWR value  <->  Output power in dBm
    *
-   * '00' - -18dBm
-   * '01' - -12dBm
-   * '10' - -6dBm
-   * '11' - 0dBm
+   * '00' – -18dBm
+   * '01' – -12dBm
+   * '10' – -6dBm
+   * '11' – 0dBm
    */
 
   switch (outpower)
@@ -2079,7 +2084,7 @@ void nrf24l01_dumpregs(FAR struct nrf24l01_dev_s *dev)
          nrf24l01_readregbyte(dev, NRF24L01_OBSERVE_TX));
 
   nrf24l01_readreg(dev, NRF24L01_TX_ADDR, addr, dev->addrlen);
-  binarycvt(addrstr, sizeof(addrstr), addr, dev->addrlen);
+  binarycvt(addrstr, addr, dev->addrlen);
   syslog(LOG_INFO, "TX_ADDR:   %s\n", addrstr);
 
   syslog(LOG_INFO, "CD:        %02x\n",

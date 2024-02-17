@@ -181,11 +181,7 @@ void __start(void)
 
   showprogress('C');
 
-#ifdef CONFIG_ARMV8M_STACKCHECK
-  arm_stack_check_init();
-#endif
-
-#ifdef CONFIG_ARCH_PERF_EVENTS
+#ifdef CONFIG_SCHED_IRQMONITOR
   up_perf_init((void *)STM32_SYSCLK_FREQUENCY);
 #endif
 

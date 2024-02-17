@@ -505,8 +505,8 @@ struct stm32_usbdev_s
 static uint32_t    stm32_getreg(uint32_t addr);
 static void        stm32_putreg(uint32_t val, uint32_t addr);
 #else
-#  define stm32_getreg(addr)     getreg32(addr)
-#  define stm32_putreg(val,addr) putreg32(val,addr)
+# define stm32_getreg(addr)     getreg32(addr)
+# define stm32_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Request queue operations *************************************************/
@@ -1377,19 +1377,6 @@ static void stm32_epin_request(struct stm32_usbdev_s *priv,
           uint32_t empmsk = stm32_getreg(STM32_OTGFS_DIEPEMPMSK);
           empmsk |= OTGFS_DIEPEMPMSK(privep->epphy);
           stm32_putreg(empmsk, STM32_OTGFS_DIEPEMPMSK);
-
-#ifdef CONFIG_DEBUG_FEATURES
-          /* Check if the configured TXFIFO size is sufficient for a given
-           * request. If not, raise an assertion here.
-           */
-
-          regval = stm32_getreg(STM32_OTGFS_DIEPTXF(privep->epphy));
-          regval &= OTGFS_DIEPTXF_INEPTXFD_MASK;
-          regval >>= OTGFS_DIEPTXF_INEPTXFD_SHIFT;
-          uerr("EP%" PRId8 " TXLEN=%" PRId32 " nwords=%d\n",
-               privep->epphy, regval, nwords);
-          DEBUGASSERT(regval >= nwords);
-#endif
 
           /* Terminate the transfer.  We will try again when the TxFIFO empty
            * interrupt is received.
@@ -3759,7 +3746,6 @@ static int stm32_usbinterrupt(int irq, void *context, void *arg)
       if ((regval & OTGFS_GINT_SOF) != 0)
         {
           usbtrace(TRACE_INTDECODE(STM32_TRACEINTID_SOF), (uint16_t)regval);
-          usbdev_sof_irq(&priv->usbdev, stm32_getframe(&priv->usbdev));
         }
 #endif
 
@@ -4413,7 +4399,7 @@ static struct usbdev_req_s *stm32_ep_allocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, ((struct stm32_ep_s *)ep)->epphy);
 
-  privreq = kmm_malloc(sizeof(struct stm32_req_s));
+  privreq = (struct stm32_req_s *)kmm_malloc(sizeof(struct stm32_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(STM32_TRACEERR_ALLOCFAIL), 0);
@@ -5367,9 +5353,9 @@ static void stm32_hwinitialize(struct stm32_usbdev_s *priv)
 
   regval  = OTGFS_GCCFG_PWRDWN;
 
-#  ifdef CONFIG_USBDEV_VBUSSENSING
+# ifdef CONFIG_USBDEV_VBUSSENSING
   regval |= OTGFS_GCCFG_VBDEN;
-#  endif
+# endif
 
 #else
   /* In the case of the all others the meaning of the bit is No VBUS
@@ -5378,12 +5364,12 @@ static void stm32_hwinitialize(struct stm32_usbdev_s *priv)
 
   regval  = (OTGFS_GCCFG_PWRDWN | OTGFS_GCCFG_VBUSASEN |
              OTGFS_GCCFG_VBUSBSEN);
-#  ifndef CONFIG_USBDEV_VBUSSENSING
+# ifndef CONFIG_USBDEV_VBUSSENSING
   regval |= OTGFS_GCCFG_NOVBUSSENS;
-#  endif
-#  ifdef CONFIG_STM32_OTGFS_SOFOUTPUT
+# endif
+# ifdef CONFIG_STM32_OTGFS_SOFOUTPUT
   regval |= OTGFS_GCCFG_SOFOUTEN;
-#  endif
+# endif
 #endif
   stm32_putreg(regval, STM32_OTGFS_GCCFG);
   up_mdelay(20);
@@ -5393,11 +5379,11 @@ static void stm32_hwinitialize(struct stm32_usbdev_s *priv)
    */
 
 #if defined(CONFIG_STM32_STM32F446) || defined(CONFIG_STM32_STM32F469)
-#  ifndef CONFIG_USBDEV_VBUSSENSING
+# ifndef CONFIG_USBDEV_VBUSSENSING
   regval  =  stm32_getreg(STM32_OTGFS_GOTGCTL);
   regval |= (OTGFS_GOTGCTL_BVALOEN | OTGFS_GOTGCTL_BVALOVAL);
   stm32_putreg(regval, STM32_OTGFS_GOTGCTL);
-#  endif
+# endif
 #endif
 
   /* Force Device Mode */

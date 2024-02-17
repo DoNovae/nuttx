@@ -217,11 +217,13 @@ int psock_tcp_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
   struct accept_s state;
   int ret;
 
+  DEBUGASSERT(psock && newconn);
+
   /* Check the backlog to see if there is a connection already pending for
    * this listener.
    */
 
-  conn = psock->s_conn;
+  conn = (FAR struct tcp_conn_s *)psock->s_conn;
 
 #ifdef CONFIG_NET_TCPBACKLOG
   state.acpt_newconn = tcp_backlogremove(conn);

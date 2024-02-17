@@ -1,7 +1,6 @@
 .. include:: /substitutions.rst
 .. _configuring:
 
-===========
 Configuring
 ===========
 
@@ -14,7 +13,7 @@ The Apache NuttX configuration system uses Linux's
 includes various frontends that allow you to modify configuration easily. Usually, the ``menuconfig``
 frontend is used, which is a console based menu system (more info `here <https://en.wikipedia.org/wiki/Menuconfig>`_).
 
-As previously explained in :doc:`compiling_make`, the first step is to load a premade configuration for
+As previously explained in :doc:`compiling`, the first step is to load a premade configuration for
 your board. Then, you can modify this configuration to your liking. In this example, we will show
 how you modify the default configuration of the ``sim`` build, a build of NuttX which runs on your own
 computer.
@@ -35,10 +34,7 @@ computer.
 
        $ make clean; make
        $ ./nuttx
-       login: admin
-       password: Administrator
-       User Logged-in!
-       nsh>
+       login:
 
    From another terminal window, kill the simulator:
 
@@ -94,7 +90,7 @@ computer.
    configured in :menuselection:`Application Configuration --> NSH Library --> Message of the Day (MOTD)`.
    
 Fast configuration changes
-==========================
+--------------------------
 
 If you know exactly which configuration symbol you want to change, you can use the ``kconfig-tweak`` tool (comes with the ``kconfig-frontends`` package) to quickly change a setting without going into the configuration frontend. This is useful to change settings such as debug options:
 
@@ -125,31 +121,3 @@ This is also useful to script configuration changes that you perform often:
    kconfig-tweak --disable CONFIG_DEBUG_NOOPT
    kconfig-tweak --disable CONFIG_SYSLOG_TIMESTAMP
    make oldconfig
-
-Reference configuration
-=======================
-
-Defconfig supports the use of ``#include`` statements to reference other configuration files:
-
-.. code-block::
-
-   CONFIG_XXX1=y
-   CONFIG_XXX2=y
-   #include "configs/system.config"
-   #include "configs/net.config"
-
-The default header file search path includes:
-
-* Current directory;
-* ``${boards}/configs/common``;
-* ``${boards}/common/configs``;
-
-Merge configuration
-===================
-
-Multiple config fragments can be merged manually using the tools/merge_config.py script.
-
-.. code-block:: console
-
-   $ cd nuttx
-   $ ./tools/merge_config.py -o defconfig .config1 .config2

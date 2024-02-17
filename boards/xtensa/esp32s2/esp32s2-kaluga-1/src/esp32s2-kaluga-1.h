@@ -27,7 +27,6 @@
 
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
-
 #include <stdint.h>
 
 /****************************************************************************
@@ -35,10 +34,6 @@
  ****************************************************************************/
 
 /* ESP32S2-Kaluga-1 GPIOs ***************************************************/
-
-/* Audio Amplifier */
-
-#define SPEAKER_ENABLE_GPIO  10
 
 /* Buttons */
 
@@ -149,7 +144,7 @@ int board_i2c_init(void);
  *
  * Description:
  *   This function is called by platform-specific, setup logic to configure
- *   and register the generic I2S audio driver. This function will register
+ *   and register the generic I2S audio driver.  This function will register
  *   the driver as /dev/audio/pcm[x] where x is determined by the I2S port
  *   number.
  *
@@ -157,46 +152,14 @@ int board_i2c_init(void);
  *   None.
  *
  * Returned Value:
- *   Zero is returned on success. Otherwise, a negated errno value is
+ *   Zero is returned on success.  Otherwise, a negated errno value is
  *   returned to indicate the nature of the failure.
  *
  ****************************************************************************/
 
-#if defined(CONFIG_ESP32S2_I2S) && !defined(CONFIG_AUDIO_ES8311)
+#if defined(CONFIG_ESP32S2_I2S) && !defined(CONFIG_AUDIO_CS4344)
 int board_i2sdev_initialize(void);
 #endif
-
-/****************************************************************************
- * Name: board_twai_setup
- *
- * Description:
- *  Initialize TWAI and register the TWAI device
- *
- ****************************************************************************/
-#ifdef CONFIG_ESP32S2_TWAI
-int board_twai_setup(void);
-#endif
-
-/****************************************************************************
- * Name: esp32s2_es8311_initialize
- *
- * Description:
- *   This function is called by platform-specific, setup logic to configure
- *   and register the ES8311 device. This function will register the driver
- *   as /dev/audio/pcm[x] where x is determined by the I2S port number.
- *
- * Input Parameters:
- *   i2c_port  - The I2C port used for the device;
- *   i2c_addr  - The I2C address used by the device;
- *   i2c_freq  - The I2C frequency used for the device.
- *
- * Returned Value:
- *   Zero is returned on success. Otherwise, a negated errno value is
- *   returned to indicate the nature of the failure.
- *
- ****************************************************************************/
-
-int esp32s2_es8311_initialize(int i2c_port, uint8_t i2c_addr, int i2c_freq);
 
 #endif /* __ASSEMBLY__ */
 #endif /* __BOARDS_XTENSA_ESP32S2_ESP32S2_KALUGA_1_SRC_ESP32S2_KALUGA_1_H */

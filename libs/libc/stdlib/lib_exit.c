@@ -31,9 +31,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <nuttx/tls.h>
-#include <nuttx/pthread.h>
-
 #if defined(CONFIG_BUILD_FLAT) || !defined(__KERNEL__)
 
 /****************************************************************************
@@ -45,10 +42,7 @@
  ****************************************************************************/
 
 extern FAR void *__dso_handle weak_data;
-
-#ifndef CONFIG_HOST_WINDOWS
 FAR void *__dso_handle = &__dso_handle;
-#endif
 
 /****************************************************************************
  * Public Functions
@@ -92,28 +86,9 @@ FAR void *__dso_handle = &__dso_handle;
 
 void exit(int status)
 {
-  /* Mark the pthread as non-cancelable to avoid additional calls to
-   * pthread_exit() due to any cancellation point logic that might get
-   * kicked off by actions taken during pthread_exit processing.
-   */
-
-  task_setcancelstate(TASK_CANCEL_DISABLE, NULL);
-
-#if defined(CONFIG_PTHREAD_CLEANUP_STACKSIZE) && CONFIG_PTHREAD_CLEANUP_STACKSIZE > 0
-  pthread_cleanup_popall(tls_get_info());
-#endif
-
-#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
-  tls_destruct();
-#endif
-
   /* Run the registered exit functions */
 
   atexit_call_exitfuncs(status, false);
-
-#if defined(CONFIG_TLS_TASK_NELEM) && CONFIG_TLS_TASK_NELEM > 0
-  task_tls_destruct();
-#endif
 
 #ifdef CONFIG_FILE_STREAM
   /* Flush all streams */
@@ -145,21 +120,6 @@ void exit(int status)
 
 void quick_exit(int status)
 {
-  /* Mark the pthread as non-cancelable to avoid additional calls to
-   * pthread_exit() due to any cancellation point logic that might get
-   * kicked off by actions taken during pthread_exit processing.
-   */
-
-  task_setcancelstate(TASK_CANCEL_DISABLE, NULL);
-
-#if defined(CONFIG_PTHREAD_CLEANUP_STACKSIZE) && CONFIG_PTHREAD_CLEANUP_STACKSIZE > 0
-  pthread_cleanup_popall(tls_get_info());
-#endif
-
-#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
-  tls_destruct();
-#endif
-
   /* Run the registered exit functions */
 
   atexit_call_exitfuncs(status, true);

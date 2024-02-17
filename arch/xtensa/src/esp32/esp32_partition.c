@@ -102,15 +102,17 @@ enum ota_img_ctrl
 
 enum ota_img_state
 {
-  /* Monitor the first boot. In bootloader of esp-idf this state is changed
-   * to ESP_OTA_IMG_PENDING_VERIFY if this bootloader enable app rollback.
+  /**
+   *  Monitor the first boot. In bootloader of esp-idf this state is changed
+   *  to ESP_OTA_IMG_PENDING_VERIFY if this bootloader enable app rollback.
    *
-   * So this driver doesn't use this state currently.
+   *  So this driver doesn't use this state currently.
    */
 
   OTA_IMG_NEW             = 0x0,
 
-  /* First boot for this app was. If while the second boot this state is then
+  /**
+   * First boot for this app was. If while the second boot this state is then
    * it will be changed to ABORTED if this bootloader enable app rollback.
    *
    * So this driver doesn't use this state currently.
@@ -126,7 +128,8 @@ enum ota_img_state
 
   OTA_IMG_INVALID         = 0x3,
 
-  /* App could not confirm the workable or non-workable. In bootloader
+  /**
+   * App could not confirm the workable or non-workable. In bootloader
    * IMG_PENDING_VERIFY state will be changed to IMG_ABORTED. This app will
    * not selected to boot at all if this bootloader enable app rollback.
    *
@@ -135,7 +138,8 @@ enum ota_img_state
 
   OTA_IMG_ABORTED         = 0x4,
 
-  /* Undefined. App can boot and work without limits in esp-idf.
+  /**
+   * Undefined. App can boot and work without limits in esp-idf.
    *
    * This state is not used.
    */
@@ -670,7 +674,8 @@ static int partition_create_dev(const struct partition_info_priv *info,
   snprintf(path, PARTITION_MOUNTPTR_LEN_MAX, "%s/%s",
            g_path_base, info->label);
 
-  /* If SPI Flash encryption is enable, "APP", "OTA data" and "NVS keys" are
+  /**
+   * If SPI Flash encryption is enable, "APP", "OTA data" and "NVS keys" are
    * force to set as encryption partition.
    */
 
@@ -756,73 +761,6 @@ static int partition_create_dev(const struct partition_info_priv *info,
 }
 
 /****************************************************************************
- * Name: partition_get_offset
- *
- * Description:
- *   Get offset in SPI flash of the partition label
- *
- * Input Parameters:
- *   label - Partition label
- *   size  - Data number
- *
- * Returned Value:
- *   Get partition offset(>= 0) if success or a negative value if fail.
- *
- ****************************************************************************/
-
-static int partition_get_offset(const char *label, size_t size)
-{
-  int i;
-  int ret;
-  uint8_t *pbuf;
-  int partion_offset;
-  const struct partition_info_priv *info;
-  DEBUGASSERT(label != NULL);
-  struct mtd_dev_s *mtd = esp32_spiflash_get_mtd();
-  if (!mtd)
-    {
-      ferr("ERROR: Failed to get SPI flash MTD\n");
-      return -ENOSYS;
-    }
-
-  pbuf = kmm_malloc(PARTITION_MAX_SIZE);
-  if (!pbuf)
-    {
-      ferr("ERROR: Failed to allocate %d byte\n", PARTITION_MAX_SIZE);
-      return -ENOMEM;
-    }
-
-  ret = MTD_READ(mtd, PARTITION_TABLE_OFFSET,
-                 PARTITION_MAX_SIZE, pbuf);
-  if (ret != PARTITION_MAX_SIZE)
-    {
-      ferr("ERROR: Failed to get read data from MTD\n");
-      kmm_free(pbuf);
-      return -EIO;
-    }
-
-  info = (struct partition_info_priv *)pbuf;
-  for (i = 0; i < PARTITION_MAX_NUM; i++)
-    {
-      if (memcmp(info[i].label, label, size) == 0)
-        {
-          partion_offset = info[i].offset;
-          break;
-        }
-    }
-
-  kmm_free(pbuf);
-  if (i == PARTITION_MAX_NUM)
-    {
-      ferr("ERROR: No %s  partition is created\n", label);
-      return -EPERM;
-    }
-
-  finfo("Get Partition offset: 0x%x\n", partion_offset);
-  return partion_offset;
-}
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -872,7 +810,8 @@ int esp32_partition_init(void)
       return -ENOMEM;
     }
 
-  /* Even without SPI Flash encryption, we can also use encrypted
+  /**
+   * Even without SPI Flash encryption, we can also use encrypted
    * MTD to read no-encrypted data.
    */
 
@@ -903,102 +842,6 @@ int esp32_partition_init(void)
     {
       ferr("ERROR: No partition is created\n");
       return -EPERM;
-    }
-
-  return OK;
-}
-
-/****************************************************************************
- * Name: esp32_partition_read
- *
- * Description:
- *   Read data from SPI Flash at designated address.
- *
- * Input Parameters:
- *   label  - Partition label
- *   offset - Offset in SPI Flash
- *   buf    - Data buffer pointer
- *   size   - Data number
- *
- * Returned Value:
- *   0 if success or a negative value if fail.
- *
- ****************************************************************************/
-
-int esp32_partition_read(const char *label, size_t offset, void *buf,
-                         size_t size)
-{
-  int ret;
-  int partion_offset;
-  DEBUGASSERT(label != NULL && buf != NULL);
-  struct mtd_dev_s *mtd = esp32_spiflash_get_mtd();
-  if (!mtd)
-    {
-      ferr("ERROR: Failed to get SPI flash MTD\n");
-      return -ENOSYS;
-    }
-
-  partion_offset = partition_get_offset(label, sizeof(label));
-  if (partion_offset < 0)
-    {
-      ferr("ERROR: Failed to get partition: %s offset\n", label);
-      return partion_offset;
-    }
-
-  ret = MTD_READ(mtd, partion_offset + offset,
-                 size, (uint8_t *)buf);
-  if (ret != size)
-    {
-      ferr("ERROR: Failed to get read data from MTD\n");
-      return -EIO;
-    }
-
-  return OK;
-}
-
-/****************************************************************************
- * Name: esp32_partition_write
- *
- * Description:
- *   Write data to SPI Flash at designated address.
- *
- * Input Parameters:
- *   label  - Partition label
- *   offset - Offset in SPI Flash
- *   buf    - Data buffer pointer
- *   size   - Data number
- *
- * Returned Value:
- *   0 if success or a negative value if fail.
- *
- ****************************************************************************/
-
-int esp32_partition_write(const char *label, size_t offset, void *buf,
-                          size_t size)
-{
-  int ret;
-  int partion_offset;
-  DEBUGASSERT(label != NULL && buf != NULL);
-  struct mtd_dev_s *mtd = esp32_spiflash_get_mtd();
-  if (!mtd)
-    {
-      ferr("ERROR: Failed to get SPI flash MTD\n");
-      return -ENOSYS;
-    }
-
-  partion_offset = partition_get_offset(label, sizeof(label));
-  if (partion_offset < 0)
-    {
-      ferr("ERROR: Failed to get partition: %s offset\n", label);
-      return partion_offset;
-    }
-
-  ret = MTD_WRITE(mtd, partion_offset + offset,
-                  size, (uint8_t *)buf);
-  if (ret != size)
-    {
-      ferr("ERROR: Failed to get read data from MTD\n");
-      return -EIO;
     }
 
   return OK;

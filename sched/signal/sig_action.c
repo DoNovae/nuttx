@@ -33,7 +33,6 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/queue.h>
-#include <nuttx/signal.h>
 #include <nuttx/spinlock.h>
 
 #include "sched/sched.h"

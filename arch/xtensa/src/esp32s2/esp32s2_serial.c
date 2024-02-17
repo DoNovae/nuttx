@@ -45,7 +45,6 @@
 #include "esp32s2_config.h"
 #include "esp32s2_irq.h"
 #include "esp32s2_lowputc.h"
-#include "esp32s2_gpio.h"
 #include "hardware/esp32s2_uart.h"
 #include "hardware/esp32s2_system.h"
 
@@ -70,7 +69,7 @@
 #    define CONSOLE_DEV     g_uart0_dev     /* UART0 is console */
 #    define TTYS0_DEV       g_uart0_dev     /* UART0 is ttyS0 */
 #    define UART0_ASSIGNED      1
-#  elif defined(CONFIG_UART1_SERIAL_CONSOLE)
+# elif defined(CONFIG_UART1_SERIAL_CONSOLE)
 #    define CONSOLE_DEV         g_uart1_dev  /* UART1 is console */
 #    define TTYS0_DEV           g_uart1_dev  /* UART1 is ttyS0 */
 #    define UART1_ASSIGNED      1
@@ -238,18 +237,6 @@ static int uart_handler(int irq, void *context, void *arg)
 
   int_status = getreg32(UART_INT_ST_REG(priv->id));
 
-#ifdef HAVE_RS485
-  if ((int_status & UART_TX_BRK_IDLE_DONE_INT_ST_M) != 0 &&
-      esp32s2_txempty(dev))
-    {
-      if (dev->xmit.tail == dev->xmit.head)
-        {
-          esp32s2_gpiowrite(priv->rs485_dir_gpio,
-                            !priv->rs485_dir_polarity);
-        }
-    }
-#endif
-
   /* TX FIFO empty interrupt or UART TX done int */
 
   if (int_status & tx_mask)
@@ -382,21 +369,6 @@ static int esp32s2_setup(struct uart_dev_s *dev)
       esp32s2_lowputc_set_oflow(priv, false);
     }
 #endif
-#ifdef HAVE_RS485
-
-  /* Configure the idle time between transfers */
-
-  if (priv->rs485_dir_gpio != 0)
-    {
-      esp32s2_lowputc_set_tx_idle_time(priv, 1);
-    }
-  else
-#endif
-    {
-      /* No Tx idle interval */
-
-      esp32s2_lowputc_set_tx_idle_time(priv, 0);
-    }
 
   /* Reset FIFOs */
 
@@ -541,18 +513,6 @@ static void esp32s2_txint(struct uart_dev_s *dev, bool enable)
 
   if (enable)
     {
-      /* After all bytes physically transmitted in the RS485 bus
-       * the TX_BRK_IDLE will indicate we can disable the TX pin.
-       */
-
-#ifdef HAVE_RS485
-      if (priv->rs485_dir_gpio != 0)
-        {
-          modifyreg32(UART_INT_ENA_REG(priv->id),
-                      0, UART_TX_BRK_IDLE_DONE_INT_ENA);
-        }
-#endif
-
       /* Set to receive an interrupt when the TX holding FIFO is empty or
        * a transmission is done.
        */
@@ -653,7 +613,7 @@ static bool esp32s2_rxavailable(struct uart_dev_s *dev)
 
 static bool esp32s2_txready(struct uart_dev_s *dev)
 {
-  return !esp32s2_lowputc_is_tx_fifo_full(dev->priv);
+  return (esp32s2_lowputc_is_tx_fifo_full(dev->priv)) ? false : true;
 }
 
 /****************************************************************************
@@ -679,9 +639,10 @@ static bool esp32s2_txempty(struct uart_dev_s *dev)
   struct esp32s2_uart_s *priv = dev->priv;
 
   reg = getreg32(UART_INT_RAW_REG(priv->id));
-  reg = REG_MASK(reg, UART_TX_DONE_INT_RAW);
 
-  return reg > 0;
+  reg =  REG_MASK(reg, UART_TXFIFO_EMPTY_INT_RAW);
+
+  return (reg > 0) ? true : false;
 }
 
 /****************************************************************************
@@ -698,16 +659,7 @@ static bool esp32s2_txempty(struct uart_dev_s *dev)
 
 static void esp32s2_send(struct uart_dev_s *dev, int ch)
 {
-  struct esp32s2_uart_s *priv = dev->priv;
-
-#ifdef HAVE_RS485
-  if (priv->rs485_dir_gpio != 0)
-    {
-      esp32s2_gpiowrite(priv->rs485_dir_gpio, priv->rs485_dir_polarity);
-    }
-#endif
-
-  esp32s2_lowputc_send_byte(priv, (char)ch);
+  esp32s2_lowputc_send_byte(dev->priv, ch);
 }
 
 /****************************************************************************
@@ -1106,7 +1058,7 @@ void xtensa_serialinit(void)
 
   uart_register("/dev/ttyS0", &TTYS0_DEV);
 
-#ifdef TTYS1_DEV
+#ifdef	TTYS1_DEV
   uart_register("/dev/ttyS1", &TTYS1_DEV);
 #endif
 }

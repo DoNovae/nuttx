@@ -60,7 +60,7 @@
 
 #include <sys/param.h>
 
-#include <nuttx/clock.h>
+#include <nuttx/time.h>
 #include <nuttx/init.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/mutex.h>
@@ -812,10 +812,6 @@ static int tzload(FAR const char *name,
            */
 
           memset(&sp->chars[i], 0, CHARS_EXTRA);
-
-          /* Read leap seconds, discarding those out of time_t range. */
-
-          leapcnt = 0;
           for (i = 0; i < sp->leapcnt; ++i)
             {
               int_fast64_t tr = stored == 4 ? detzcode(p) : detzcode64(p);
@@ -1721,7 +1717,7 @@ static int tzparse(FAR const char *name, FAR struct state_s *sp,
                                                janoffset + endtime) &&
                       atlo <= sp->ats[timecnt])
                     {
-                      sp->types[timecnt++] = reversed;
+                      sp->types[timecnt++] = !reversed;
                     }
                 }
 
@@ -2171,7 +2167,7 @@ static FAR struct tm *timesub(FAR const time_t *timep,
     }
   else
     {
-      set_errno(EOVERFLOW);
+      errno = EOVERFLOW;
       return NULL;
     }
 

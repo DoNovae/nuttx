@@ -74,9 +74,9 @@
 
 #if defined(CONFIG_SCHED_HPWORK) && \
     (CONFIG_IEEE80211_BROADCOM_SCHED_PRIORITY >= CONFIG_SCHED_HPWORKPRIORITY)
-#  define BCMFWORK HPWORK
+# define BCMFWORK HPWORK
 #else
-#  define BCMFWORK LPWORK
+# define BCMFWORK LPWORK
 #endif
 
 /* CONFIG_IEEE80211_BROADCOM_NINTERFACES determines the number of physical
@@ -84,13 +84,13 @@
  */
 
 #ifndef CONFIG_IEEE80211_BROADCOM_NINTERFACES
-#  define CONFIG_IEEE80211_BROADCOM_NINTERFACES 1
+# define CONFIG_IEEE80211_BROADCOM_NINTERFACES 1
 #endif
 
 #ifdef CONFIG_IEEE80211_BROADCOM_LOWPOWER
-#  define LP_IFDOWN_TIMEOUT CONFIG_IEEE80211_BROADCOM_LP_IFDOWN_TIMEOUT
-#  define LP_DTIM_TIMEOUT   CONFIG_IEEE80211_BROADCOM_LP_DTIM_TIMEOUT
-#  define LP_DTIM_INTERVAL  CONFIG_IEEE80211_BROADCOM_LP_DTIM_INTERVAL
+# define LP_IFDOWN_TIMEOUT CONFIG_IEEE80211_BROADCOM_LP_IFDOWN_TIMEOUT
+# define LP_DTIM_TIMEOUT   CONFIG_IEEE80211_BROADCOM_LP_DTIM_TIMEOUT
+# define LP_DTIM_INTERVAL  CONFIG_IEEE80211_BROADCOM_LP_DTIM_INTERVAL
 #endif
 
 /* This is a helper pointer for accessing the contents of Ethernet header */
@@ -122,6 +122,9 @@ static int  bcmf_addmac(FAR struct net_driver_s *dev,
 #ifdef CONFIG_NET_MCASTGROUP
 static int  bcmf_rmmac(FAR struct net_driver_s *dev,
                        FAR const uint8_t *mac);
+#endif
+#ifdef CONFIG_NET_ICMPv6
+static void bcmf_ipv6multicast(FAR struct bcmf_dev_s *priv);
 #endif
 #endif
 #ifdef CONFIG_NETDEV_IOCTL
@@ -633,6 +636,14 @@ static int bcmf_ifup(FAR struct net_driver_s *dev)
                                CONFIG_IEEE80211_BROADCOM_DEFAULT_COUNTRY);
     }
 
+  /* Instantiate MAC address from priv->bc_dev.d_mac.ether.ether_addr_octet */
+
+#ifdef CONFIG_NET_ICMPv6
+  /* Set up IPv6 multicast address filtering */
+
+  bcmf_ipv6multicast(priv);
+#endif
+
   /* Enable the hardware interrupt */
 
   priv->bc_bifup = true;
@@ -640,8 +651,6 @@ static int bcmf_ifup(FAR struct net_driver_s *dev)
 #ifdef CONFIG_IEEE80211_BROADCOM_LOWPOWER
   bcmf_lowpower_poll(priv);
 #endif
-
-  bcmf_wl_set_pta_priority(priv, IW_PTA_PRIORITY_COEX_HIGH);
 
   goto errout_in_critical_section;
 
@@ -698,8 +707,6 @@ static int bcmf_ifdown(FAR struct net_driver_s *dev)
           work_cancel(LPWORK, &priv->lp_work_ifdown);
         }
 #endif
-
-      bcmf_wl_set_pta_priority(priv, IW_PTA_PRIORITY_COEX_MAXIMIZED);
 
       bcmf_wl_enable(priv, false);
       bcmf_wl_active(priv, false);
@@ -869,7 +876,6 @@ static int bcmf_addmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
-  UNUSED(priv);
   return OK;
 }
 #endif
@@ -899,10 +905,81 @@ static int bcmf_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
-  UNUSED(priv);
   return OK;
 }
 #endif
+
+/****************************************************************************
+ * Name: bcmf_ipv6multicast
+ *
+ * Description:
+ *   Configure the IPv6 multicast MAC address.
+ *
+ * Input Parameters:
+ *   priv - A reference to the private driver state structure
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ * Assumptions:
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_ICMPv6
+static void bcmf_ipv6multicast(FAR struct bcmf_dev_s *priv)
+{
+  FAR struct net_driver_s *dev;
+  uint16_t tmp16;
+  uint8_t mac[6];
+
+  /* For ICMPv6, we need to add the IPv6 multicast address
+   *
+   * For IPv6 multicast addresses, the Ethernet MAC is derived by
+   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
+   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
+   * to the Ethernet MAC address 33:33:00:01:00:03.
+   *
+   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
+   * Message, but the ICMPv6 Neighbor Solicitation message seems to
+   * use 33:33:ff:01:00:03.
+   */
+
+  mac[0] = 0x33;
+  mac[1] = 0x33;
+
+  dev    = &priv->bc_dev;
+  tmp16  = dev->d_ipv6addr[6];
+  mac[2] = 0xff;
+  mac[3] = tmp16 >> 8;
+
+  tmp16  = dev->d_ipv6addr[7];
+  mac[4] = tmp16 & 0xff;
+  mac[5] = tmp16 >> 8;
+
+  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  bcmf_addmac(dev, mac);
+
+#ifdef CONFIG_NET_ICMPv6_AUTOCONF
+  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
+   * address that we expect to receive ICMPv6 Router Advertisement
+   * packets.
+   */
+
+  bcmf_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
+#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
+
+#ifdef CONFIG_NET_ICMPv6_ROUTER
+  /* Add the IPv6 all link-local routers Ethernet address.  This is the
+   * address that we expect to receive ICMPv6 Router Solicitation
+   * packets.
+   */
+
+  bcmf_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
+#endif /* CONFIG_NET_ICMPv6_ROUTER */
+}
+#endif /* CONFIG_NET_ICMPv6 */
 
 /****************************************************************************
  * Name: bcmf_ioctl
@@ -936,11 +1013,6 @@ static int bcmf_ioctl(FAR struct net_driver_s *dev, int cmd,
       return -EPERM;
     }
 
-  if ((ret = nxmutex_lock(&priv->ioctl_mutex)) < 0)
-    {
-      return ret;
-    }
-
 #ifdef CONFIG_IEEE80211_BROADCOM_LOWPOWER
   bcmf_lowpower_poll(priv);
 #endif
@@ -950,24 +1022,11 @@ static int bcmf_ioctl(FAR struct net_driver_s *dev, int cmd,
   switch (cmd)
     {
       case SIOCSIWSCAN:
-        bcmf_wl_set_pta_priority(priv, IW_PTA_PRIORITY_WLAN_MAXIMIZED);
         ret = bcmf_wl_start_scan(priv, (struct iwreq *)arg);
-        if (ret != OK)
-          {
-            bcmf_wl_set_pta_priority(priv, IFF_IS_RUNNING(dev->d_flags) ?
-                                     IW_PTA_PRIORITY_BALANCED :
-                                     IW_PTA_PRIORITY_COEX_HIGH);
-          }
         break;
 
       case SIOCGIWSCAN:
         ret = bcmf_wl_get_scan_results(priv, (struct iwreq *)arg);
-        if (ret != -EAGAIN)
-          {
-            bcmf_wl_set_pta_priority(priv, IFF_IS_RUNNING(dev->d_flags) ?
-                                     IW_PTA_PRIORITY_BALANCED :
-                                     IW_PTA_PRIORITY_COEX_HIGH);
-          }
         break;
 
       case SIOCSIFHWADDR:    /* Set device MAC address */
@@ -988,7 +1047,7 @@ static int bcmf_ioctl(FAR struct net_driver_s *dev, int cmd,
         break;
 
       case SIOCGIWFREQ:     /* Get channel/frequency (Hz) */
-        ret = bcmf_wl_get_frequency(priv, (struct iwreq *)arg);
+        ret = bcmf_wl_get_channel(priv, (struct iwreq *)arg);
         break;
 
       case SIOCSIWMODE:     /* Set operation mode */
@@ -1008,19 +1067,7 @@ static int bcmf_ioctl(FAR struct net_driver_s *dev, int cmd,
         break;
 
       case SIOCSIWESSID:    /* Set ESSID (network name) */
-        bcmf_wl_set_pta_priority(priv, IW_PTA_PRIORITY_WLAN_MAXIMIZED);
         ret = bcmf_wl_set_ssid(priv, (struct iwreq *)arg);
-        if (ret != OK)
-          {
-            bcmf_wl_set_pta_priority(priv, IW_PTA_PRIORITY_COEX_HIGH);
-          }
-        else
-          {
-            bcmf_wl_set_pta_priority(priv, (bcmf_wl_get_channel(priv,
-                                           CHIP_STA_INTERFACE) > 14) ?
-                                     IW_PTA_PRIORITY_COEX_MAXIMIZED :
-                                     IW_PTA_PRIORITY_BALANCED);
-          }
         break;
 
       case SIOCGIWESSID:    /* Get ESSID */
@@ -1061,23 +1108,11 @@ static int bcmf_ioctl(FAR struct net_driver_s *dev, int cmd,
         ret = bcmf_wl_get_country(priv, (struct iwreq *)arg);
         break;
 
-#ifdef CONFIG_IEEE80211_BROADCOM_PTA_PRIORITY
-      case SIOCGIWPTAPRIO:  /* Get Packet Traffic Arbitration */
-        ret = bcmf_wl_get_pta(priv, (struct iwreq *)arg);
-        break;
-
-      case SIOCSIWPTAPRIO:  /* Set Packet Traffic Arbitration */
-        ret = bcmf_wl_set_pta(priv, (struct iwreq *)arg);
-        break;
-#endif
-
       default:
         nerr("ERROR: Unrecognized IOCTL command: %x\n", cmd);
         ret = -ENOTTY;  /* Special return value for this case */
         break;
     }
-
-  nxmutex_unlock(&priv->ioctl_mutex);
 
   return ret;
 }

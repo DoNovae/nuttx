@@ -41,6 +41,8 @@
 #include <nuttx/lcd/lcd.h>
 #include <nuttx/lcd/ili9341.h>
 
+#include <nuttx/video/fb.h>
+
 #include <arch/irq.h>
 
 /****************************************************************************
@@ -177,7 +179,7 @@
  * BGR:         0/1 Depending on endian mode of the mcu?
  * MH:          0
  */
-
+/*
 #define ILI9341_MADCTL_PORTRAIT_MY      0
 #define ILI9341_MADCTL_PORTRAIT_MX      ILI9341_MEMORY_ACCESS_CONTROL_MX
 #define ILI9341_MADCTL_PORTRAIT_MV      0
@@ -188,13 +190,33 @@
 #  define ILI9341_MADCTL_PORTRAIT_BGR   ILI9341_MEMORY_ACCESS_CONTROL_BGR
 #endif
 #define ILI9341_MADCTL_PORTRAIT_MH      0
+*/
 
+
+/*
+ * HBL ILI9342
+ * cf #define ILI9341_MEMORY_ACCESS_CONTROL          0x36
+ * lvgldemo wheel
+ * */
+
+/*
 #define ILI9341_MADCTL_PORTRAIT_PARAM1  (ILI9341_MADCTL_PORTRAIT_MY | \
                                         ILI9341_MADCTL_PORTRAIT_MX | \
                                         ILI9341_MADCTL_PORTRAIT_MV | \
                                         ILI9341_MADCTL_PORTRAIT_ML | \
                                         ILI9341_MADCTL_PORTRAIT_BGR | \
                                         ILI9341_MADCTL_PORTRAIT_MH)
+   */
+
+/*
+ * HBL
+ */
+#define ILI9341_MADCTL_PORTRAIT_PARAM1 ILI9341_MEMORY_ACCESS_CONTROL_ML|\
+	ILI9341_MEMORY_ACCESS_CONTROL_MH|ILI9341_MEMORY_ACCESS_CONTROL_BGR
+
+
+
+
 /* RLandscape:  01100000 / 01101000 / h68
  *
  * MY:          0
@@ -284,9 +306,16 @@
                                         ILI9341_PIXSET_18BITDBI)
 
 /* General fix display resolution */
-
+/*
 #define ILI9341_XRES           240
 #define ILI9341_YRES           320
+*/
+
+/*HBL ILI9342 */
+
+#define ILI9341_XRES           320
+#define ILI9341_YRES           240
+
 
 /* Validate configuration */
 
@@ -708,17 +737,22 @@ static int ili9341_hwinitialize(FAR struct ili9341_dev_s *dev)
 #ifdef CONFIG_DEBUG_LCD_INFO
   /* Read display identification */
 
-  lcd->sendcmd(lcd, ILI9341_READ_ID1);
+  //lcd->sendcmd(lcd, ILI9341_READ_DISP_ID);
+  param=ILI9341_READ_DISP_ID;
   lcd->recvparam(lcd, &param);
-  lcdinfo("ili9341 LCD driver: LCD modules manufacturer ID: %d\n", param);
+  lcdinfo("ili9341 LCD driver: LCD Identification information 0xe3: %#x\n", param);
 
-  lcd->sendcmd(lcd, ILI9341_READ_ID2);
-  lcd->recvparam(lcd, &param);
-  lcdinfo("ili9341 LCD driver: LCD modules driver version ID: %d\n", param);
+  //lcd->sendcmd(lcd, ILI9341_READ_ID1);
+  //lcd->recvparam(lcd, &param);
+  lcdinfo("ili9341 LCD driver: LCD modules manufacturer ID: %#x\n", param);
 
-  lcd->sendcmd(lcd, ILI9341_READ_ID3);
-  lcd->recvparam(lcd, &param);
-  lcdinfo("ili9341 LCD driver: LCD modules driver ID: %d\n", param);
+  //lcd->sendcmd(lcd, ILI9341_READ_ID2);
+  //lcd->recvparam(lcd, &param);
+  lcdinfo("ili9341 LCD driver: LCD modules driver version ID: %#x\n", param);
+
+  //lcd->sendcmd(lcd, ILI9341_READ_ID3);
+  //lcd->recvparam(lcd, &param);
+  lcdinfo("ili9341 LCD driver: LCD modules driver ID: %#x\n", param);
 #endif
 
   /* Reset the lcd display to the default state */
@@ -753,6 +787,11 @@ static int ili9341_hwinitialize(FAR struct ili9341_dev_s *dev)
   lcd->sendparam(lcd, ILI9341_IFCTL_PARAM1);
   lcd->sendparam(lcd, ILI9341_IFCTL_PARAM2);
   lcd->sendparam(lcd, ILI9341_IFCTL_PARAM3);
+
+  // Send the command twice as otherwise it does not always work
+  lcd->sendcmd(lcd, ILI9341_DISP_INVERSION_ON);
+  lcd->sendcmd(lcd, ILI9341_DISP_INVERSION_ON);
+
 
   /* Sleep out */
 
@@ -1015,6 +1054,7 @@ static int ili9341_setcontrast(struct lcd_dev_s *dev, unsigned int contrast)
 FAR struct lcd_dev_s *
   ili9341_initialize(FAR struct ili9341_lcd_s *lcd, int devno)
 {
+
   if (lcd && devno >= 0 && devno < CONFIG_LCD_ILI9341_NINTERFACES)
     {
       FAR struct ili9341_dev_s *priv = &g_lcddev[devno];
@@ -1110,3 +1150,4 @@ int ili9341_clear(FAR struct lcd_dev_s *dev, uint16_t color)
 
   return OK;
 }
+

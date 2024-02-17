@@ -145,68 +145,6 @@ unsigned int net_timeval2dsec(FAR struct timeval *tv,
                               enum tv2ds_remainder_e remainder);
 
 /****************************************************************************
- * Name: net_getrandom
- *
- * Description:
- *   Fill a buffer of arbitrary length with randomness. This function is
- *   guaranteed to be success.
- *
- * Input Parameters:
- *   bytes  - Buffer for returned random bytes
- *   nbytes - Number of bytes requested.
- *
- ****************************************************************************/
-
-void net_getrandom(FAR void *bytes, size_t nbytes);
-
-/****************************************************************************
- * Name: net_ipv4_mask2pref
- *
- * Description:
- *   Convert a 32-bit netmask to a prefix length.  The NuttX IPv4
- *   networking uses 32-bit network masks internally.  This function
- *   converts the IPv4 netmask to a prefix length.
- *
- *   The prefix length is the number of MS '1' bits on in the netmask.
- *   This, of course, assumes that all MS bits are '1' and all LS bits are
- *   '0' with no intermixed 1's and 0's.  This function searches from the MS
- *   bit until the first '0' is found (this does not necessary mean that
- *   there might not be additional '1' bits following the firs '0', but that
- *   will be a malformed netmask.
- *
- * Input Parameters:
- *   mask   An IPv4 netmask in the form of in_addr_t
- *
- * Returned Value:
- *   The prefix length, range 0-32 on success;  This function will not
- *   fail.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_IPv4
-uint8_t net_ipv4_mask2pref(in_addr_t mask);
-#endif
-
-/****************************************************************************
- * Name: net_ipv6_common_pref
- *
- * Description:
- *   Calculate the common prefix length of two IPv6 addresses.
- *
- * Input Parameters:
- *   a1,a2   Points to IPv6 addresses in the form of uint16_t[8]
- *
- * Returned Value:
- *   The common prefix length, range 0-128 on success;  This function will
- *   not fail.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_IPv6
-uint8_t net_ipv6_common_pref(FAR const uint16_t *a1, FAR const uint16_t *a2);
-#endif
-
-/****************************************************************************
  * Name: net_ipv6_mask2pref
  *
  * Description:
@@ -242,8 +180,8 @@ uint8_t net_ipv6_mask2pref(FAR const uint16_t *mask);
  *   specifies the number of MS bits under mask (0-128)
  *
  * Input Parameters:
- *   mask     - The location to return the netmask.
  *   preflen  - Determines the width of the netmask (in bits).  Range 0-128
+ *   mask  - The location to return the netmask.
  *
  * Returned Value:
  *   None
@@ -251,24 +189,7 @@ uint8_t net_ipv6_mask2pref(FAR const uint16_t *mask);
  ****************************************************************************/
 
 #ifdef CONFIG_NET_IPv6
-void net_ipv6_pref2mask(net_ipv6addr_t mask, uint8_t preflen);
-#endif
-
-/****************************************************************************
- * Name: net_iob_concat
- *
- * Description:
- *   Concatenate iob_s chain iob2 to iob1, if CONFIG_NET_RECV_PACK is
- *   endabled, pack all data in the I/O buffer chain.
- *
- * Returned Value:
- *   The number of bytes actually buffered is returned.  This will be either
- *   zero or equal to iob1->io_pktlen.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_MM_IOB
-uint16_t net_iob_concat(FAR struct iob_s **iob1, FAR struct iob_s **iob2);
+void net_ipv6_pref2mask(uint8_t preflen, net_ipv6addr_t mask);
 #endif
 
 /****************************************************************************
@@ -389,34 +310,6 @@ uint16_t icmp_chksum_iob(FAR struct iob_s *iob);
 #ifdef CONFIG_NET_ICMPv6
 uint16_t icmpv6_chksum(FAR struct net_driver_s *dev, unsigned int iplen);
 #endif
-
-/****************************************************************************
- * Name: cmsg_append
- *
- * Description:
- *   Append specified data into the control message, msg_control and
- *   msg_controllen will be changed to the appropriate value when success
- *
- * Input Parameters:
- *   msg       - Buffer to receive the message.
- *   level     - The level of control message.
- *   type      - The type of control message.
- *   value     - If the value is not NULL, this interface copies the data
- *               to the appropriate location in msg_control, and modify
- *               msg_control and msg_controllen.
- *               If the value is NULL, just modify the corresponding value
- *               of msg.
- *   value_len - The value length of control message.
- *
- * Returned Value:
- *   On success, a pointer to the start address of control message data,
- *               the caller can copy the data in.
- *   On failure, return NULL, because of msg_controllen is not enough
- *
- ****************************************************************************/
-
-FAR void *cmsg_append(FAR struct msghdr *msg, int level, int type,
-                      FAR void *value, int value_len);
 
 #undef EXTERN
 #ifdef __cplusplus

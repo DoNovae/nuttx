@@ -33,7 +33,7 @@
  ****************************************************************************/
 
 /* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  It is non-NULL only during interrupt
+ * register storage structure.  If is non-NULL only during interrupt
  * processing.  Access to g_current_regs[] must be through the macro
  * CURRENT_REGS for portability.
  */
@@ -97,12 +97,6 @@ static inline void arm_color_intstack(void)
 
 void up_initialize(void)
 {
-#if CONFIG_ARCH_INTERRUPTSTACK > 7
-  /* Reinitializes the stack pointer */
-
-  arm_initialize_stack();
-#endif
-
   /* Colorize the interrupt stack */
 
   arm_color_intstack();

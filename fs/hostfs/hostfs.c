@@ -36,7 +36,7 @@
 #include <errno.h>
 #include <debug.h>
 
-#include <nuttx/lib/lib.h>
+#include <nuttx/kmalloc.h>
 #include <nuttx/mutex.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/fat.h>
@@ -134,7 +134,7 @@ static mutex_t g_lock = NXMUTEX_INITIALIZER;
  * with any compiler.
  */
 
-const struct mountpt_operations g_hostfs_operations =
+const struct mountpt_operations hostfs_operations =
 {
   hostfs_open,          /* open */
   hostfs_close,         /* close */
@@ -144,7 +144,6 @@ const struct mountpt_operations g_hostfs_operations =
   hostfs_ioctl,         /* ioctl */
   NULL,                 /* mmap */
   hostfs_ftruncate,     /* ftruncate */
-  NULL,                 /* poll */
 
   hostfs_sync,          /* sync */
   hostfs_dup,           /* dup */
@@ -229,7 +228,7 @@ static void hostfs_mkpath(FAR struct hostfs_mountpt_s  *fs,
 
   if (depth >= 0)
     {
-      strlcat(path, &relpath[first], pathlen - strlen(path));
+      strncat(path, &relpath[first], pathlen - strlen(path) - 1);
     }
 }
 
@@ -269,7 +268,7 @@ static int hostfs_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Allocate memory for the open file */
 
-  hf = kmm_malloc(sizeof *hf);
+  hf = (struct hostfs_ofile_s *) kmm_malloc(sizeof *hf);
   if (hf == NULL)
     {
       ret = -ENOMEM;
@@ -297,7 +296,7 @@ static int hostfs_open(FAR struct file *filep, FAR const char *relpath,
 
   if ((oflags & (O_APPEND | O_WRONLY)) == (O_APPEND | O_WRONLY))
     {
-      ret = host_lseek(hf->fd, 0, 0, SEEK_END);
+      ret = host_lseek(hf->fd, 0, SEEK_END);
       if (ret >= 0)
         {
           filep->f_pos = ret;
@@ -354,7 +353,7 @@ static int hostfs_close(FAR struct file *filep)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -442,7 +441,7 @@ static ssize_t hostfs_read(FAR struct file *filep, FAR char *buffer,
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -484,7 +483,7 @@ static ssize_t hostfs_write(FAR struct file *filep, const char *buffer,
   FAR struct hostfs_ofile_s *hf;
   ssize_t ret;
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -538,7 +537,7 @@ static off_t hostfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -558,7 +557,7 @@ static off_t hostfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   /* Call our internal routine to perform the seek */
 
-  ret = host_lseek(hf->fd, filep->f_pos, offset, whence);
+  ret = host_lseek(hf->fd, offset, whence);
   if (ret >= 0)
     {
       filep->f_pos = ret;
@@ -581,7 +580,7 @@ static int hostfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -624,7 +623,7 @@ static int hostfs_sync(FAR struct file *filep)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -697,11 +696,11 @@ static int hostfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
 
   /* Sanity checks */
 
-  DEBUGASSERT(buf != NULL);
+  DEBUGASSERT(filep != NULL && buf != NULL);
 
   /* Recover our private data from the struct file instance */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
   hf    = filep->f_priv;
   inode = filep->f_inode;
 
@@ -743,11 +742,11 @@ static int hostfs_fchstat(FAR const struct file *filep,
 
   /* Sanity checks */
 
-  DEBUGASSERT(buf != NULL);
+  DEBUGASSERT(filep != NULL && buf != NULL);
 
   /* Recover our private data from the struct file instance */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
   hf    = filep->f_priv;
   inode = filep->f_inode;
 
@@ -786,9 +785,13 @@ static int hostfs_ftruncate(FAR struct file *filep, off_t length)
   FAR struct hostfs_ofile_s *hf;
   int ret = OK;
 
+  /* Sanity checks */
+
+  DEBUGASSERT(filep != NULL);
+
   /* Recover our private data from the struct file instance */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
   hf    = filep->f_priv;
   inode = filep->f_inode;
 
@@ -999,7 +1002,7 @@ static int hostfs_rewinddir(FAR struct inode *mountpt,
 static int hostfs_bind(FAR struct inode *blkdriver, FAR const void *data,
                        FAR void **handle)
 {
-  FAR struct hostfs_mountpt_s *fs;
+  FAR struct hostfs_mountpt_s  *fs;
   FAR char *options;
   char *saveptr;
   char *ptr;
@@ -1045,7 +1048,7 @@ static int hostfs_bind(FAR struct inode *blkdriver, FAR const void *data,
       ptr = strtok_r(NULL, ",", &saveptr);
     }
 
-  lib_free(options);
+  kmm_free(options);
 
   /* Take the lock for the mount */
 
@@ -1077,7 +1080,7 @@ static int hostfs_bind(FAR struct inode *blkdriver, FAR const void *data,
 
   if (fs->fs_root[len - 1] != '/')
     {
-      strlcat(fs->fs_root, "/", sizeof(fs->fs_root));
+      strcat(fs->fs_root, "/");
     }
 
   *handle = (FAR void *)fs;
@@ -1158,6 +1161,7 @@ static int hostfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   /* Call the host fs to perform the statfs */
 
+  memset(buf, 0, sizeof(struct statfs));
   ret = host_statfs(fs->fs_root, buf);
   buf->f_type = HOSTFS_MAGIC;
 

@@ -72,13 +72,12 @@ static ssize_t mempool_read(FAR struct file *filep, FAR char *buffer,
  * Public Data
  ****************************************************************************/
 
-const struct procfs_operations g_mempool_operations =
+const struct procfs_operations mempool_operations =
 {
   mempool_open,   /* open */
   mempool_close,  /* close */
   mempool_read,   /* read */
   NULL,           /* write */
-  NULL,           /* poll */
   mempool_dup,    /* dup */
   NULL,           /* opendir */
   NULL,           /* closedir */

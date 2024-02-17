@@ -29,7 +29,6 @@
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/queue.h>
-#include <nuttx/trace.h>
 
 #include "signal/signal.h"
 
@@ -128,7 +127,7 @@ static FAR sigq_t *nxsig_alloc_block(sq_queue_t *siglist, uint16_t nsigs,
 
   /* Allocate a block of pending signal actions. */
 
-  sigqalloc = kmm_malloc(sizeof(sigq_t) * nsigs);
+  sigqalloc = (FAR sigq_t *)kmm_malloc((sizeof(sigq_t)) * nsigs);
   if (sigqalloc != NULL)
     {
       sigq = sigqalloc;
@@ -161,7 +160,9 @@ static sigpendq_t *nxsig_alloc_pendingsignalblock(sq_queue_t *siglist,
 
   /* Allocate a block of pending signal structures  */
 
-  sigpendalloc = kmm_malloc(sizeof(sigpendq_t) * nsigs);
+  sigpendalloc =
+    (FAR sigpendq_t *)kmm_malloc((sizeof(sigpendq_t)) * nsigs);
+
   if (sigpendalloc != NULL)
     {
       sigpend = sigpendalloc;
@@ -189,8 +190,6 @@ static sigpendq_t *nxsig_alloc_pendingsignalblock(sq_queue_t *siglist,
 
 void nxsig_initialize(void)
 {
-  sched_trace_begin();
-
   /* Initialize free lists */
 
   sq_init(&g_sigfreeaction);
@@ -224,5 +223,4 @@ void nxsig_initialize(void)
                                    CONFIG_SIG_PREALLOC_IRQ_ACTIONS,
                                    SIG_ALLOC_IRQ);
   DEBUGASSERT(g_sigpendingirqsignalalloc != NULL);
-  sched_trace_end();
 }

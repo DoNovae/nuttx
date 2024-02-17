@@ -136,7 +136,7 @@ typedef struct
 #if CONFIG_ARCH_INTERRUPTSTACK > 3
   _stack_t interrupt;
 #endif
-} stacks_t;
+} stack_t;
 
 /* Not Used for reference only */
 
@@ -237,7 +237,7 @@ typedef struct
   int           lineno;                 /* __LINE__ to up_assert */
   int           pid;                    /* Process ID */
   uint32_t      regs[XCPTCONTEXT_REGS]; /* Interrupt register save area */
-  stacks_t      stacks;                 /* Stack info */
+  stack_t       stacks;                 /* Stack info */
 #if CONFIG_TASK_NAME_SIZE > 0
   char          name[CONFIG_TASK_NAME_SIZE + 1]; /* Task name (with NULL
                                                   * terminator) */
@@ -381,7 +381,7 @@ int stm32_bbsram_int(void)
 #if defined(CONFIG_STM32F7_SAVE_CRASHDUMP)
 void board_crashdump(uintptr_t sp, struct tcb_s *tcb,
                      const char *filename, int lineno,
-                     const char *msg, void *regs)
+                     const char *msg)
 {
   fullcontext_t *pdump = (fullcontext_t *)&g_sdata;
   int rv;

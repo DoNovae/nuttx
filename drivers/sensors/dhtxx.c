@@ -33,6 +33,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/signal.h>
+#include <nuttx/time.h>
 #include <nuttx/clock.h>
 #include <nuttx/mutex.h>
 #include <nuttx/sensors/dhtxx.h>
@@ -545,7 +546,7 @@ int dhtxx_register(FAR const char *devpath,
 
   /* Initialize the Dhtxx device structure */
 
-  priv = kmm_malloc(sizeof(struct dhtxx_dev_s));
+  priv = (FAR struct dhtxx_dev_s *)kmm_malloc(sizeof(struct dhtxx_dev_s));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

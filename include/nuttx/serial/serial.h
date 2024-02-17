@@ -272,6 +272,8 @@ struct uart_dev_s
 
   uint8_t              open_count;   /* Number of times the device has been opened */
   uint8_t              escape;       /* Number of the character to be escaped */
+  volatile bool        xmitwaiting;  /* true: User waiting for space in xmit.buffer */
+  volatile bool        recvwaiting;  /* true: User waiting for data in recv.buffer */
 #ifdef CONFIG_SERIAL_REMOVABLE
   volatile bool        disconnected; /* true: Removable device is not connected */
 #endif
@@ -318,12 +320,6 @@ struct uart_dev_s
    * driver events. The 'struct pollfd' reference for each open is also
    * retained in the f_priv field of the 'struct file'.
    */
-
-#ifdef CONFIG_SERIAL_TERMIOS
-  uint8_t minrecv;                   /* Minimum received bytes */
-  uint8_t minread;                   /* c_cc[VMIN] */
-  uint8_t timeout;                   /* c_cc[VTIME] */
-#endif
 
   struct pollfd *fds[CONFIG_SERIAL_NPOLLWAITERS];
 };
@@ -520,19 +516,6 @@ void uart_reset_sem(FAR uart_dev_t *dev);
 #if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGTSTP) || \
     defined(CONFIG_TTY_FORCE_PANIC) || defined(CONFIG_TTY_LAUNCH)
 int uart_check_special(FAR uart_dev_t *dev, const char *buf, size_t size);
-#endif
-
-/****************************************************************************
- * Name: uart_gdbstub_register
- *
- * Description:
- *   Use the uart device to register gdbstub.
- *   gdbstub run with serial interrupt.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SERIAL_GDBSTUB
-int uart_gdbstub_register(FAR uart_dev_t *dev);
 #endif
 
 #undef EXTERN

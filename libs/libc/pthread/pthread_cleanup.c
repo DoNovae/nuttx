@@ -32,7 +32,7 @@
 #include <nuttx/tls.h>
 #include <nuttx/pthread.h>
 
-#if defined(CONFIG_PTHREAD_CLEANUP_STACKSIZE) && CONFIG_PTHREAD_CLEANUP_STACKSIZE > 0
+#ifdef CONFIG_PTHREAD_CLEANUP
 
 /****************************************************************************
  * Private Functions
@@ -52,17 +52,20 @@
  * Returned Value:
  *   None
  *
+ * Assumptions:
+ *   The scheduler is locked.
+ *
  ****************************************************************************/
 
 static void pthread_cleanup_pop_tls(FAR struct tls_info_s *tls, int execute)
 {
-  if (tls->tl_tos > 0)
+  if (tls->tos > 0)
     {
       unsigned int ndx;
 
       /* Get the index to the last cleaner function pushed onto the stack */
 
-      ndx = tls->tl_tos - 1;
+      ndx = tls->tos - 1;
       DEBUGASSERT(ndx >= 0 && ndx < CONFIG_PTHREAD_CLEANUP_STACKSIZE);
 
       /* Should we execute the cleanup routine at the top of the stack? */
@@ -73,11 +76,11 @@ static void pthread_cleanup_pop_tls(FAR struct tls_info_s *tls, int execute)
 
           /* Yes..  Execute the clean-up routine. */
 
-          cb  = &tls->tl_stack[ndx];
+          cb  = &tls->stack[ndx];
           cb->pc_cleaner(cb->pc_arg);
         }
 
-      tls->tl_tos = ndx;
+      tls->tos = ndx;
     }
 }
 
@@ -119,7 +122,14 @@ void pthread_cleanup_pop(int execute)
 
   DEBUGASSERT(tls != NULL);
 
+  /* sched_lock() should provide sufficient protection.  We only need to
+   * have this TCB stationary; the pthread cleanup stack should never be
+   * modified by interrupt level logic.
+   */
+
+  sched_lock();
   pthread_cleanup_pop_tls(tls, execute);
+  sched_unlock();
 }
 
 void pthread_cleanup_push(pthread_cleanup_t routine, FAR void *arg)
@@ -127,16 +137,24 @@ void pthread_cleanup_push(pthread_cleanup_t routine, FAR void *arg)
   FAR struct tls_info_s *tls = tls_get_info();
 
   DEBUGASSERT(tls != NULL);
-  DEBUGASSERT(tls->tl_tos < CONFIG_PTHREAD_CLEANUP_STACKSIZE);
+  DEBUGASSERT(tls->tos < CONFIG_PTHREAD_CLEANUP_STACKSIZE);
 
-  if (tls->tl_tos < CONFIG_PTHREAD_CLEANUP_STACKSIZE)
+  /* sched_lock() should provide sufficient protection.  We only need to
+   * have this TCB stationary; the pthread cleanup stack should never be
+   * modified by interrupt level logic.
+   */
+
+  sched_lock();
+  if (tls->tos < CONFIG_PTHREAD_CLEANUP_STACKSIZE)
     {
-      unsigned int ndx = tls->tl_tos;
+      unsigned int ndx = tls->tos;
 
-      tls->tl_tos++;
-      tls->tl_stack[ndx].pc_cleaner = routine;
-      tls->tl_stack[ndx].pc_arg = arg;
+      tls->tos++;
+      tls->stack[ndx].pc_cleaner = routine;
+      tls->stack[ndx].pc_arg = arg;
     }
+
+  sched_unlock();
 }
 
 /****************************************************************************
@@ -159,10 +177,13 @@ void pthread_cleanup_popall(FAR struct tls_info_s *tls)
 {
   DEBUGASSERT(tls != NULL);
 
-  while (tls->tl_tos > 0)
+  sched_lock();
+  while (tls->tos > 0)
     {
       pthread_cleanup_pop_tls(tls, 1);
     }
+
+  sched_unlock();
 }
 
-#endif /* defined(CONFIG_PTHREAD_CLEANUP_STACKSIZE) && CONFIG_PTHREAD_CLEANUP_STACKSIZE > 0 */
+#endif /* CONFIG_PTHREAD_CLEANUP */

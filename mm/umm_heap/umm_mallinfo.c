@@ -45,7 +45,9 @@
 
 struct mallinfo mallinfo(void)
 {
-  return mm_mallinfo(USR_HEAP);
+  struct mallinfo info;
+  mm_mallinfo(USR_HEAP, &info);
+  return info;
 }
 
 /****************************************************************************
@@ -57,7 +59,11 @@ struct mallinfo mallinfo(void)
  *
  ****************************************************************************/
 
-struct mallinfo_task mallinfo_task(FAR const struct malltask *task)
+struct mallinfo_task mallinfo_task(pid_t pid)
 {
-  return mm_mallinfo_task(USR_HEAP, task);
+  struct mallinfo_task info;
+
+  info.pid = pid;
+  mm_mallinfo_task(USR_HEAP, &info);
+  return info;
 }

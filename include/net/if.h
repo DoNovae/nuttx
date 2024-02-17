@@ -54,10 +54,8 @@
 #define IFF_POINTOPOINT    (1 << 6)  /* Is point-to-point link */
 #define IFF_NOARP          (1 << 7)  /* ARP is not required for this packet */
 #define IFF_NAT            (1 << 8)  /* NAT is enabled for this interface */
-#define IFF_SLAVE          (1 << 11) /* Slave of a load balancer. */
 #define IFF_MULTICAST      (1 << 12) /* Supports multicast. */
 #define IFF_BROADCAST      (1 << 13) /* Broadcast address valid. */
-#define IFF_DYNAMIC        (1 << 15) /* Dialup device with changing addresses. */
 
 /* Interface flag helpers */
 
@@ -69,8 +67,6 @@
 #define IFF_SET_POINTOPOINT(f) do { (f) |= IFF_POINTOPOINT; } while (0)
 #define IFF_SET_MULTICAST(f)   do { (f) |= IFF_MULTICAST; } while (0)
 #define IFF_SET_BROADCAST(f)   do { (f) |= IFF_BROADCAST; } while (0)
-#define IFF_SET_SLAVE(f)       do { (f) |= IFF_SLAVE; } while (0)
-#define IFF_SET_DYNAMIC(f)     do { (f) |= IFF_DYNAMIC; } while (0)
 
 #define IFF_CLR_UP(f)          do { (f) &= ~IFF_UP; } while (0)
 #define IFF_CLR_RUNNING(f)     do { (f) &= ~IFF_RUNNING; } while (0)
@@ -80,8 +76,6 @@
 #define IFF_CLR_POINTOPOINT(f) do { (f) &= ~IFF_POINTOPOINT; } while (0)
 #define IFF_CLR_MULTICAST(f)   do { (f) &= ~IFF_MULTICAST; } while (0)
 #define IFF_CLR_BROADCAST(f)   do { (f) &= ~IFF_BROADCAST; } while (0)
-#define IFF_CLR_SLAVE(f)       do { (f) &= ~IFF_SLAVE; } while (0)
-#define IFF_CLR_DYNAMIC(f)     do { (f) &= ~IFF_DYNAMIC; } while (0)
 
 #define IFF_IS_UP(f)          (((f) & IFF_UP) != 0)
 #define IFF_IS_RUNNING(f)     (((f) & IFF_RUNNING) != 0)
@@ -91,8 +85,6 @@
 #define IFF_IS_POINTOPOINT(f) (((f) & IFF_POINTOPOINT) != 0)
 #define IFF_IS_MULTICAST(f)   (((f) & IFF_MULTICAST) != 0)
 #define IFF_IS_BROADCAST(f)   (((f) & IFF_BROADCAST) != 0)
-#define IFF_IS_SLAVE(f)       (((f) & IFF_SLAVE) != 0)
-#define IFF_IS_DYNAMIC(f)     (((f) & IFF_DYNAMIC) != 0)
 
 /* We only need to manage the IPv6 bit if both IPv6 and IPv4 are supported.
  * Otherwise, we can save a few bytes by ignoring it.
@@ -125,19 +117,6 @@
 #  define IFF_CLR_IPv4(f)
 #  define IFF_IS_IPv4(f)   (1)
 #endif
-
-/* RFC 2863 operational status */
-
-enum
-{
-  IF_OPER_UNKNOWN,
-  IF_OPER_NOTPRESENT,
-  IF_OPER_DOWN,
-  IF_OPER_LOWERLAYERDOWN,
-  IF_OPER_TESTING,
-  IF_OPER_DORMANT,
-  IF_OPER_UP,
-};
 
 /****************************************************************************
  * Public Type Definitions
@@ -276,7 +255,6 @@ struct ifreq
     struct mii_ioctl_data_s    ifru_mii_data;       /* MII request data */
     struct can_ioctl_data_s    ifru_can_data;       /* CAN bitrate request data */
     struct can_ioctl_filter_s  ifru_can_filter;     /* CAN filter request data */
-    FAR void                  *ifru_data;           /* For use by interface */
   } ifr_ifru;
 };
 
@@ -294,7 +272,6 @@ struct ifreq
 #define ifr_mii_reg_num       ifr_ifru.ifru_mii_data.reg_num /* PHY register address */
 #define ifr_mii_val_in        ifr_ifru.ifru_mii_data.val_in  /* PHY input data */
 #define ifr_mii_val_out       ifr_ifru.ifru_mii_data.val_out /* PHY output data */
-#define ifr_data              ifr_ifru.ifru_data             /* for use by interface  */
 
 /* Used only with the SIOCGIFCONF IOCTL command */
 

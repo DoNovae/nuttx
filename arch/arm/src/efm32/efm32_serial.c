@@ -804,6 +804,9 @@ static int efm32_ioctl(struct file *filep, int cmd, unsigned long arg)
 
   int ret = OK;
 
+  DEBUGASSERT(filep);
+  DEBUGASSERT(filep->f_inode);
+
   inode = filep->f_inode;
   dev   = inode->i_private;
 

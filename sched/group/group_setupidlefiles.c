@@ -34,7 +34,6 @@
 
 #include <nuttx/fs/fs.h>
 #include <nuttx/net/net.h>
-#include <nuttx/trace.h>
 
 #include "group/group.h"
 
@@ -49,7 +48,7 @@
  *   Configure the idle thread's TCB.
  *
  * Input Parameters:
- *   None.
+ *   tcb - tcb of the idle task.
  *
  * Returned Value:
  *   0 is returned on success; a negated errno value is returned on a
@@ -57,13 +56,13 @@
  *
  ****************************************************************************/
 
-int group_setupidlefiles(void)
+int group_setupidlefiles(FAR struct task_tcb_s *tcb)
 {
 #if defined(CONFIG_DEV_CONSOLE) || defined(CONFIG_DEV_NULL)
   int fd;
 #endif
 
-  sched_trace_begin();
+  DEBUGASSERT(tcb->cmn.group != NULL);
 
   /* Open stdin, dup to get stdout and stderr. This should always
    * be the first file opened and, hence, should always get file
@@ -71,11 +70,11 @@ int group_setupidlefiles(void)
    */
 
 #if defined(CONFIG_DEV_CONSOLE) || defined(CONFIG_DEV_NULL)
-#  ifdef CONFIG_DEV_CONSOLE
+#ifdef CONFIG_DEV_CONSOLE
   fd = nx_open("/dev/console", O_RDWR);
-#  else
+#else
   fd = nx_open("/dev/null", O_RDWR);
-#  endif
+#endif
   if (fd == 0)
     {
       /* Successfully opened stdin (fd == 0) */
@@ -99,7 +98,6 @@ int group_setupidlefiles(void)
           serr("ERROR: Failed to open stdin: %d\n", fd);
         }
 
-      sched_trace_end();
       return -ENFILE;
     }
 #else
@@ -110,9 +108,14 @@ int group_setupidlefiles(void)
    * It's a common practice to keep 0-2 always open even if they are
    * /dev/null to avoid that kind of problems. Thus the following warning.
    */
-#  warning file descriptors 0-2 are not opened
+#warning file descriptors 0-2 are not opened
 #endif /* defined(CONFIG_DEV_CONSOLE) || defined(CONFIG_DEV_NULL) */
 
-  sched_trace_end();
+  /* Allocate file/socket streams for the TCB */
+
+#ifdef CONFIG_FILE_STREAM
+  return group_setupstreams(tcb);
+#else
   return OK;
+#endif
 }

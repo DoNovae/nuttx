@@ -79,10 +79,6 @@
 #  error "Unsupported BPP"
 #endif
 
-#if !defined(CONFIG_LCD_FBCOUNT)
-#  define CONFIG_LCD_FBCOUNT 1
-#endif
-
 /****************************************************************************
  * Private Type Definition
  ****************************************************************************/
@@ -140,8 +136,6 @@ static int sim_getpower(struct lcd_dev_s *dev);
 static int sim_setpower(struct lcd_dev_s *dev, int power);
 static int sim_getcontrast(struct lcd_dev_s *dev);
 static int sim_setcontrast(struct lcd_dev_s *dev, unsigned int contrast);
-static int sim_openwindow(struct lcd_dev_s *dev);
-static int sim_closewindow(struct lcd_dev_s *dev);
 
 /****************************************************************************
  * Private Data
@@ -209,8 +203,6 @@ static struct sim_dev_s g_lcddev =
     .setpower     = sim_setpower,
     .getcontrast  = sim_getcontrast,
     .setcontrast  = sim_setcontrast,
-    .open         = sim_openwindow,
-    .close        = sim_closewindow,
   },
 };
 
@@ -435,39 +427,7 @@ static int sim_setcontrast(struct lcd_dev_s *dev, unsigned int contrast)
 }
 
 /****************************************************************************
- * Name: sim_openwindow
- ****************************************************************************/
-
-static int sim_openwindow(struct lcd_dev_s *dev)
-{
-  int ret = OK;
-  ginfo("lcd_dev=%p\n", dev);
-
-#ifdef CONFIG_SIM_X11FB
-  ret = sim_x11openwindow();
-#endif
-
-  return ret;
-}
-
-/****************************************************************************
- * Name: sim_closewindow
- ****************************************************************************/
-
-static int sim_closewindow(struct lcd_dev_s *dev)
-{
-  int ret = OK;
-  ginfo("lcd_dev=%p\n", dev);
-
-#ifdef CONFIG_SIM_X11FB
-  ret = sim_x11closewindow();
-#endif
-
-  return ret;
-}
-
-/****************************************************************************
- * Name: sim_x11loop
+ * Name: sim_updatework
  ****************************************************************************/
 
 void sim_x11loop(void)
@@ -507,7 +467,7 @@ int board_lcd_initialize(void)
 #ifdef CONFIG_SIM_X11FB
   ret = sim_x11initialize(CONFIG_SIM_FBWIDTH, CONFIG_SIM_FBHEIGHT,
                           (void**)&g_planeinfo.buffer, &g_fblen,
-                          &g_planeinfo.bpp, &g_stride, CONFIG_LCD_FBCOUNT);
+                          &g_planeinfo.bpp, &g_stride);
 #endif
 
   return ret;

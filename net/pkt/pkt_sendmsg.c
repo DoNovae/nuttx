@@ -105,12 +105,10 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
         {
           /* Copy the packet data into the device packet buffer and send it */
 
-          int ret = devif_send(dev, pstate->snd_buffer,
-                               pstate->snd_buflen, 0);
-          if (ret <= 0)
+          devif_send(dev, pstate->snd_buffer, pstate->snd_buflen, 0);
+          if (dev->d_sndlen == 0)
             {
-              pstate->snd_sent = ret;
-              goto end_wait;
+              return flags;
             }
 
           pstate->snd_sent = pstate->snd_buflen;
@@ -121,8 +119,6 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
 
           IFF_SET_NOARP(dev->d_flags);
         }
-
-end_wait:
 
       /* Don't allow any further call backs. */
 
@@ -205,7 +201,7 @@ ssize_t pkt_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
   /* Get the device driver that will service this transfer */
 
-  dev = pkt_find_device(psock->s_conn);
+  dev = pkt_find_device((FAR struct pkt_conn_s *)psock->s_conn);
   if (dev == NULL)
     {
       return -ENODEV;
@@ -227,7 +223,7 @@ ssize_t pkt_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
   if (len > 0)
     {
-      FAR struct pkt_conn_s *conn = psock->s_conn;
+      FAR struct pkt_conn_s *conn = (FAR struct pkt_conn_s *)psock->s_conn;
 
       /* Allocate resource to receive a callback */
 

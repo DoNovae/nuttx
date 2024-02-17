@@ -168,7 +168,7 @@ static int  ft5x06_poll(FAR struct file *filep, struct pollfd *fds,
 
 /* This the vtable that supports the character driver interface */
 
-static const struct file_operations g_ft5x06_fops =
+static const struct file_operations ft5x06_fops =
 {
   ft5x06_open,    /* open */
   ft5x06_close,   /* close */
@@ -606,6 +606,12 @@ static ssize_t ft5x06_waitsample(FAR struct ft5x06_dev_s *priv,
 {
   int ret;
 
+  /* Disable pre-emption to prevent other threads from getting control while
+   * we muck with the semaphores.
+   */
+
+  sched_lock();
+
   /* Now release the semaphore that manages mutually exclusive access to
    * the device structure.  This may cause other tasks to become ready to
    * run, but they cannot run yet because pre-emption is disabled.
@@ -653,6 +659,13 @@ static ssize_t ft5x06_waitsample(FAR struct ft5x06_dev_s *priv,
     }
 
 errout:
+  /* Restore pre-emption.  We might get suspended here but that is okay
+   * because we already have our sample.  Note:  this means that if there
+   * were two threads reading from the FT5x06 for some reason, the data
+   * might be read out of order.
+   */
+
+  sched_unlock();
   return ret;
 }
 
@@ -732,10 +745,11 @@ static int ft5x06_open(FAR struct file *filep)
   uint8_t tmp;
   int ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct ft5x06_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -790,10 +804,11 @@ static int ft5x06_close(FAR struct file *filep)
   FAR struct ft5x06_dev_s *priv;
   int ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct ft5x06_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -837,10 +852,11 @@ static ssize_t ft5x06_read(FAR struct file *filep, FAR char *buffer,
   FAR struct ft5x06_dev_s *priv;
   int ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct ft5x06_dev_s *)inode->i_private;
 
   /* Verify that the caller has provided a buffer large enough to receive
    * the touch data.
@@ -909,10 +925,11 @@ static int ft5x06_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   int                      ret;
 
   iinfo("cmd: %d arg: %ld\n", cmd, arg);
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct ft5x06_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -965,11 +982,11 @@ static int ft5x06_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int                      i;
 
   iinfo("setup: %d\n", (int)setup);
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct ft5x06_dev_s *)inode->i_private;
 
   /* Are we setting up the poll?  Or tearing it down? */
 
@@ -1013,8 +1030,8 @@ static int ft5x06_poll(FAR struct file *filep, FAR struct pollfd *fds,
       if (i >= CONFIG_FT5X06_NPOLLWAITERS)
         {
           ierr("ERROR: No available slot found: %d\n", i);
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
 
@@ -1022,7 +1039,7 @@ static int ft5x06_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (priv->valid)
         {
-          poll_notify(&fds, 1, POLLIN);
+          ft5x06_notify(priv);
         }
     }
   else if (fds->priv)
@@ -1034,8 +1051,8 @@ static int ft5x06_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       /* Remove all memory of the poll setup */
 
-      *slot     = NULL;
-      fds->priv = NULL;
+      *slot                = NULL;
+      fds->priv            = NULL;
     }
 
 errout:
@@ -1092,7 +1109,7 @@ int ft5x06_register(FAR struct i2c_master_s *i2c,
 
   /* Create and initialize a FT5x06 device driver instance */
 
-  priv = kmm_zalloc(sizeof(struct ft5x06_dev_s));
+  priv = (FAR struct ft5x06_dev_s *)kmm_zalloc(sizeof(struct ft5x06_dev_s));
   if (!priv)
     {
       ierr("ERROR: kmm_zalloc(%d) failed\n", sizeof(struct ft5x06_dev_s));
@@ -1134,7 +1151,7 @@ int ft5x06_register(FAR struct i2c_master_s *i2c,
   snprintf(devname, sizeof(devname), DEV_FORMAT, minor);
   iinfo("Registering %s\n", devname);
 
-  ret = register_driver(devname, &g_ft5x06_fops, 0666, priv);
+  ret = register_driver(devname, &ft5x06_fops, 0666, priv);
   if (ret < 0)
     {
       ierr("ERROR: register_driver() failed: %d\n", ret);

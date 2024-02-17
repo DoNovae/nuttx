@@ -81,7 +81,7 @@ void xtensa_panic(int xptcode, uint32_t *regs)
   _alert("Unhandled Exception %d\n", xptcode);
 #endif
 
-  PANIC_WITH_REGS("panic", regs);  /* Should not return */
+  PANIC();  /* Should not return */
   for (; ; );
 }
 
@@ -106,7 +106,7 @@ void xtensa_panic(int xptcode, uint32_t *regs)
  *      Level-1 interrupt as indicated by set level-1 bits in the INTERRUPT
  *      register.
  *   5  AllocaCause
- *      MOVSP instruction, if caller's registers are not in the register
+ *      MOVSP instruction, if caller’s registers are not in the register
  *      file.
  *   6  IntegerDivideByZeroCause
  *      QUOS, QUOU, REMS, or REMU divisor operand is zero.
@@ -184,6 +184,6 @@ void xtensa_user_panic(int exccause, uint32_t *regs)
   _alert("User Exception: EXCCAUSE=%04x\n", exccause);
 #endif
 
-  PANIC_WITH_REGS("user panic", regs); /* Should not return */
+  PANIC(); /* Should not return */
   for (; ; );
 }

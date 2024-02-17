@@ -44,7 +44,6 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/signal.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #include <nuttx/usb/cdc.h>
@@ -256,7 +255,6 @@ static void usbhost_notification_work(FAR void *arg);
 static void usbhost_notification_callback(FAR void *arg, ssize_t nbytes);
 static void usbhost_rxdata_work(FAR void *arg);
 static void usbhost_bulkin_work(FAR void *arg);
-static void usbhost_bulkin_callback(FAR void *arg, ssize_t nbytes);
 
 static void usbhost_destroy(FAR void *arg);
 
@@ -341,7 +339,7 @@ static struct usbhost_registry_s g_cdcmbim =
 
 /* File operations for control channel */
 
-static const struct file_operations g_cdcwdm_fops =
+static const struct file_operations cdcwdm_fops =
 {
   NULL,          /* open */
   NULL,          /* close */
@@ -538,7 +536,7 @@ static int cdcwdm_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int                           ret = OK;
   int                           i;
 
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && filep->f_inode && fds);
   inode = filep->f_inode;
   priv  = inode->i_private;
 
@@ -573,8 +571,8 @@ static int cdcwdm_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (i >= CONFIG_USBHOST_CDCMBIM_NPOLLWAITERS)
         {
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
 
@@ -584,7 +582,8 @@ static int cdcwdm_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (priv->comm_rxlen > 0)
         {
-          poll_notify(&fds, 1, POLLIN);
+          poll_notify(priv->fds, CONFIG_USBHOST_CDCMBIM_NPOLLWAITERS,
+                      POLLIN);
         }
     }
   else
@@ -629,7 +628,8 @@ static inline FAR struct usbhost_cdcmbim_s *usbhost_allocclass(void)
   FAR struct usbhost_cdcmbim_s *priv;
 
   DEBUGASSERT(!up_interrupt_context());
-  priv = kmm_malloc(sizeof(struct usbhost_cdcmbim_s));
+  priv = (FAR struct usbhost_cdcmbim_s *)kmm_malloc(
+                                         sizeof(struct usbhost_cdcmbim_s));
   uinfo("Allocated: %p\n", priv);
   return priv;
 }
@@ -1574,7 +1574,7 @@ static inline int usbhost_devinit(FAR struct usbhost_cdcmbim_s *priv)
 
       uinfo("Register character driver\n");
       usbhost_mkdevname(priv, devname);
-      ret = register_driver(devname, &g_cdcwdm_fops, 0666, priv);
+      ret = register_driver(devname, &cdcwdm_fops, 0666, priv);
     }
 
   if (priv->intin)
@@ -2310,9 +2310,9 @@ static int cdcmbim_ifup(struct net_driver_s *dev)
   int ret;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff), (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff), (int)(dev->d_ipaddr >> 24));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",

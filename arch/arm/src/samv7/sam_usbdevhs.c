@@ -455,7 +455,7 @@ static void   sam_dumpep(struct sam_usbdev_s *priv, int epno);
 #else
 static inline uint32_t sam_getreg(uintptr_t regaddr);
 static inline void sam_putreg(uint32_t regval, uintptr_t regaddr);
-#  define sam_dumpep(priv,epno)
+# define sam_dumpep(priv,epno)
 #endif
 
 /* Suspend/Resume Helpers ***************************************************/
@@ -2004,13 +2004,6 @@ static void sam_ep0_setup(struct sam_usbdev_s *priv)
   uint8_t              epno;
   int                  nbytes = 0; /* Assume zero-length packet */
   int                  ret;
-
-  /* We want to pass pointer to response.b to sam_ctrlep_write function.
-   * Memset the union to avoid compilation warnings of uninitialized
-   * variable.
-   */
-
-  memset(&response, 0, sizeof(union wb_u));
 
   /* Terminate any pending requests */
 
@@ -3935,7 +3928,7 @@ static struct usbdev_req_s *sam_ep_allocreq(struct usbdev_ep_s *ep)
   DEBUGASSERT(ep != NULL);
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = kmm_malloc(sizeof(struct sam_req_s));
+  privreq = (struct sam_req_s *)kmm_malloc(sizeof(struct sam_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(SAM_TRACEERR_ALLOCFAIL), 0);

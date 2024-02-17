@@ -52,7 +52,6 @@
 #include <nuttx/irq.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
@@ -1356,9 +1355,11 @@ static int dm9x_ifup(FAR struct net_driver_s *dev)
   uint8_t netstatus;
   int i;
 
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 
   /* Initialize DM90x0 chip */
 
@@ -1553,9 +1554,8 @@ static int dm9x_addmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
-  /* #warning "Multicast MAC support not implemented" */
-
-  return -ENOSYS;
+#warning "Multicast MAC support not implemented"
+  return OK;
 }
 #endif
 
@@ -1585,9 +1585,8 @@ static int dm9x_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
-  /* #warning "Multicast MAC support not implemented" */
-
-  return -ENOSYS;
+#warning "Multicast MAC support not implemented"
+  return OK;
 }
 #endif
 

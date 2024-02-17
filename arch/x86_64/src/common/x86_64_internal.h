@@ -32,7 +32,6 @@
 #  include <nuttx/sched.h>
 #  include <stdint.h>
 #  include <arch/io.h>
-#  include <arch/multiboot2.h>
 #endif
 
 /****************************************************************************
@@ -48,6 +47,11 @@
 #undef  CONFIG_SUPPRESS_TIMER_INTS    /* DEFINED: No timer */
 #undef  CONFIG_SUPPRESS_SERIAL_INTS   /* DEFINED: Console will poll */
 #undef  CONFIG_SUPPRESS_UART_CONFIG   /* DEFINED: Do not reconfig UART */
+#undef  CONFIG_DUMP_ON_EXIT           /* DEFINED: Dump task state on exit */
+
+#ifndef CONFIG_DEBUG_SCHED_INFO
+#  undef CONFIG_DUMP_ON_EXIT          /* Needs CONFIG_DEBUG_SCHED_INFO */
+#endif
 
 /* Determine which (if any) console driver to use.  If a console is enabled
  * and no other console device is specified, then a serial console is
@@ -64,7 +68,7 @@
 #    undef  USE_SERIALDRIVER
 #    undef  USE_EARLYSERIALINIT
 #    undef  CONFIG_DEV_LOWCONSOLE
-#  elif defined(CONFIG_16550_UART)
+#  else
 #    define USE_SERIALDRIVER 1
 #    define USE_EARLYSERIALINIT 1
 #  endif
@@ -83,7 +87,7 @@
 /* Check if an interrupt stack size is configured */
 
 #ifndef CONFIG_ARCH_INTERRUPTSTACK
-#  define CONFIG_ARCH_INTERRUPTSTACK 0
+# define CONFIG_ARCH_INTERRUPTSTACK 0
 #endif
 
 /* The initial stack point is aligned at 16 bytes boundaries. If
@@ -196,17 +200,12 @@ void x86_64_checktasks(void);
 
 void x86_64_syscall(uint64_t *regs);
 
-#ifdef CONFIG_ARCH_MULTIBOOT2
-void x86_64_mb2_fbinitialize(struct multiboot_tag_framebuffer *tag);
-void fb_putc(char ch);
-#endif
-
 /* Defined in up_allocateheap.c */
 
 #if CONFIG_MM_REGIONS > 1
 void x86_64_addregion(void);
 #else
-#  define x86_64_addregion()
+# define x86_64_addregion()
 #endif
 
 /* Defined in xyz_serial.c */
@@ -224,15 +223,15 @@ void x86_64_timer_initialize(void);
 #ifdef CONFIG_NET
 void x86_64_netinitialize(void);
 #else
-#  define x86_64_netinitialize()
+# define x86_64_netinitialize()
 #endif
 
 #ifdef CONFIG_USBDEV
 void x86_64_usbinitialize(void);
 void x86_64_usbuninitialize(void);
 #else
-#  define x86_64_usbinitialize()
-#  define x86_64_usbuninitialize()
+# define x86_64_usbinitialize()
+# define x86_64_usbuninitialize()
 #endif
 
 #endif /* __ASSEMBLY__ */

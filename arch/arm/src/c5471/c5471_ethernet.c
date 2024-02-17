@@ -41,7 +41,6 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/wqueue.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
@@ -81,7 +80,7 @@
  */
 
 #ifndef CONFIG_C5471_NET_NINTERFACES
-#  define CONFIG_C5471_NET_NINTERFACES 1
+# define CONFIG_C5471_NET_NINTERFACES 1
 #endif
 
 /* CONFIG_C5471_NET_STATS will enabled collection of driver statistics.
@@ -100,7 +99,7 @@
 # undef CONFIG_C5471_AUTONEGOTIATION
 # undef CONFIG_C5471_BASET100
 #else
-#  define CONFIG_C5471_AUTONEGOTIATION 1
+# define CONFIG_C5471_AUTONEGOTIATION 1
 # undef CONFIG_C5471_BASET100
 # undef CONFIG_C5471_BASET10
 #endif
@@ -436,7 +435,7 @@ static inline void c5471_dumpbuffer(const char *msg, const uint8_t *buffer,
   ninfodumpbuffer(msg, buffer, nbytes);
 }
 #else
-#  define c5471_dumpbuffer(msg, buffer,nbytes)
+# define c5471_dumpbuffer(msg, buffer,nbytes)
 #endif
 
 /****************************************************************************
@@ -1722,9 +1721,11 @@ static int c5471_ifup(struct net_driver_s *dev)
   struct c5471_driver_s *priv = (struct c5471_driver_s *)dev->d_private;
   volatile uint32_t clearbits;
 
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 
   /* Initialize Ethernet interface */
 

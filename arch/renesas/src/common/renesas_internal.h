@@ -147,6 +147,7 @@ void renesas_fullcontextrestore(uint32_t *regs) noreturn_function;
 void renesas_prefetchabort(uint32_t *regs);
 void renesas_sigdeliver(void);
 void renesas_syscall(uint32_t *regs);
+void renesas_undefinedinsn(uint32_t *regs);
 void renesas_lowputc(char ch);
 void renesas_lowputs(const char *str);
 
@@ -179,8 +180,8 @@ void renesas_lowputc(char ch);
 void renesas_lcdinit(void);
 void renesas_lcdputc(char ch);
 #else
-#  define renesas_lcdinit()
-#  define renesas_lcdputc(ch)
+# define renesas_lcdinit()
+# define renesas_lcdputc(ch)
 #endif
 
 /* Defined in board/xyz_network.c */
@@ -188,7 +189,7 @@ void renesas_lcdputc(char ch);
 #if defined(CONFIG_NET) && !defined(CONFIG_NETDEV_LATEINIT)
 void renesas_netinitialize(void);
 #else
-#  define renesas_netinitialize()
+# define renesas_netinitialize()
 #endif
 
 /* USB */
@@ -197,8 +198,8 @@ void renesas_netinitialize(void);
 void renesas_usbinitialize(void);
 void renesas_usbuninitialize(void);
 #else
-#  define renesas_usbinitialize()
-#  define renesas_usbuninitialize()
+# define renesas_usbinitialize()
+# define renesas_usbuninitialize()
 #endif
 
 #endif /* __ASSEMBLY__ */

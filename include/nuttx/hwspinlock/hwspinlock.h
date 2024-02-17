@@ -104,16 +104,18 @@ hwspin_lock_irqsave(FAR struct hwspinlock_dev_s *dev,
   return flags;
 }
 
-static inline void hwspin_unlock(FAR struct hwspinlock_dev_s *dev, int id)
+static inline void hwspin_unlock(FAR struct hwspinlock_dev_s *dev,
+                                 int id, int priority)
 {
   dev->ops->unlock(dev, id);
 }
 
 static inline void hwspin_unlock_restore(FAR struct hwspinlock_dev_s *dev,
-                                         int id, irqstate_t flags)
+                                         int id, int priority,
+                                         irqstate_t flags)
 {
   hwspin_unlock(dev, id);
-  spin_unlock_irqrestore(&dev->lock, flags);
+  spin_lock_restore(&dev->lock, flags);
 }
 
 #ifdef __cplusplus

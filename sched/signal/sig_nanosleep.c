@@ -103,24 +103,6 @@ int nxsig_nanosleep(FAR const struct timespec *rqtp,
       return -EINVAL;
     }
 
-  /* If rqtp is zero, yield CPU and return
-   * Notice: The behavior of sleep(0) is not defined in POSIX, so there are
-   * different implementations:
-   * 1. In Linux, nanosleep(0) will call schedule() to yield CPU:
-   *    https://elixir.bootlin.com/linux/latest/source/kernel/time/
-   *    hrtimer.c#L2038
-   * 2. In BSD, nanosleep(0) will return immediately:
-   *    https://github.com/freebsd/freebsd-src/blob/
-   *    475fa89800086718bd9249fd4dc3f862549f1f78/crypto/openssh/
-   *    openbsd-compat/bsd-misc.c#L243
-   */
-
-  if (rqtp->tv_sec == 0 && rqtp->tv_nsec == 0)
-    {
-      sched_yield();
-      return OK;
-    }
-
   /* Get the start time of the wait.  Interrupts are disabled to prevent
    * timer interrupts while we do tick-related calculations before and
    * after the wait.
@@ -262,13 +244,12 @@ int nxsig_nanosleep(FAR const struct timespec *rqtp,
  *   actually slept). If the rmtp argument is NULL, the remaining time is not
  *   returned.
  *
- *   If clock_nanosleep() fails, it returns a value of errno. The
- *   clock_nanosleep() function will fail if:
+ *   If clock_nanosleep() fails, it returns a value of -1 and sets errno to
+ *   indicate the error. The clock_nanosleep() function will fail if:
  *
  *     EINTR - The clock_nanosleep() function was interrupted by a signal.
  *     EINVAL - The rqtp argument specified a nanosecond value less than
- *       zero or greater than or equal to 1000 million. Or the clockid that
- *       does not specify a known clock.
+ *       zero or greater than or equal to 1000 million.
  *     ENOSYS - The clock_nanosleep() function is not supported by this
  *       implementation.
  *
@@ -283,12 +264,6 @@ int clock_nanosleep(clockid_t clockid, int flags,
   /* clock_nanosleep() is a cancellation point */
 
   enter_cancellation_point();
-
-  if (clockid < CLOCK_REALTIME || clockid > CLOCK_BOOTTIME)
-    {
-      leave_cancellation_point();
-      return EINVAL;
-    }
 
   /* Check if absolute time is selected */
 
@@ -311,7 +286,7 @@ int clock_nanosleep(clockid_t clockid, int flags,
 
           leave_critical_section(irqstate);
           leave_cancellation_point();
-          return -ret;
+          return ERROR;
         }
 
       clock_timespec_subtract(rqtp, &now, &reltime);
@@ -337,9 +312,10 @@ int clock_nanosleep(clockid_t clockid, int flags,
 
   if (ret < 0)
     {
-      /* If not return the errno */
+      /* If not set the errno variable and return -1 */
 
-      ret = -ret;
+      set_errno(-ret);
+      ret = ERROR;
     }
 
   leave_cancellation_point();

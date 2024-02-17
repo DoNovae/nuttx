@@ -52,16 +52,15 @@
 #  define CALL_FUNC(func, arg) \
      do \
        { \
-         clock_t start; \
-         clock_t elapsed; \
-         start = perf_gettime(); \
+         uint32_t start; \
+         uint32_t elapsed; \
+         start = up_perf_gettime(); \
          func(arg); \
-         elapsed = perf_gettime() - start; \
+         elapsed = up_perf_gettime() - start; \
          if (elapsed > CONFIG_SCHED_CRITMONITOR_MAXTIME_WDOG) \
            { \
-             CRITMONITOR_PANIC("WDOG %p, %s IRQ, execute too long %ju\n", \
-                               func, up_interrupt_context() ? \
-                               "IN" : "NOT", (uintmax_t)elapsed); \
+             serr("WDOG %p, %s IRQ, execute too long %"PRIu32"\n", \
+                   func, up_interrupt_context() ? "IN" : "NOT", elapsed); \
            } \
        } \
      while (0)
@@ -373,10 +372,6 @@ unsigned int wd_timer(int ticks, bool noswitches)
   unsigned int ret;
   int decr;
 
-  /* Update clock tickbase */
-
-  g_wdtickbase += ticks;
-
   /* Check if there are any active watchdogs to process */
 
   wdog = (FAR struct wdog_s *)g_wdactivelist.head;
@@ -390,6 +385,7 @@ unsigned int wd_timer(int ticks, bool noswitches)
 
       wdog->lag    -= decr;
       ticks        -= decr;
+      g_wdtickbase += decr;
 
       wdog = wdog->next;
     }
@@ -400,6 +396,10 @@ unsigned int wd_timer(int ticks, bool noswitches)
     {
       wd_expiration();
     }
+
+  /* Update clock tickbase */
+
+  g_wdtickbase += ticks;
 
   /* Return the delay for the next watchdog to expire */
 

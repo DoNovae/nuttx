@@ -80,8 +80,9 @@ int can_getsockopt(FAR struct socket *psock, int level, int option,
   FAR struct can_conn_s *conn;
   int ret = OK;
 
-  DEBUGASSERT(value != NULL && value_len != NULL);
-  conn = psock->s_conn;
+  DEBUGASSERT(psock != NULL && value != NULL && value_len != NULL &&
+              psock->s_conn != NULL);
+  conn = (FAR struct can_conn_s *)psock->s_conn;
 
 #ifdef CONFIG_NET_TIMESTAMP
   if (level == SOL_SOCKET && option == SO_TIMESTAMP)
@@ -122,7 +123,6 @@ int can_getsockopt(FAR struct socket *psock, int level, int option,
         else
           {
             int count = conn->filter_count;
-            int i;
 
             if (*value_len < count * sizeof(struct can_filter))
               {
@@ -133,26 +133,16 @@ int can_getsockopt(FAR struct socket *psock, int level, int option,
                 *value_len = count * sizeof(struct can_filter);
               }
 
-            for (i = 0; i < count; i++)
+            for (int i = 0; i < count; i++)
               {
-                ((FAR struct can_filter *)value)[i] = conn->filters[i];
+                ((struct can_filter *)value)[i] = conn->filters[i];
               }
+
+            ret = OK;
           }
         break;
 
       case CAN_RAW_ERR_FILTER:
-#ifdef CONFIG_NET_CAN_ERRORS
-        if (*value_len < sizeof(can_err_mask_t))
-          {
-            return -EINVAL;
-          }
-        else
-          {
-            FAR can_err_mask_t *mask = (FAR can_err_mask_t *)value;
-            *mask = conn->err_mask;
-            *value_len = sizeof(can_err_mask_t);
-          }
-#endif
         break;
 
       case CAN_RAW_LOOPBACK:
@@ -163,13 +153,14 @@ int can_getsockopt(FAR struct socket *psock, int level, int option,
              * to me in this case.
              */
 
-            ret = -EINVAL;
+            ret              = -EINVAL;
           }
         else
           {
-            FAR int32_t *loopback = (FAR int32_t *)value;
-            *loopback             = conn->loopback;
-            *value_len            = sizeof(conn->loopback);
+            FAR int32_t *loopback  = (FAR int32_t *)value;
+            *loopback              = conn->loopback;
+            *value_len             = sizeof(conn->loopback);
+            ret                    = OK;
           }
         break;
 
@@ -181,13 +172,14 @@ int can_getsockopt(FAR struct socket *psock, int level, int option,
              * to me in this case.
              */
 
-            ret = -EINVAL;
+            ret              = -EINVAL;
           }
         else
           {
             FAR int32_t *recv_own_msgs = (FAR int32_t *)value;
             *recv_own_msgs             = conn->recv_own_msgs;
             *value_len                 = sizeof(conn->recv_own_msgs);
+            ret                        = OK;
           }
         break;
 
@@ -200,13 +192,14 @@ int can_getsockopt(FAR struct socket *psock, int level, int option,
              * to me in this case.
              */
 
-            ret = -EINVAL;
+            ret              = -EINVAL;
           }
         else
           {
             FAR int32_t *fd_frames = (FAR int32_t *)value;
             *fd_frames             = conn->fd_frames;
             *value_len             = sizeof(conn->fd_frames);
+            ret                    = OK;
           }
         break;
 #endif
@@ -223,13 +216,14 @@ int can_getsockopt(FAR struct socket *psock, int level, int option,
              * to me in this case.
              */
 
-            ret = -EINVAL;
+            ret              = -EINVAL;
           }
         else
           {
             FAR int32_t *tx_deadline = (FAR int32_t *)value;
             *tx_deadline             = conn->tx_deadline;
             *value_len               = sizeof(conn->tx_deadline);
+            ret                      = OK;
           }
         break;
 #endif

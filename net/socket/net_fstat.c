@@ -108,7 +108,8 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
 #if defined(NET_TCP_HAVE_STACK)
        case SOCK_STREAM:
          {
-           FAR struct tcp_conn_s *tcp_conn = psock->s_conn;
+           FAR struct tcp_conn_s *tcp_conn =
+                       (FAR struct tcp_conn_s *)psock->s_conn;
 
            /* For TCP, the MSS is a dynamic value that maintained in the
             * connection structure.
@@ -122,7 +123,8 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
 #if defined(NET_UDP_HAVE_STACK)
        case SOCK_DGRAM:
          {
-           FAR struct udp_conn_s *udp_conn = psock->s_conn;
+           FAR struct udp_conn_s *udp_conn =
+                                   (FAR struct udp_conn_s *)psock->s_conn;
            FAR struct net_driver_s *dev;
            uint16_t iplen;
 
@@ -150,9 +152,14 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
              {
                /* We need the length of the IP header */
 
-               iplen = net_ip_domain_select(udp_conn->domain,
-                                            IPv4_HDRLEN, IPv6_HDRLEN);
-
+#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
+               iplen = (udp_conn->domain == PF_INET) ? IPv4_HDRLEN :
+                                                       IPv6_HDRLEN;
+#elif defined(CONFIG_NET_IPv4)
+               iplen = IPv4_HDRLEN;
+#else
+               iplen = IPv6_HDRLEN;
+#endif
                /* Now we can calculate the MSS */
 
                buf->st_blksize = UDP_MSS(dev, iplen);

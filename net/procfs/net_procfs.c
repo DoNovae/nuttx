@@ -39,7 +39,7 @@
 
 #include <sys/param.h>
 
-#include <nuttx/lib/lib.h>
+#include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/procfs.h>
 #include <nuttx/net/netdev.h>
@@ -99,7 +99,7 @@ static int     netprocfs_stat(FAR const char *relpath, FAR struct stat *buf);
  * Private Data
  ****************************************************************************/
 
-extern const struct procfs_operations g_netroute_operations;
+extern const struct procfs_operations net_procfs_routeoperations;
 
 /* Netprocfs component mappings */
 
@@ -141,7 +141,7 @@ static const struct netprocfs_entry_s g_net_entries[] =
   {
     DTYPE_DIRECTORY, "route",
     {
-      (FAR void *)&g_netroute_operations
+      (FAR void *)&net_procfs_routeoperations
     }
   },
 #endif
@@ -162,13 +162,12 @@ static const struct netprocfs_entry_s g_net_entries[] =
  * with any compiler.
  */
 
-const struct procfs_operations g_net_operations =
+const struct procfs_operations net_procfsoperations =
 {
   netprocfs_open,       /* open */
   netprocfs_close,      /* close */
   netprocfs_read,       /* read */
   NULL,                 /* write */
-  NULL,                 /* poll */
   netprocfs_dup,        /* dup */
 
   netprocfs_opendir,    /* opendir */
@@ -203,7 +202,7 @@ static int netprocfs_open(FAR struct file *filep, FAR const char *relpath,
    */
 
   if (((oflags & O_WRONLY) != 0 || (oflags & O_RDONLY) == 0) &&
-      (g_net_operations.write == NULL))
+      (net_procfsoperations.write == NULL))
     {
       ferr("ERROR: Only O_RDONLY supported\n");
       return -EACCES;
@@ -245,7 +244,7 @@ static int netprocfs_open(FAR struct file *filep, FAR const char *relpath,
 
       devname = basename(copy);
       dev     = netdev_findbyname(devname);
-      lib_free(copy);
+      kmm_free(copy);
 
       if (dev == NULL)
         {
@@ -671,7 +670,7 @@ static int netprocfs_stat(FAR const char *relpath, FAR struct stat *buf)
 
       devname = basename(copy);
       dev     = netdev_findbyname(devname);
-      lib_free(copy);
+      kmm_free(copy);
 
       if (dev == NULL)
         {

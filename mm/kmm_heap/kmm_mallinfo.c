@@ -24,6 +24,8 @@
 
 #include <nuttx/config.h>
 
+#include <malloc.h>
+
 #include <nuttx/mm/mm.h>
 
 #ifdef CONFIG_MM_KERNEL_HEAP
@@ -43,7 +45,9 @@
 
 struct mallinfo kmm_mallinfo(void)
 {
-  return mm_mallinfo(g_kmmheap);
+  struct mallinfo info;
+  mm_mallinfo(g_kmmheap, &info);
+  return info;
 }
 
 /****************************************************************************
@@ -55,8 +59,12 @@ struct mallinfo kmm_mallinfo(void)
  *
  ****************************************************************************/
 
-struct mallinfo_task kmm_mallinfo_task(FAR const struct malltask *task)
+struct mallinfo_task kmm_mallinfo_task(pid_t pid)
 {
-  return mm_mallinfo_task(g_kmmheap, task);
+  struct mallinfo_task info;
+
+  info.pid = pid;
+  mm_mallinfo_task(g_kmmheap, &info);
+  return info;
 }
 #endif /* CONFIG_MM_KERNEL_HEAP */

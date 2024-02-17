@@ -87,7 +87,7 @@ static int cxd56_sphirqhandler(int irq, void *context, void *arg);
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_sph_fops =
+static const struct file_operations sph_fops =
 {
   .open  = sph_open,
   .ioctl = sph_ioctl
@@ -115,7 +115,7 @@ static int sph_open(struct file *filep)
 static int sph_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
   struct sph_dev_s *priv =
-    filep->f_inode->i_private;
+    (struct sph_dev_s *)filep->f_inode->i_private;
   int ret = -ENOTTY;
 
   hsinfo("cmd = %x\n", cmd);
@@ -224,7 +224,7 @@ static inline int cxd56_sphdevinit(const char *devname, int num)
 
   snprintf(fullpath, sizeof(fullpath), "/dev/%s%d", devname, num);
 
-  ret = register_driver(fullpath, &g_sph_fops, 0666, (void *)priv);
+  ret = register_driver(fullpath, &sph_fops, 0666, (void *)priv);
   if (ret != 0)
     {
       return ERROR;

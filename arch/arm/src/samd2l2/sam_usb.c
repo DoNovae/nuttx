@@ -31,19 +31,19 @@
  *
  *   Device mode
  *   - Supports 8 IN endpoints and 8 OUT endpoints
- *   - No endpoint size limitations
- *   - Built-in DMA with multi-packet and dual bank for all endpoints
- *   - Supports feedback endpoint
- *   - Supports crystal less clock
+ *   – No endpoint size limitations
+ *   – Built-in DMA with multi-packet and dual bank for all endpoints
+ *   – Supports feedback endpoint
+ *   – Supports crystal less clock
  *
  *   Host mode
  *   - Supports 8 physical pipes
- *   - No pipe size limitations
- *   - Supports multiplexed virtual pipe on one physical pipe to allow an
+ *   – No pipe size limitations
+ *   – Supports multiplexed virtual pipe on one physical pipe to allow an
  *     unlimited USB tree
- *   - Built-in DMA with multi-packet support and dual bank for all pipes
- *   - Supports feedback endpoint
- *   - Supports the USB 2.0 Phase-locked SOFs feature
+ *   – Built-in DMA with multi-packet support and dual bank for all pipes
+ *   – Supports feedback endpoint
+ *   – Supports the USB 2.0 Phase-locked SOFs feature
  *
  ****************************************************************************/
 
@@ -383,7 +383,7 @@ static inline uint32_t sam_getreg16(uintptr_t regaddr);
 static inline void sam_putreg16(uint16_t regval, uintptr_t regaddr);
 static inline uint32_t sam_getreg8(uintptr_t regaddr);
 static inline void sam_putreg8(uint8_t regval, uintptr_t regaddr);
-#  define sam_dumpep(priv,epno)
+# define sam_dumpep(priv,epno)
 #endif
 
 /* Suspend/Resume Helpers ***************************************************/
@@ -1644,7 +1644,7 @@ static struct usbdev_req_s *sam_ep_allocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = kmm_malloc(sizeof(struct sam_req_s));
+  privreq = (struct sam_req_s *)kmm_malloc(sizeof(struct sam_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(SAM_TRACEERR_ALLOCFAIL), 0);

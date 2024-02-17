@@ -127,7 +127,7 @@ static int     ajoy_poll(FAR struct file *filep, FAR struct pollfd *fds,
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_ajoy_fops =
+static const struct file_operations ajoy_fops =
 {
   ajoy_open,  /* open */
   ajoy_close, /* close */
@@ -297,13 +297,14 @@ static int ajoy_open(FAR struct file *filep)
   ajoy_buttonset_t supported;
   irqstate_t flags;
 
+  DEBUGASSERT(filep && filep->f_inode);
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv = inode->i_private;
+  priv = (FAR struct ajoy_upperhalf_s *)inode->i_private;
 
   /* Allocate a new open structure */
 
-  opriv = kmm_zalloc(sizeof(struct ajoy_open_s));
+  opriv = (FAR struct ajoy_open_s *)kmm_zalloc(sizeof(struct ajoy_open_s));
   if (!opriv)
     {
       ierr("ERROR: Failed to allocate open structure\n");
@@ -351,11 +352,11 @@ static int ajoy_close(FAR struct file *filep)
   FAR struct ajoy_open_s *prev;
   irqstate_t flags;
 
-  DEBUGASSERT(filep->f_priv);
+  DEBUGASSERT(filep && filep->f_priv && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  priv  = (FAR struct ajoy_upperhalf_s *)inode->i_private;
 
   flags = enter_critical_section();
 
@@ -414,10 +415,11 @@ static ssize_t ajoy_read(FAR struct file *filep, FAR char *buffer,
   irqstate_t flags;
   int ret;
 
+  DEBUGASSERT(filep && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  priv  = (FAR struct ajoy_upperhalf_s *)inode->i_private;
 
   /* Make sure that the buffer is sufficiently large to hold at least one
    * complete sample.
@@ -463,11 +465,11 @@ static int ajoy_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   irqstate_t flags;
   int ret;
 
-  DEBUGASSERT(filep->f_priv);
+  DEBUGASSERT(filep && filep->f_priv && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  priv  = (FAR struct ajoy_upperhalf_s *)inode->i_private;
 
   /* Get exclusive access to the driver structure */
 
@@ -588,7 +590,7 @@ static int ajoy_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int ret = OK;
   int i;
 
-  DEBUGASSERT(filep->f_priv);
+  DEBUGASSERT(filep && filep->f_priv && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
@@ -630,8 +632,8 @@ static int ajoy_poll(FAR struct file *filep, FAR struct pollfd *fds,
       if (i >= CONFIG_INPUT_AJOYSTICK_NPOLLWAITERS)
         {
           ierr("ERROR: Too man poll waiters\n");
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
     }
@@ -718,7 +720,7 @@ int ajoy_register(FAR const char *devname,
 
   /* And register the ajoystick driver */
 
-  ret = register_driver(devname, &g_ajoy_fops, 0666, priv);
+  ret = register_driver(devname, &ajoy_fops, 0666, priv);
   if (ret < 0)
     {
       ierr("ERROR: register_driver failed: %d\n", ret);

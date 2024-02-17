@@ -91,7 +91,7 @@ static int local_sendctl(FAR struct local_conn_s *conn,
       fds = (int *)CMSG_DATA(cmsg);
       count = (cmsg->cmsg_len - sizeof(struct cmsghdr)) / sizeof(int);
 
-      if (count + peer->lc_cfpcount >= LOCAL_NCONTROLFDS)
+      if (count + peer->lc_cfpcount > LOCAL_NCONTROLFDS)
         {
           ret = -EMFILE;
           goto fail;
@@ -105,7 +105,7 @@ static int local_sendctl(FAR struct local_conn_s *conn,
               goto fail;
             }
 
-          filep2 = kmm_zalloc(sizeof(*filep2));
+          filep2 = (FAR struct file *)kmm_zalloc(sizeof(*filep2));
           if (!filep2)
             {
               ret = -ENOMEM;
@@ -170,17 +170,13 @@ static ssize_t local_send(FAR struct socket *psock,
     {
 #ifdef CONFIG_NET_LOCAL_STREAM
       case SOCK_STREAM:
-#endif /* CONFIG_NET_LOCAL_STREAM */
-#ifdef CONFIG_NET_LOCAL_DGRAM
-      case SOCK_DGRAM:
-#endif /* CONFIG_NET_LOCAL_DGRAM */
         {
           FAR struct local_conn_s *peer;
 
           /* Local TCP packet send */
 
-          DEBUGASSERT(buf);
-          peer = psock->s_conn;
+          DEBUGASSERT(psock && psock->s_conn && buf);
+          peer = (FAR struct local_conn_s *)psock->s_conn;
 
           /* Verify that this is a connected peer socket and that it has
            * opened the outgoing FIFO for write-only access.
@@ -189,6 +185,11 @@ static ssize_t local_send(FAR struct socket *psock,
           if (peer->lc_state != LOCAL_STATE_CONNECTED ||
               peer->lc_outfile.f_inode == NULL)
             {
+              if (peer->lc_state == LOCAL_STATE_CONNECTING)
+                {
+                  return -EAGAIN;
+                }
+
               nerr("ERROR: not connected\n");
               return -ENOTCONN;
             }
@@ -203,11 +204,24 @@ static ssize_t local_send(FAR struct socket *psock,
               return ret;
             }
 
-          ret = local_send_packet(&peer->lc_outfile, buf, len,
-                                  psock->s_type == SOCK_DGRAM);
+          ret = local_send_packet(&peer->lc_outfile, buf, len, false);
           nxmutex_unlock(&peer->lc_sendlock);
         }
         break;
+#endif /* CONFIG_NET_LOCAL_STREAM */
+
+#ifdef CONFIG_NET_LOCAL_DGRAM
+      case SOCK_DGRAM:
+        {
+          /* Local UDP packet send */
+
+#warning Missing logic
+
+          ret = -ENOSYS;
+        }
+        break;
+#endif /* CONFIG_NET_LOCAL_DGRAM */
+
       default:
         {
           /* EDESTADDRREQ.  Signifies that the socket is not connection-mode
@@ -254,7 +268,7 @@ static ssize_t local_sendto(FAR struct socket *psock,
                             socklen_t tolen)
 {
 #ifdef CONFIG_NET_LOCAL_DGRAM
-  FAR struct local_conn_s *conn = psock->s_conn;
+  FAR struct local_conn_s *conn = (FAR struct local_conn_s *)psock->s_conn;
   FAR struct sockaddr_un *unaddr = (FAR struct sockaddr_un *)to;
   ssize_t ret;
 
@@ -291,7 +305,7 @@ static ssize_t local_sendto(FAR struct socket *psock,
 
   /* The outgoing FIFO should not be open */
 
-  DEBUGASSERT(conn->lc_outfile.f_inode == NULL);
+  DEBUGASSERT(conn->lc_outfile.f_inode == 0);
 
   /* At present, only standard pathname type address are support */
 

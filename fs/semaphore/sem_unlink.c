@@ -41,7 +41,7 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: nxsem_unlink
+ * Name: sem_unlink
  *
  * Description:
  *   This function removes the semaphore named by the input parameter 'name.'
@@ -55,17 +55,18 @@
  *   name - Semaphore name
  *
  * Returned Value:
- *  0 (OK), or negated errno if unsuccessful.
+ *  0 (OK), or -1 (ERROR) if unsuccessful.
  *
  * Assumptions:
  *
  ****************************************************************************/
 
-int nxsem_unlink(FAR const char *name)
+int sem_unlink(FAR const char *name)
 {
   FAR struct inode *inode;
   struct inode_search_s desc;
   char fullpath[MAX_SEMPATH];
+  int errcode;
   int ret;
 
   /* Get the full path to the semaphore */
@@ -77,23 +78,26 @@ int nxsem_unlink(FAR const char *name)
 
   SETUP_SEARCH(&desc, fullpath, false);
 
+  sched_lock();
   ret = inode_find(&desc);
   if (ret < 0)
     {
       /* There is no inode that includes in this path */
 
+      errcode = -ret;
       goto errout_with_search;
     }
 
   /* Get the search results */
 
   inode = desc.node;
+  DEBUGASSERT(inode != NULL);
 
   /* Verify that what we found is, indeed, a semaphore */
 
   if (!INODE_IS_NAMEDSEM(inode))
     {
-      ret = -ENOENT;
+      errcode = ENOENT;
       goto errout_with_inode;
     }
 
@@ -104,12 +108,13 @@ int nxsem_unlink(FAR const char *name)
   ret = inode_lock();
   if (ret < 0)
     {
+      errcode = -ret;
       goto errout_with_inode;
     }
 
   if (inode->i_child != NULL)
     {
-      ret = -ENOTEMPTY;
+      errcode = ENOTEMPTY;
       goto errout_with_lock;
     }
 
@@ -136,8 +141,9 @@ int nxsem_unlink(FAR const char *name)
    */
 
   inode_unlock();
-  ret = nxsem_close(&inode->u.i_nsem->ns_sem);
+  ret = sem_close(&inode->u.i_nsem->ns_sem);
   RELEASE_SEARCH(&desc);
+  sched_unlock();
   return ret;
 
 errout_with_lock:
@@ -148,5 +154,7 @@ errout_with_inode:
 
 errout_with_search:
   RELEASE_SEARCH(&desc);
-  return ret;
+  set_errno(errcode);
+  sched_unlock();
+  return ERROR;
 }

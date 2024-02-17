@@ -32,12 +32,11 @@
  * Private Functions
  ****************************************************************************/
 
-#undef strcasechr /* See mm/README.txt */
 static FAR char *strcasechr(FAR const char *s, int uc)
 {
   register char ch;
 
-  for (; *s != '\0'; s++)
+  for (; *s; s++)
     {
       ch = *s;
       if (toupper(ch) == uc)
@@ -92,7 +91,7 @@ FAR char *strcasestr(FAR const char *str, FAR const char *substr)
            * substring.
            */
 
-          break;
+          return NULL;
         }
 
       /* Check if this is the beginning of a matching substring

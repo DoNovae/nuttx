@@ -27,7 +27,6 @@
 #include <nuttx/sched.h>
 #include <nuttx/clock.h>
 #include <nuttx/mutex.h>
-#include <nuttx/semaphore.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -82,19 +81,15 @@ static bool nxmutex_is_reset(FAR mutex_t *mutex)
 
 int nxmutex_init(FAR mutex_t *mutex)
 {
-  int ret = nxsem_init(&mutex->sem, 0, 1);
+  int ret = _SEM_INIT(&mutex->sem, 0, 1);
 
   if (ret < 0)
     {
-      return ret;
+      return _SEM_ERRVAL(ret);
     }
 
   mutex->holder = NXMUTEX_NO_HOLDER;
-#ifdef CONFIG_PRIORITY_INHERITANCE
-  nxsem_set_protocol(&mutex->sem, SEM_TYPE_MUTEX | SEM_PRIO_INHERIT);
-#else
-  nxsem_set_protocol(&mutex->sem, SEM_TYPE_MUTEX);
-#endif
+  _SEM_SETPROTOCOL(&mutex->sem, SEM_TYPE_MUTEX | SEM_PRIO_INHERIT);
   return ret;
 }
 
@@ -119,11 +114,11 @@ int nxmutex_init(FAR mutex_t *mutex)
 
 int nxmutex_destroy(FAR mutex_t *mutex)
 {
-  int ret = nxsem_destroy(&mutex->sem);
+  int ret = _SEM_DESTROY(&mutex->sem);
 
   if (ret < 0)
     {
-      return ret;
+      return _SEM_ERRVAL(ret);
     }
 
   mutex->holder = NXMUTEX_NO_HOLDER;
@@ -167,7 +162,7 @@ bool nxmutex_is_locked(FAR mutex_t *mutex)
   int cnt;
   int ret;
 
-  ret = nxsem_get_value(&mutex->sem, &cnt);
+  ret = _SEM_GETVALUE(&mutex->sem, &cnt);
 
   return ret >= 0 && cnt < 1;
 }
@@ -201,13 +196,15 @@ int nxmutex_lock(FAR mutex_t *mutex)
     {
       /* Take the semaphore (perhaps waiting) */
 
-      ret = nxsem_wait(&mutex->sem);
+      ret = _SEM_WAIT(&mutex->sem);
       if (ret >= 0)
         {
           mutex->holder = _SCHED_GETTID();
           break;
         }
-      else if (ret != -EINTR && ret != -ECANCELED)
+
+      ret = _SEM_ERRVAL(ret);
+      if (ret != -EINTR && ret != -ECANCELED)
         {
           break;
         }
@@ -242,10 +239,10 @@ int nxmutex_trylock(FAR mutex_t *mutex)
   int ret;
 
   DEBUGASSERT(!nxmutex_is_hold(mutex));
-  ret = nxsem_trywait(&mutex->sem);
+  ret = _SEM_TRYWAIT(&mutex->sem);
   if (ret < 0)
     {
-      return ret;
+      return _SEM_ERRVAL(ret);
     }
 
   mutex->holder = _SCHED_GETTID();
@@ -291,7 +288,11 @@ int nxmutex_timedlock(FAR mutex_t *mutex, unsigned int timeout)
 
   do
     {
-      ret = nxsem_clockwait(&mutex->sem, CLOCK_MONOTONIC, &rqtp);
+      ret = _SEM_CLOCKWAIT(&mutex->sem, CLOCK_MONOTONIC, &rqtp);
+      if (ret < 0)
+        {
+          ret = _SEM_ERRVAL(ret);
+        }
     }
   while (ret == -EINTR || ret == -ECANCELED);
 
@@ -336,10 +337,11 @@ int nxmutex_unlock(FAR mutex_t *mutex)
 
   mutex->holder = NXMUTEX_NO_HOLDER;
 
-  ret = nxsem_post(&mutex->sem);
+  ret = _SEM_POST(&mutex->sem);
   if (ret < 0)
     {
       mutex->holder = _SCHED_GETTID();
+      ret = _SEM_ERRVAL(ret);
     }
 
   return ret;

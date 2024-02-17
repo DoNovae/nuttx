@@ -31,10 +31,9 @@
 #include <debug.h>
 
 #include <nuttx/board.h>
-#include <nuttx/signal.h>
 #include <arch/board/board.h>
 #ifdef CONFIG_SENSORS_HYT271
-#  include <nuttx/sensors/hyt271.h>
+# include <nuttx/sensors/hyt271.h>
 #endif
 
 #include "chip.h"
@@ -111,7 +110,7 @@ static int stm32_i2c_power_reset(struct hyt271_bus_s *bus)
     }
 
   stm32_gpiowrite(BOARD_HYT271_POWOUT, false);
-  nxsig_usleep(250000);
+  usleep(250000);
   stm32_gpiowrite(BOARD_HYT271_POWOUT, true);
 
   while (1)

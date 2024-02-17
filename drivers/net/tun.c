@@ -63,7 +63,6 @@
 #include <nuttx/wqueue.h>
 #include <nuttx/mm/iob.h>
 #include <nuttx/net/net.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/ethernet.h>
 #include <nuttx/net/tun.h>
@@ -244,6 +243,11 @@ static void tun_pollnotify(FAR struct tun_device_s *priv,
     {
       priv->write_wait = false;
       nxsem_post(&priv->write_wait_sem);
+    }
+
+  if (fds == NULL)
+    {
+      return;
     }
 
   poll_notify(&fds, 1, eventset);
@@ -647,9 +651,11 @@ static int tun_ifup(FAR struct net_driver_s *dev)
   FAR struct tun_device_s *priv = (FAR struct tun_device_s *)dev->d_private;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -770,20 +776,13 @@ static void tun_txavail_work(FAR void *arg)
 static int tun_txavail(FAR struct net_driver_s *dev)
 {
   FAR struct tun_device_s *priv = (FAR struct tun_device_s *)dev->d_private;
-  irqstate_t flags;
 
-  flags = enter_critical_section(); /* No interrupts */
+  /* Schedule to perform the TX poll on the worker thread. */
 
-  /* Schedule to perform the TX poll on the worker thread when priv->bifup
-   * is true.
-   */
-
-  if (priv->bifup && work_available(&priv->work))
+  if (work_available(&priv->work))
     {
       work_queue(TUNWORK, &priv->work, tun_txavail_work, priv, 0);
     }
-
-  leave_critical_section(flags);
 
   return OK;
 }
@@ -912,8 +911,6 @@ static void tun_dev_uninit(FAR struct tun_device_s *priv)
   /* Put the interface in the down state */
 
   tun_ifdown(&priv->dev);
-
-  work_cancel_sync(TUNWORK, &priv->work);
 
   /* Remove the device from the OS */
 
@@ -1133,8 +1130,7 @@ static ssize_t tun_read(FAR struct file *filep, FAR char *buffer,
  * Name: tun_poll
  ****************************************************************************/
 
-static int tun_poll(FAR struct file *filep,
-                    FAR struct pollfd *fds, bool setup)
+int tun_poll(FAR struct file *filep, FAR struct pollfd *fds, bool setup)
 {
   FAR struct tun_device_s *priv = filep->f_priv;
   pollevent_t eventset;
@@ -1181,11 +1177,11 @@ static int tun_poll(FAR struct file *filep,
           eventset |= POLLIN;
         }
 
-      poll_notify(&fds, 1, eventset);
+      tun_pollnotify(priv, eventset);
     }
   else
     {
-      priv->poll_fds = NULL;
+      priv->poll_fds = 0;
     }
 
 errout:
@@ -1236,7 +1232,7 @@ static int tun_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
            intf++, free_tuns >>= 1);
 
       ret = tun_dev_init(&g_tun_devices[intf], filep,
-                         *ifr->ifr_name ? ifr->ifr_name : NULL,
+                         *ifr->ifr_name ? ifr->ifr_name : 0,
                          (ifr->ifr_flags & IFF_MASK) == IFF_TUN);
       if (ret != OK)
         {

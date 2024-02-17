@@ -28,7 +28,6 @@
 #include <assert.h>
 
 #include <nuttx/fs/fs.h>
-#include <nuttx/trace.h>
 
 #include "sched/sched.h"
 #include "group/group.h"
@@ -45,9 +44,7 @@
  *   file descriptors and streams from the parent task.
  *
  * Input Parameters:
- *   tcb     - tcb of the new task.
- *   actions - The spawn file actions
- *   cloexec - Perform O_CLOEXEC on setup task files
+ *   tcb - tcb of the new task.
  *
  * Returned Value:
  *   Zero (OK) is returned on success; A negated errno value is returned on
@@ -57,17 +54,14 @@
  *
  ****************************************************************************/
 
-int group_setuptaskfiles(FAR struct task_tcb_s *tcb,
-                         FAR const posix_spawn_file_actions_t *actions,
-                         bool cloexec)
+int group_setuptaskfiles(FAR struct task_tcb_s *tcb)
 {
   FAR struct task_group_s *group = tcb->cmn.group;
-  int ret = OK;
 #ifndef CONFIG_FDCLONE_DISABLE
   FAR struct tcb_s *rtcb = this_task();
+  int ret;
 #endif
 
-  sched_trace_begin();
   DEBUGASSERT(group);
 #ifndef CONFIG_DISABLE_PTHREAD
   DEBUGASSERT((tcb->cmn.flags & TCB_FLAG_TTYPE_MASK) !=
@@ -79,14 +73,18 @@ int group_setuptaskfiles(FAR struct task_tcb_s *tcb,
 
   /* Duplicate the parent task's file descriptors */
 
-  ret = files_duplist(&rtcb->group->tg_filelist,
-                      &group->tg_filelist, actions, cloexec);
-  if (ret >= 0 && actions != NULL)
+  ret = files_duplist(&rtcb->group->tg_filelist, &group->tg_filelist);
+  if (ret < 0)
     {
-      ret = spawn_file_actions(&tcb->cmn, actions);
+      return ret;
     }
 #endif
 
-  sched_trace_end();
-  return ret;
+  /* Allocate file/socket streams for the new TCB */
+
+#ifdef CONFIG_FILE_STREAM
+  return group_setupstreams(tcb);
+#else
+  return OK;
+#endif
 }

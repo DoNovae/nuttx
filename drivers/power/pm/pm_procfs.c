@@ -114,8 +114,6 @@ static int     pm_rewinddir(FAR struct fs_dirent_s *dir);
 
 static int     pm_stat(FAR const char *relpath, FAR struct stat *buf);
 
-static int     pm_get_file_index(FAR const char *relpath);
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -125,13 +123,12 @@ static int     pm_get_file_index(FAR const char *relpath);
  * with any compiler.
  */
 
-const struct procfs_operations g_pm_operations =
+const struct procfs_operations pm_operations =
 {
   pm_open,       /* open */
   pm_close,      /* close */
   pm_read,       /* read */
   NULL,          /* write */
-  NULL,          /* poll */
 
   pm_dup,        /* dup */
 
@@ -163,26 +160,6 @@ static FAR const char *g_pm_state[PM_COUNT] =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: pm_get_file_index
- ****************************************************************************/
-
-static int pm_get_file_index(FAR const char *relpath)
-{
-  int i;
-
-  for (i = 0; i < nitems(g_pm_files); i++)
-    {
-      if (strncmp(relpath, g_pm_files[i].name,
-                  strlen(g_pm_files[i].name)) == 0)
-        {
-          return i;
-        }
-    }
-
-  return -1;
-}
-
-/****************************************************************************
  * Name: pm_open
  ****************************************************************************/
 
@@ -204,23 +181,26 @@ static int pm_open(FAR struct file *filep, FAR const char *relpath,
       return -EACCES;
     }
 
-  relpath += strlen("pm/");
-  i = pm_get_file_index(relpath);
-  if (i < 0)
-    {
-      return -ENOENT;
-    }
-
   /* Allocate a container to hold the file attributes */
 
-  pmfile = kmm_zalloc(sizeof(struct pm_file_s));
+  pmfile = (FAR struct pm_file_s *)kmm_zalloc(sizeof(struct pm_file_s));
   if (!pmfile)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
       return -ENOMEM;
     }
 
-  pmfile->read = g_pm_files[i].read;
+  relpath += strlen("pm/");
+  for (i = 0; i < nitems(g_pm_files); i++)
+    {
+      if (strncmp(relpath, g_pm_files[i].name,
+                  strlen(g_pm_files[i].name)) == 0)
+        {
+          pmfile->read = g_pm_files[i].read;
+          break;
+        }
+    }
+
   pmfile->domain = atoi(relpath + strlen(g_pm_files[i].name));
 
   DEBUGASSERT(pmfile->read);
@@ -434,7 +414,7 @@ static int pm_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   /* Allocate a new container to hold the task and attribute selection */
 
-  newattr = kmm_malloc(sizeof(struct pm_file_s));
+  newattr = (FAR struct pm_file_s *)kmm_malloc(sizeof(struct pm_file_s));
   if (!newattr)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -575,12 +555,6 @@ static int pm_stat(FAR const char *relpath, FAR struct stat *buf)
     }
   else
     {
-      relpath += strlen("pm/");
-      if (pm_get_file_index(relpath) < 0)
-        {
-          return -ENOENT;
-        }
-
       buf->st_mode = S_IFREG | S_IROTH | S_IRGRP | S_IRUSR;
     }
 

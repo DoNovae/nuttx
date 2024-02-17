@@ -24,7 +24,7 @@ include $(TOPDIR)/Make.defs
 
 CSRCS  = binfmt_globals.c binfmt_initialize.c binfmt_register.c binfmt_unregister.c
 CSRCS += binfmt_loadmodule.c binfmt_unloadmodule.c binfmt_execmodule.c
-CSRCS += binfmt_exec.c binfmt_copyargv.c binfmt_copyactions.c binfmt_dumpmodule.c
+CSRCS += binfmt_exec.c binfmt_copyargv.c binfmt_dumpmodule.c
 CSRCS += binfmt_coredump.c
 
 ifeq ($(CONFIG_BINFMT_LOADABLE),y)
@@ -41,24 +41,10 @@ ifeq ($(CONFIG_BUILTIN),y)
 CSRCS += builtin.c
 endif
 
-# ELF application interfaces
-
-ifeq ($(CONFIG_ELF),y)
-CSRCS += elf.c
-endif
-
-# NXFLAT application interfaces
-
-ifeq ($(CONFIG_NXFLAT),y)
-CSRCS += nxflat.c
-endif
-
 # Add configured binary modules
 
 include libnxflat/Make.defs
 include libelf/Make.defs
-
-CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)sched
 
 AOBJS = $(ASRCS:.S=$(OBJEXT))
 COBJS = $(CSRCS:.c=$(OBJEXT))

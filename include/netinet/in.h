@@ -126,14 +126,12 @@
 #define IPV6_UNICAST_HOPS     (__SO_PROTOCOL + 6)  /* Unicast hop limit */
 #define IPV6_V6ONLY           (__SO_PROTOCOL + 7)  /* Restrict AF_INET6 socket
                                                     * to IPv6 communications only */
-#define IPV6_PKTINFO          (__SO_PROTOCOL + 8)  /* Information about the
-                                                    * incoming packet */
-#define IPV6_RECVPKTINFO      (__SO_PROTOCOL + 9)  /* Receive the information about
+#define IPV6_PKTINFO          (__SO_PROTOCOL + 8)  /* Get some information about
                                                     * the incoming packet */
+#define IPV6_RECVPKTINFO      (__SO_PROTOCOL + 9)  /* It functions just same as
+                                                    * IPV6_PKTINFO for now */
 #define IPV6_TCLASS           (__SO_PROTOCOL + 10) /* Access the Traffic Class
                                                     * field */
-#define IPV6_RECVHOPLIMIT     (__SO_PROTOCOL + 11) /* Access the hop limit field */
-#define IPV6_HOPLIMIT         (__SO_PROTOCOL + 12) /* Hop limit */
 
 /* Values used with SIOCSIFMCFILTER and SIOCGIFMCFILTER ioctl's */
 
@@ -230,12 +228,16 @@
  * for uIP:
  */
 
-#define HTONS htobe16
-#define HTONL htobe32
-#define HTONQ htobe64
-#define NTOHS be16toh
-#define NTOHL be32toh
-#define NTOHQ be64toh
+#ifdef CONFIG_ENDIAN_BIG
+#  define HTONS(ns) (ns)
+#  define HTONL(nl) (nl)
+#else
+#  define HTONS __swap_uint16
+#  define HTONL __swap_uint32
+#endif
+
+#define NTOHS(hs) HTONS(hs)
+#define NTOHL(hl) HTONL(hl)
 
 /****************************************************************************
  * Public Type Definitions
@@ -335,13 +337,6 @@ struct in6_pktinfo
   int             ipi6_ifindex;     /* send/recv interface index */
 };
 
-struct in6_ifreq
-{
-  struct in6_addr ifr6_addr;        /* The IPv6 address of the request */
-  uint32_t        ifr6_prefixlen;   /* The IPv6 prefix length */
-  int             ifr6_ifindex;     /* The interface index of the request */
-};
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -376,10 +371,8 @@ EXTERN const struct in6_addr in6addr_any;
 
 uint32_t    ntohl(uint32_t nl);
 uint16_t    ntohs(uint16_t ns);
-uint64_t    ntohq(uint64_t nq);
 uint32_t    htonl(uint32_t hl);
 uint16_t    htons(uint16_t hs);
-uint64_t    htonq(uint64_t hq);
 
 #undef EXTERN
 #if defined(__cplusplus)

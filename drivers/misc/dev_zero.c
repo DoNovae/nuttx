@@ -39,17 +39,17 @@
  ****************************************************************************/
 
 static ssize_t devzero_read(FAR struct file *filep, FAR char *buffer,
-                            size_t buflen);
+                 size_t buflen);
 static ssize_t devzero_write(FAR struct file *filep, FAR const char *buffer,
-                             size_t buflen);
+                 size_t buflen);
 static int     devzero_poll(FAR struct file *filep, FAR struct pollfd *fds,
-                            bool setup);
+                 bool setup);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_devzero_fops =
+static const struct file_operations devzero_fops =
 {
   NULL,          /* open */
   NULL,          /* close */
@@ -123,5 +123,5 @@ static int devzero_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
 void devzero_register(void)
 {
-  register_driver("/dev/zero", &g_devzero_fops, 0666, NULL);
+  register_driver("/dev/zero", &devzero_fops, 0666, NULL);
 }

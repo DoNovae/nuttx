@@ -48,14 +48,14 @@
  * have to be defined or CONFIG_NXFLAT_DUMPBUFFER does nothing.
  */
 
-#if !defined(CONFIG_DEBUG_INFO) || !defined(CONFIG_DEBUG_BINFMT)
+#if !defined(CONFIG_DEBUG_INFO) || !defined (CONFIG_DEBUG_BINFMT)
 #  undef CONFIG_NXFLAT_DUMPBUFFER
 #endif
 
 #ifdef CONFIG_NXFLAT_DUMPBUFFER
-#  define nxflat_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
+# define nxflat_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
 #else
-#  define nxflat_dumpbuffer(m,b,n)
+# define nxflat_dumpbuffer(m,b,n)
 #endif
 
 /****************************************************************************
@@ -123,7 +123,7 @@ static void nxflat_dumploadinfo(FAR struct nxflat_loadinfo_s *loadinfo)
   binfo("    reloccount:   %d\n",    loadinfo->reloccount);
 }
 #else
-#  define nxflat_dumploadinfo(i)
+# define nxflat_dumploadinfo(i)
 #endif
 
 /****************************************************************************

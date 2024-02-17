@@ -241,13 +241,13 @@ struct arm_mmu_ptables
  */
 
 extern const struct arm_mmu_config g_mmu_config;
+extern size_t g_dcache_line_size;
 
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
 int arm64_mmu_init(bool is_primary_core);
-int arm64_mmu_set_memregion(const struct arm_mmu_region *region);
 
 #endif /* __ASSEMBLY__ */
 

@@ -79,7 +79,7 @@
  */
 
 #ifndef CONFIG_IEEE802154_NETDEV_NINTERFACES
-#  define CONFIG_IEEE802154_NETDEV_NINTERFACES 1
+# define CONFIG_IEEE802154_NETDEV_NINTERFACES 1
 #endif
 
 /* Preferred address size */
@@ -843,7 +843,6 @@ static int macnet_addmac(FAR struct net_driver_s *dev,
    *  Not used with IEEE 802.15.4 radios.
    */
 
-  UNUSED(priv);
   return -ENOSYS;
 }
 #endif
@@ -875,7 +874,6 @@ static int macnet_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
    *  Not used with IEEE 802.15.4 radios.
    */
 
-  UNUSED(priv);
   return -ENOSYS;
 }
 #endif

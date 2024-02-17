@@ -29,17 +29,10 @@ function analyse()
 }
 
 if [[ $# == 0 ]]; then
-  echo "usage: $0 <rank> <dir>..."
+  echo "usage: $0 <dir>..."
   exit
 fi
 
-rank=20
-
-if [[ "$1" =~ ^[0-9]+$ ]]; then
-  rank=$1
-  shift
-fi
-
 for dir in $@; do
-  analyse $dir $rank
+  analyse $dir 20
 done

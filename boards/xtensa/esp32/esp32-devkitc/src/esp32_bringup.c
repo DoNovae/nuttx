@@ -41,7 +41,6 @@
 #endif
 #include <nuttx/fs/fs.h>
 #include <nuttx/himem/himem.h>
-#include <nuttx/board.h>
 
 #if defined(CONFIG_ESP32_EFUSE)
 #include "esp32_efuse.h"
@@ -57,7 +56,7 @@
 #endif
 
 #ifdef CONFIG_TIMER
-#  include <esp32_tim_lowerhalf.h>
+#include <esp32_tim_lowerhalf.h>
 #endif
 
 #ifdef CONFIG_ONESHOT
@@ -100,10 +99,6 @@
 #  include "esp32_tca9548a.h"
 #endif
 
-#ifdef CONFIG_SENSORS_APDS9960
-#include "esp32_board_apds9960.h"
-#endif
-
 #ifdef CONFIG_SENSORS_BMP180
 #  include "esp32_bmp180.h"
 #endif
@@ -116,7 +111,7 @@
 #  include "esp32_sht3x.h"
 #endif
 
-#ifdef CONFIG_SENSORS_MS56XX
+#ifdef CONFIG_SENSORS_MS5611
 #  include "esp32_ms5611.h"
 #endif
 
@@ -136,15 +131,6 @@
 #  include <nuttx/input/buttons.h>
 #endif
 
-#ifdef CONFIG_LCD_DEV
-#  include <nuttx/board.h>
-#  include <nuttx/lcd/lcd_dev.h>
-#endif
-
-#ifdef CONFIG_VIDEO_FB
-#  include <nuttx/video/fb.h>
-#endif
-
 #ifdef CONFIG_RTC_DRIVER
 #  include "esp32_rtc_lowerhalf.h"
 #endif
@@ -159,14 +145,6 @@
 
 #ifdef CONFIG_SENSORS_MAX6675
 #  include "esp32_max6675.h"
-#endif
-
-#ifdef CONFIG_ESP32_RMT
-#  include "esp32_rmt.h"
-#endif
-
-#ifdef CONFIG_DAC
-#  include "esp32_board_dac.h"
 #endif
 
 #include "esp32-devkitc.h"
@@ -259,7 +237,7 @@ int esp32_bringup(void)
 #endif
 
 #ifdef CONFIG_ESP32_SPIFLASH
-  ret = board_spiflash_init();
+  ret = esp32_spiflash_init();
   if (ret)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize SPI Flash\n");
@@ -315,7 +293,7 @@ int esp32_bringup(void)
   if (ret)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize Wi-Fi and BT "
-                      "coexistence support\n");
+             "coexistence support\n");
     }
 #endif
 
@@ -336,9 +314,9 @@ int esp32_bringup(void)
     }
 #endif
 
-  /* First, register the timer drivers and let timer 1 for oneshot
-   * if it is enabled.
-   */
+/* First, register the timer drivers and let timer 1 for oneshot
+ * if it is enabled.
+ */
 
 #ifdef CONFIG_TIMER
 
@@ -554,7 +532,7 @@ int esp32_bringup(void)
 
 #endif /* CONFIG_AUDIO_CS4344 */
 
-#endif /* CONFIG_ESP32_I2S0 */
+#endif  /* CONFIG_ESP32_I2S0 */
 
 #ifdef CONFIG_ESP32_I2S1
 
@@ -579,7 +557,7 @@ int esp32_bringup(void)
              CONFIG_ESP32_I2S1, ret);
     }
 
-#endif /* CONFIG_ESP32_I2S1 */
+#endif  /* CONFIG_ESP32_I2S1 */
 
 #endif /* CONFIG_ESP32_I2S */
 
@@ -594,7 +572,7 @@ int esp32_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_SENSORS_MS56XX
+#ifdef CONFIG_SENSORS_MS5611
   /* Try to register MS5611 device in I2C0 as device 0: I2C addr 0x77 */
 
   ret = board_ms5611_initialize(0, 0);
@@ -627,36 +605,6 @@ int esp32_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_LCD_DEV
-  ret = board_lcd_initialize();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: board_lcd_initialize() failed: %d\n", ret);
-    }
-
-  ret = lcddev_register(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_ESP32_RMT
-  ret = board_rmt_initialize(RMT_CHANNEL, RMT_OUTPUT_PIN);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: board_rmt_initialize() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_DAC
-  ret = board_dac_initialize(CONFIG_ESP32_DAC_DEVPATH);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: board_dac_initialize(0) failed: %d\n", ret);
-    }
-#endif
-
 #ifdef CONFIG_RTC_DRIVER
   /* Instantiate the ESP32 RTC driver */
 
@@ -677,37 +625,6 @@ int esp32_bringup(void)
              ESP32_SPI2, ret);
     }
 #  endif
-#endif
-
-#ifdef CONFIG_WS2812
-#  ifndef CONFIG_WS2812_NON_SPI_DRIVER 
-  ret = board_ws2812_initialize(0, ESP32_SPI3, CONFIG_WS2812_LED_COUNT);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize ws2812 driver\n");
-    }
-#  endif
-#endif
-
-#ifdef CONFIG_VIDEO_FB
-  /* Initialize and register the framebuffer driver */
-
-  ret = fb_register(0, 0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: fb_register() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_SENSORS_APDS9960
-  /* Register the APDS-9960 gesture sensor */
-
-  ret = board_apds9960_initialize(0, 0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: board_apds9960_initialize() failed: %d\n",
-             ret);
-    }
 #endif
 
   /* If we got here then perhaps not all initialization was successful, but

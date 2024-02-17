@@ -60,7 +60,7 @@ The ESP32-S2-Kaluga-1 board has connectors for boards with:
 
 - Extension header (ESP-LyraT-8311A, ESP-LyraP-LCD32)
 - Camera header (ESP-LyraP-CAM)
-- Touch FPC connector (ESP-LyraP-TouchA)
+- Touch FPC coneector (ESP-LyraP-TouchA)
 - LCD FPC connector (no official extension boards yet)
 - I2C FPC connector (no official extension boards yet)
 
@@ -74,7 +74,7 @@ The ESP32-S2-Kaluga-1 board has connectors for boards with:
 
     ESP32-S2-Kaluga-1 (click to enlarge)
 
-All the four extension boards are specially designed to support the following
+All the four extension boards are specially desgined to support the following
 features:
 
 * Touch panel control
@@ -180,40 +180,10 @@ Configurations
 All of the configurations presented below can be tested by running the following commands::
 
     $ ./tools/configure.sh esp32s2-kaluga-1:<config_name>
-    $ make flash ESPTOOL_PORT=/dev/ttyUSB1 -j
+    $ make flash ESPTOOL_PORT=/dev/ttyUSB0 -j
 
 Where <config_name> is the name of board configuration you want to use, i.e.: nsh, buttons, wifi...
 Then use a serial console terminal like ``picocom`` configured to 115200 8N1.
-
-audio
------
-
-This configuration uses the I2S peripheral and the ES8311 audio
-codec to play an audio file. The easiest way of playing an uncompressed file
-is embedding into the firmware. This configuration selects
-`romfs example <https://github.com/apache/nuttx-apps/tree/master/examples/romfs>`__
-to allow that.
-
-**ROMFS example**
-
-Prepare and build the ``audio`` defconfig::
-
-  $ make -j distclean && ./tools/configure.sh esp32s2-kaluga-1:audio && make
-
-This will create a temporary folder in ``apps/examples/romfs/testdir``. Move
-a PCM-encoded (``.wav``) audio file with 16 or 24 bits/sample (sampled at 16~48kHz)
-to this folder.
-
-.. note:: You can use :download:`this 440 Hz sinusoidal tone <../esp32s2-saola-1/tone.wav>`.
-   The audio file should be located at ``apps/examples/romfs/testdir/tone.wav``
-
-Build the project again and flash it (make sure not to clean it, just build)
-
-After successfully built and flashed, load the romfs and play it::
-
-    nsh> romfs
-    nsh> nxplayer
-    nxplayer> play /usr/share/local/tone.wav
 
 buttons
 -------
@@ -240,111 +210,8 @@ the ``buttons`` application and pressing on any of the available board buttons a
     Sample = 64
     Sample = 0
 
-i2c
----
-
-This configuration can be used to scan and manipulate I2C devices.
-You can scan for all I2C devices using the following command::
-
-    nsh> i2c dev 0x00 0x7f
-
-lvgl_ili9341
-------------
-
-This is a demonstration of the LVGL graphics library running on the NuttX LCD
-driver with the ILI9341 display. You can find LVGL here::
-
-    https://www.lvgl.io/
-    https://github.com/lvgl/lvgl
-
-This configuration uses the LVGL demonstration at ``apps/examples/lvgldemo`` and
-can be executed by running the ``lvgldemo`` application.
-
-lvgl_st7789
------------
-
-This is a demonstration of the LVGL graphics library running on the NuttX LCD
-driver with the ST7799 display. You can find LVGL here::
-
-    https://www.lvgl.io/
-    https://github.com/lvgl/lvgl
-
-This configuration uses the LVGL demonstration at ``apps/examples/lvgldemo`` and
-can be executed by running the ``lvgldemo`` application.
-
 nsh
 ---
 
 Basic NuttShell configuration (console enabled in UART0, exposed via
 USB connection by means of CP2102 converter, at 115200 bps).
-
-nxlooper
---------
-
-The ``nxlooper`` application captures data from the audio device with receiving
-capabilities and forwards the audio data frame to the audio device with transmitting
-capabilities.
-
-After successfully built and flashed, run on the boards' terminal::
-
-    nsh> nxlooper
-    nxlooper> loopback
-
-.. note:: ``loopback`` command default arguments for the channel configuration,
-  the data width and the sample rate are, respectively, 2 channels,
-  16 bits/sample and 48KHz. These arguments can be supplied to select
-  different audio formats, for instance::
-
-    nxlooper> loopback 2 8 44100
-
-rtc
----
-
-This configuration demonstrates the use of the RTC driver through alarms.
-You can set an alarm, check its progress and receive a notification after it expires::
-
-    nsh> alarm 10
-    alarm_daemon started
-    alarm_daemon: Running
-    Opening /dev/rtc0
-    Alarm 0 set in 10 seconds
-    nsh> alarm -r
-    Opening /dev/rtc0
-    Alarm 0 is active with 10 seconds to expiration
-    nsh> alarm_daemon: alarm 0 received
-
-twai
-----
-
-This configuration enables the support for the TWAI (Two-Wire Automotive Interface) driver.
-You can test it by connecting TWAI RX and TWAI TX pins which are GPIO0 and GPIO2 by default
-to a external transceiver or connecting TWAI RX to TWAI TX pin by enabling
-the ``Device Drivers -> CAN Driver Support -> CAN loopback mode`` option and running the ``can`` example::
-
-    nsh> can
-    nmsgs: 0
-    min ID: 1 max ID: 2047
-    Bit timing:
-      Baud: 1000000
-      TSEG1: 15
-      TSEG2: 4
-        SJW: 3
-      ID:    1 DLC: 1
-
-watchdog
---------
-
-This config test the watchdog timers. It includes the 2 MWDTs,
-adds driver support, registers the WDTs as devices and includes the watchdog
-example.
-
-To test it, just run the following::
-
-    nsh> wdog -i /dev/watchdogx
-
-Where x is the watchdog instance.
-
-To test the XTWDT(/dev/watchdog3) an interrupt handler needs to be
-implemented because XTWDT does not have system reset feature. To implement
-an interrupt handler `WDIOC_CAPTURE` command can be used. When interrupt
-rises, XTAL32K clock can be restored with `WDIOC_RSTCLK` command.

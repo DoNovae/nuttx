@@ -55,13 +55,13 @@ static int     bch_open(FAR struct file *filep);
 static int     bch_close(FAR struct file *filep);
 static off_t   bch_seek(FAR struct file *filep, off_t offset, int whence);
 static ssize_t bch_read(FAR struct file *filep, FAR char *buffer,
-                        size_t buflen);
+                 size_t buflen);
 static ssize_t bch_write(FAR struct file *filep, FAR const char *buffer,
-                         size_t buflen);
+                 size_t buflen);
 static int     bch_ioctl(FAR struct file *filep, int cmd,
-                         unsigned long arg);
+                 unsigned long arg);
 static int     bch_poll(FAR struct file *filep, FAR struct pollfd *fds,
-                        bool setup);
+                 bool setup);
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int     bch_unlink(FAR struct inode *inode);
 #endif
@@ -70,7 +70,7 @@ static int     bch_unlink(FAR struct inode *inode);
  * Public Data
  ****************************************************************************/
 
-const struct file_operations g_bch_fops =
+const struct file_operations bch_fops =
 {
   bch_open,    /* open */
   bch_close,   /* close */
@@ -118,8 +118,8 @@ static int bch_open(FAR struct file *filep)
   FAR struct bchlib_s *bch;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  bch = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bch = (FAR struct bchlib_s *)inode->i_private;
 
   /* Increment the reference count */
 
@@ -155,8 +155,8 @@ static int bch_close(FAR struct file *filep)
   FAR struct bchlib_s *bch;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  bch = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bch = (FAR struct bchlib_s *)inode->i_private;
 
   /* Get exclusive access */
 
@@ -168,7 +168,7 @@ static int bch_close(FAR struct file *filep)
 
   /* Flush any dirty pages remaining in the cache */
 
-  bchlib_flushsector(bch, false);
+  bchlib_flushsector(bch);
 
   /* Decrement the reference count (I don't use bchlib_decref() because I
    * want the entire close operation to be atomic wrt other driver
@@ -223,9 +223,9 @@ static off_t bch_seek(FAR struct file *filep, off_t offset, int whence)
   off_t newpos;
   off_t ret;
 
-  DEBUGASSERT(inode->i_private);
+  DEBUGASSERT(inode && inode->i_private);
 
-  bch = inode->i_private;
+  bch = (FAR struct bchlib_s *)inode->i_private;
   ret = nxmutex_lock(&bch->lock);
   if (ret < 0)
     {
@@ -294,8 +294,8 @@ static ssize_t bch_read(FAR struct file *filep, FAR char *buffer, size_t len)
   FAR struct bchlib_s *bch;
   ssize_t ret;
 
-  DEBUGASSERT(inode->i_private);
-  bch = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bch = (FAR struct bchlib_s *)inode->i_private;
 
   ret = nxmutex_lock(&bch->lock);
   if (ret < 0)
@@ -324,8 +324,8 @@ static ssize_t bch_write(FAR struct file *filep, FAR const char *buffer,
   FAR struct bchlib_s *bch;
   ssize_t ret = -EACCES;
 
-  DEBUGASSERT(inode->i_private);
-  bch = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bch = (FAR struct bchlib_s *)inode->i_private;
 
   if (!bch->readonly)
     {
@@ -361,8 +361,8 @@ static int bch_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct bchlib_s *bch;
   int ret = -ENOTTY;
 
-  DEBUGASSERT(inode->i_private);
-  bch = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bch = (FAR struct bchlib_s *)inode->i_private;
 
   /* Process the call according to the command */
 
@@ -424,7 +424,7 @@ static int bch_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         {
           /* Flush any dirty pages remaining in the cache */
 
-          ret = bchlib_flushsector(bch, false);
+          ret = bchlib_flushsector(bch);
         }
         break;
 
@@ -473,8 +473,8 @@ static int bch_unlink(FAR struct inode *inode)
   FAR struct bchlib_s *bch;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  bch = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  bch = (FAR struct bchlib_s *)inode->i_private;
 
   /* Get exclusive access to the BCH device */
 

@@ -39,29 +39,24 @@
  * Name: rttstream_putc
  ****************************************************************************/
 
-static void rttstream_putc(FAR struct lib_outstream_s *self, int ch)
+static void rttstream_putc(FAR struct lib_outstream_s *this, int ch)
 {
   FAR struct lib_rttoutstream_s *stream =
-                                 (FAR struct lib_rttoutstream_s *)self;
-
-  SEGGER_RTT_BLOCK_IF_FIFO_FULL(0);
-  stream->common.nput += SEGGER_RTT_PutChar(stream->channel, ch);
+                                 (FAR struct lib_rttoutstream_s *)this;
+  stream->public.nput += SEGGER_RTT_PutChar(stream->channel, ch);
 }
 
 /****************************************************************************
  * Name: rttstream_puts
  ****************************************************************************/
 
-static int rttstream_puts(FAR struct lib_outstream_s *self,
+static int rttstream_puts(FAR struct lib_outstream_s *this,
                           FAR const void *buf, int len)
 {
   FAR struct lib_rttoutstream_s *stream =
-                                (FAR struct lib_rttoutstream_s *)self;
-  int ret;
-
-  SEGGER_RTT_BLOCK_IF_FIFO_FULL(0);
-  ret = SEGGER_RTT_Write(stream->channel, buf, len);
-  stream->common.nput += ret;
+                                (FAR struct lib_rttoutstream_s *)this;
+  int ret = SEGGER_RTT_Write(stream->channel, buf, len);
+  stream->public.nput += ret;
   return ret;
 }
 
@@ -69,14 +64,14 @@ static int rttstream_puts(FAR struct lib_outstream_s *self,
  * Name: rttstream_getc
  ****************************************************************************/
 
-static int rttstream_getc(FAR struct lib_instream_s *self)
+static int rttstream_getc(FAR struct lib_instream_s *this)
 {
   FAR struct lib_rttinstream_s *stream =
-                                (FAR struct lib_rttinstream_s *)self;
+                                (FAR struct lib_rttinstream_s *)this;
   int ch = -1;
 
   DEBUGASSERT(stream);
-  stream->common.nget += SEGGER_RTT_Read(stream->channel, &ch, 1);
+  stream->public.nget += SEGGER_RTT_Read(stream->channel, &ch, 1);
   return ch;
 }
 
@@ -84,16 +79,16 @@ static int rttstream_getc(FAR struct lib_instream_s *self)
  * Name: rttstream_gets
  ****************************************************************************/
 
-static int rttstream_gets(FAR struct lib_instream_s *self,
+static int rttstream_gets(FAR struct lib_instream_s *this,
                           FAR void * buffer, int size)
 {
   FAR struct lib_rttinstream_s *stream =
-                                (FAR struct lib_rttinstream_s *)self;
+                                (FAR struct lib_rttinstream_s *)this;
   int ret;
 
   DEBUGASSERT(stream);
   ret = SEGGER_RTT_Read(stream->channel, buffer, size);
-  stream->common.nget += ret;
+  stream->public.nget += ret;
   return ret;
 }
 
@@ -124,17 +119,17 @@ void lib_rttoutstream_open(FAR struct lib_rttoutstream_s *stream,
   if (channel)
     {
       bufsize = bufsize ? bufsize : BUFFER_SIZE_UP;
-      stream->buffer = kmm_malloc(bufsize);
+      stream->buffer = (FAR char *)kmm_malloc(bufsize);
       DEBUGASSERT(stream->buffer);
-      snprintf(stream->name, sizeof(stream->name), "rtt%d", channel);
+      sprintf(stream->name, "rtt%d", channel);
       SEGGER_RTT_ConfigUpBuffer(channel, stream->name, stream->buffer,
                                 bufsize, SEGGER_RTT_MODE_DEFAULT);
     }
 
-  stream->common.putc = rttstream_putc;
-  stream->common.puts = rttstream_puts;
-  stream->common.flush = lib_noflush;
-  stream->common.nput = 0;
+  stream->public.putc = rttstream_putc;
+  stream->public.puts = rttstream_puts;
+  stream->public.flush = lib_noflush;
+  stream->public.nput = 0;
   stream->channel = channel;
 }
 
@@ -172,16 +167,16 @@ void lib_rttinstream_open(FAR struct lib_rttinstream_s *stream,
   if (channel)
     {
       bufsize = bufsize ? bufsize : BUFFER_SIZE_DOWN;
-      stream->buffer = kmm_malloc(bufsize);
+      stream->buffer = (FAR char *)kmm_malloc(bufsize);
       DEBUGASSERT(stream->buffer);
-      snprintf(stream->name, sizeof(stream->name), "rtt%d", channel);
+      sprintf(stream->name, "rtt%d", channel);
       SEGGER_RTT_ConfigDownBuffer(channel, stream->name, stream->buffer,
                                   bufsize, SEGGER_RTT_MODE_DEFAULT);
     }
 
-  stream->common.getc = rttstream_getc;
-  stream->common.gets = rttstream_gets;
-  stream->common.nget = 0;
+  stream->public.getc = rttstream_getc;
+  stream->public.gets = rttstream_gets;
+  stream->public.nget = 0;
   stream->channel = channel;
 }
 

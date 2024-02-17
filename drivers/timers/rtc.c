@@ -116,7 +116,7 @@ static int     rtc_unlink(FAR struct inode *inode);
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_rtc_fops =
+static const struct file_operations rtc_fops =
 {
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   rtc_open,      /* open */
@@ -240,8 +240,9 @@ static int rtc_open(FAR struct file *filep)
    * structure.
    */
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
-  DEBUGASSERT(inode->i_private);
+  DEBUGASSERT(inode && inode->i_private);
   upper = inode->i_private;
 
   /* Get exclusive access to the device structures */
@@ -276,8 +277,9 @@ static int rtc_close(FAR struct file *filep)
    * structure.
    */
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
-  DEBUGASSERT(inode->i_private);
+  DEBUGASSERT(inode && inode->i_private);
   upper = inode->i_private;
 
   /* Get exclusive access to the device structures */
@@ -335,14 +337,15 @@ static int rtc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct inode *inode;
   FAR struct rtc_upperhalf_s *upper;
   FAR const struct rtc_ops_s *ops;
-  int ret;
+  int ret = -ENOSYS;
 
   /* Get the reference to our internal state structure from the inode
    * structure.
    */
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
-  DEBUGASSERT(inode->i_private);
+  DEBUGASSERT(inode && inode->i_private);
   upper = inode->i_private;
   DEBUGASSERT(upper->lower && upper->lower->ops);
 
@@ -359,9 +362,7 @@ static int rtc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
    * RTC implementation.
    */
 
-  ret = -ENOSYS;
   ops = upper->lower->ops;
-
   switch (cmd)
     {
     /* RTC_RD_TIME returns the current RTC time.
@@ -396,7 +397,7 @@ static int rtc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         if (ops->settime)
           {
             ret = ops->settime(upper->lower, rtctime);
-            if (ret == 0)
+            if (ret >= 0)
               {
                 /* If the RTC time was set successfully, then update the
                  * current system time to match.
@@ -476,16 +477,16 @@ static int rtc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
              * alarm expires.
              */
 
-            upperinfo->active = true;
-            upperinfo->pid    = pid;
-            upperinfo->event  = alarminfo->event;
+            upperinfo->active   = true;
+            upperinfo->pid      = pid;
+            upperinfo->event    = alarminfo->event;
 
             /* Format the alarm info needed by the lower half driver */
 
-            lowerinfo.id   = alarmid;
-            lowerinfo.cb   = rtc_alarm_callback;
-            lowerinfo.priv = (FAR void *)upper;
-            lowerinfo.time = alarminfo->time;
+            lowerinfo.id        = alarmid;
+            lowerinfo.cb        = rtc_alarm_callback;
+            lowerinfo.priv      = (FAR void *)upper;
+            lowerinfo.time      = alarminfo->time;
 
             /* Then set the alarm */
 
@@ -547,16 +548,16 @@ static int rtc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
              * alarm expires.
              */
 
-            upperinfo->active = true;
-            upperinfo->pid    = pid;
-            upperinfo->event  = alarminfo->event;
+            upperinfo->active   = true;
+            upperinfo->pid      = pid;
+            upperinfo->event    = alarminfo->event;
 
             /* Format the alarm info needed by the lower half driver */
 
-            lowerinfo.id      = alarmid;
-            lowerinfo.cb      = rtc_alarm_callback;
-            lowerinfo.priv    = (FAR void *)upper;
-            lowerinfo.reltime = alarminfo->reltime;
+            lowerinfo.id        = alarmid;
+            lowerinfo.cb        = rtc_alarm_callback;
+            lowerinfo.priv      = (FAR void *)upper;
+            lowerinfo.reltime   = alarminfo->reltime;
 
             /* Then set the alarm */
 
@@ -681,16 +682,16 @@ static int rtc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
              * alarm expires.
              */
 
-            upperinfo->active = true;
-            upperinfo->pid    = pid;
-            upperinfo->event  = alarminfo->event;
+            upperinfo->active   = true;
+            upperinfo->pid      = pid;
+            upperinfo->event    = alarminfo->event;
 
             /* Format the alarm info needed by the lower half driver. */
 
-            lowerinfo.id     = id;
-            lowerinfo.cb     = rtc_periodic_callback;
-            lowerinfo.priv   = (FAR void *)upper;
-            lowerinfo.period = alarminfo->period;
+            lowerinfo.id        = id;
+            lowerinfo.cb        = rtc_periodic_callback;
+            lowerinfo.priv      = (FAR void *)upper;
+            lowerinfo.period    = alarminfo->period;
 
             /* Then set the periodic wakeup. */
 
@@ -736,6 +737,7 @@ static int rtc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
     default:
       {
+        ret = -ENOTTY;
 #ifdef CONFIG_RTC_IOCTL
         if (ops->ioctl)
           {
@@ -764,7 +766,7 @@ static int rtc_unlink(FAR struct inode *inode)
    * structure.
    */
 
-  DEBUGASSERT(inode->i_private);
+  DEBUGASSERT(inode && inode->i_private);
   upper = inode->i_private;
 
   /* Get exclusive access to the device structures */
@@ -817,7 +819,7 @@ static int rtc_unlink(FAR struct inode *inode)
 int rtc_initialize(int minor, FAR struct rtc_lowerhalf_s *lower)
 {
   FAR struct rtc_upperhalf_s *upper;
-  char devpath[20];
+  char devpath[16];
   int ret;
 
   DEBUGASSERT(lower && lower->ops && minor >= 0 && minor < 1000);
@@ -842,15 +844,15 @@ int rtc_initialize(int minor, FAR struct rtc_lowerhalf_s *lower)
   upper->unlinked = false;  /* Driver is not  unlinked */
 #endif
 
-  /* Create the driver name.  There is space for the a minor number up to 10
+  /* Create the driver name.  There is space for the a minor number up to  6
    * characters
    */
 
-  snprintf(devpath, sizeof(devpath), "/dev/rtc%d", minor);
+  snprintf(devpath, 16, "/dev/rtc%d", minor);
 
   /* And, finally, register the new RTC driver */
 
-  ret = register_driver(devpath, &g_rtc_fops, 0666, upper);
+  ret = register_driver(devpath, &rtc_fops, 0666, upper);
   if (ret < 0)
     {
       nxmutex_destroy(&upper->lock);

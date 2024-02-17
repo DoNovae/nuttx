@@ -30,7 +30,6 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <assert.h>
-#include <netinet/icmp6.h>
 
 #include <nuttx/mm/iob.h>
 #include <nuttx/net/ip.h>
@@ -85,6 +84,7 @@ struct icmpv6_conn_s
   /* ICMPv6-specific content follows */
 
   uint16_t   id;       /* ICMPv6 ECHO request ID */
+  uint8_t    nreqs;    /* Number of requests with no response received */
   uint8_t    crefs;    /* Reference counts on this instance */
 
   /* The device that the ICMPv6 request was sent on */
@@ -97,7 +97,6 @@ struct icmpv6_conn_s
    */
 
   struct iob_queue_s readahead;  /* Read-ahead buffering */
-  struct icmp6_filter filter;    /* ICMP6 type filter */
 
   /* The following is a list of poll structures of threads waiting for
    * socket events.
@@ -105,11 +104,6 @@ struct icmpv6_conn_s
 
   struct icmpv6_poll_s pollinfo[CONFIG_NET_ICMPv6_NPOLLWAITERS];
 };
-
-/* Callback from icmpv6_foreach() */
-
-typedef CODE int (*icmpv6_callback_t)(FAR struct icmpv6_conn_s *conn,
-                                      FAR void *arg);
 #endif
 
 #ifdef CONFIG_NET_ICMPv6_NEIGHBOR
@@ -136,13 +130,6 @@ struct icmpv6_rnotify_s
 };
 #endif
 
-struct icmpv6_pmtu_entry
-{
-  net_ipv6addr_t daddr;
-  uint16_t pmtu;
-  clock_t time;
-};
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -164,26 +151,6 @@ EXTERN const struct sock_intf_s g_icmpv6_sockif;
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
-
-/****************************************************************************
- * Name: icmpv6_devinit
- *
- * Description:
- *   Called when a new network device is registered to configure that device
- *   for ICMPv6 support.
- *
- * Input Parameters:
- *   dev   - The device driver structure to configure.
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-void icmpv6_devinit(FAR struct net_driver_s *dev);
 
 /****************************************************************************
  * Name: icmpv6_input
@@ -225,8 +192,6 @@ void icmpv6_input(FAR struct net_driver_s *dev, unsigned int iplen);
  *   ICMPv6 Neighbor Advertisement.
  *
  * Input Parameters:
- *   dev      The suggested device driver structure to do the solicitation,
- *            can be NULL for auto decision, must set for link-local ipaddr.
  *   ipaddr   The IPv6 address to be queried.
  *
  * Returned Value:
@@ -243,10 +208,9 @@ void icmpv6_input(FAR struct net_driver_s *dev, unsigned int iplen);
  ****************************************************************************/
 
 #ifdef CONFIG_NET_ICMPv6_NEIGHBOR
-int icmpv6_neighbor(FAR struct net_driver_s *dev,
-                    const net_ipv6addr_t ipaddr);
+int icmpv6_neighbor(const net_ipv6addr_t ipaddr);
 #else
-#  define icmpv6_neighbor(d,i) (0)
+#  define icmpv6_neighbor(i) (0)
 #endif
 
 /****************************************************************************
@@ -333,7 +297,6 @@ void icmpv6_rsolicit(FAR struct net_driver_s *dev);
  ****************************************************************************/
 
 void icmpv6_advertise(FAR struct net_driver_s *dev,
-                      const net_ipv6addr_t tgtaddr,
                       const net_ipv6addr_t destipaddr);
 
 /****************************************************************************
@@ -556,9 +519,9 @@ int icmpv6_rwait(FAR struct icmpv6_rnotify_s *notify, unsigned int timeout);
  ****************************************************************************/
 
 #ifdef CONFIG_NET_ICMPv6_AUTOCONF
-void icmpv6_rnotify(FAR struct net_driver_s *dev, int result);
+void icmpv6_rnotify(FAR struct net_driver_s *dev);
 #else
-#  define icmpv6_rnotify(d,r) (0)
+#  define icmpv6_rnotify(d) (0)
 #endif
 
 /****************************************************************************
@@ -633,12 +596,11 @@ FAR struct icmpv6_conn_s *icmpv6_nextconn(FAR struct icmpv6_conn_s *conn);
 #endif
 
 /****************************************************************************
- * Name: icmpv6_foreach
+ * Name: icmpv6_findconn
  *
  * Description:
- *   Enumerate each ICMPv6 connection structure. This function will terminate
- *   when either (1) all connection have been enumerated or (2) when a
- *   callback returns any non-zero value.
+ *   Find an ICMPv6 connection structure that is expecting a ICMPv6 ECHO
+ *   response with this ID from this device
  *
  * Assumptions:
  *   This function is called from network logic at with the network locked.
@@ -646,7 +608,8 @@ FAR struct icmpv6_conn_s *icmpv6_nextconn(FAR struct icmpv6_conn_s *conn);
  ****************************************************************************/
 
 #ifdef CONFIG_NET_ICMPv6_SOCKET
-int icmpv6_foreach(icmpv6_callback_t callback, FAR void *arg);
+FAR struct icmpv6_conn_s *icmpv6_findconn(FAR struct net_driver_s *dev,
+                                          uint16_t id);
 #endif
 
 /****************************************************************************
@@ -682,7 +645,7 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
  * Description:
  *   Implements the socket recvfrom interface for the case of the AF_INET
  *   data gram socket with the IPPROTO_ICMP6 protocol.  icmpv6_recvmsg()
- *   receives ICMPv6 message for the a socket.
+ *   receives ICMPv6 ECHO replies for the a socket.
  *
  *   If msg_name is not NULL, and the underlying protocol provides the source
  *   address, this source address is filled in. The argument 'msg_namelen' is
@@ -813,39 +776,6 @@ void icmpv6_reply(FAR struct net_driver_s *dev,
 #ifdef CONFIG_NET_ICMPv6_SOCKET
 int icmpv6_ioctl(FAR struct socket *psock, int cmd, unsigned long arg);
 #endif
-
-/****************************************************************************
- * Name: icmpv6_find_pmtu_entry
- *
- * Description:
- *   Search for a ipv6 pmtu entry
- *
- * Parameters:
- *   destipaddr   the IPv6 address of the destination
- *
- * Return:
- *   void
- ****************************************************************************/
-
-FAR struct icmpv6_pmtu_entry *
-icmpv6_find_pmtu_entry(net_ipv6addr_t destipaddr);
-
-/****************************************************************************
- * Name: icmpv6_add_pmtu_entry
- *
- * Description:
- *   Create a new ipv6 destination cache entry. If no unused entry is found,
- *   will recycle oldest entry
- *
- * Parameters:
- *   destipaddr   the IPv6 address of the destination
- *   mtu          MTU
- *
- * Return:
- *   void
- ****************************************************************************/
-
-void icmpv6_add_pmtu_entry(net_ipv6addr_t destipaddr, int mtu);
 
 #undef EXTERN
 #ifdef __cplusplus

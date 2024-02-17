@@ -91,18 +91,6 @@
 #  define TLIST_BLOCKED(t)       __TLIST_HEAD(t)
 #endif
 
-#ifdef CONFIG_SCHED_CRITMONITOR_MAXTIME_PANIC
-#  define CRITMONITOR_PANIC(fmt, ...) \
-          do \
-            { \
-              _alert(fmt, ##__VA_ARGS__); \
-              PANIC(); \
-            } \
-          while(0)
-#else
-#  define CRITMONITOR_PANIC(fmt, ...) _alert(fmt, ##__VA_ARGS__)
-#endif
-
 /****************************************************************************
  * Public Type Definitions
  ****************************************************************************/
@@ -235,7 +223,7 @@ extern volatile int g_npidhash;
 
 extern const struct tasklist_s g_tasklisttable[NUM_TASK_STATES];
 
-#ifndef CONFIG_SCHED_CPULOAD_NONE
+#ifdef CONFIG_SCHED_CPULOAD
 /* This is the total number of clock tick counts.  Essentially the
  * 'denominator' for all CPU load calculations.
  */
@@ -381,12 +369,12 @@ void nxsched_suspend(FAR struct tcb_s *tcb);
 #endif
 
 #ifdef CONFIG_SMP
-FAR struct tcb_s *this_task(void) noinstrument_function;
+FAR struct tcb_s *this_task(void);
 
 int  nxsched_select_cpu(cpu_set_t affinity);
 int  nxsched_pause_cpu(FAR struct tcb_s *tcb);
 
-#  define nxsched_islocked_global() spin_is_locked(&g_cpu_schedlock)
+#  define nxsched_islocked_global() spin_islocked(&g_cpu_schedlock)
 #  define nxsched_islocked_tcb(tcb) nxsched_islocked_global()
 
 #else
@@ -395,13 +383,17 @@ int  nxsched_pause_cpu(FAR struct tcb_s *tcb);
 #  define nxsched_islocked_tcb(tcb) ((tcb)->lockcount > 0)
 #endif
 
+#ifndef CONFIG_SCHED_CPULOAD_EXTCLK
+
 /* CPU load measurement support */
 
-#if defined(CONFIG_SCHED_CPULOAD_SYSCLK) || \
-    defined (CONFIG_SCHED_CPULOAD_CRITMONITOR)
-void nxsched_process_taskload_ticks(FAR struct tcb_s *tcb, uint32_t ticks);
+#  ifdef CONFIG_SCHED_CPULOAD
 void nxsched_process_cpuload_ticks(uint32_t ticks);
-#define nxsched_process_cpuload() nxsched_process_cpuload_ticks(1)
+#  else
+#    define nxsched_process_cpuload_ticks(ticks)
+#  endif
+
+#  define nxsched_process_cpuload() nxsched_process_cpuload_ticks(1)
 #endif
 
 /* Critical section monitor */
@@ -416,10 +408,5 @@ void nxsched_suspend_critmon(FAR struct tcb_s *tcb);
 /* TCB operations */
 
 bool nxsched_verify_tcb(FAR struct tcb_s *tcb);
-
-/* Obtain TLS from kernel */
-
-struct tls_info_s; /* Forward declare */
-FAR struct tls_info_s *nxsched_get_tls(FAR struct tcb_s *tcb);
 
 #endif /* __SCHED_SCHED_SCHED_H */

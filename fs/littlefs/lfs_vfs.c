@@ -40,14 +40,6 @@
 #include "littlefs/lfs_util.h"
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef CONFIG_C99_BOOL
-#  error littlefs requires CONFIG_C99_BOOL to be selected
-#endif
-
-/****************************************************************************
  * Private Types
  ****************************************************************************/
 
@@ -140,7 +132,7 @@ static int     littlefs_stat(FAR struct inode *mountpt,
  * with any compiler.
  */
 
-const struct mountpt_operations g_littlefs_operations =
+const struct mountpt_operations littlefs_operations =
 {
   littlefs_open,          /* open */
   littlefs_close,         /* close */
@@ -150,7 +142,6 @@ const struct mountpt_operations g_littlefs_operations =
   littlefs_ioctl,         /* ioctl */
   NULL,                   /* mmap */
   littlefs_truncate,      /* truncate */
-  NULL,                   /* poll */
 
   littlefs_sync,          /* sync */
   littlefs_dup,           /* dup */
@@ -1243,6 +1234,7 @@ static int littlefs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   /* Return something for the file system description */
 
+  memset(buf, 0, sizeof(*buf));
   buf->f_type    = LITTLEFS_SUPER_MAGIC;
   buf->f_namelen = LFS_NAME_MAX;
   buf->f_bsize   = fs->cfg.block_size;

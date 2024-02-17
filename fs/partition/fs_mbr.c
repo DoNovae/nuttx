@@ -25,7 +25,6 @@
 #include <debug.h>
 #include <endian.h>
 #include <string.h>
-#include <inttypes.h>
 
 #include <nuttx/kmalloc.h>
 
@@ -36,7 +35,7 @@
  ****************************************************************************/
 
 #define MBR_SIZE                   512
-#define MBR_LBA_TO_BLOCK(lba, blk) (((blkcnt_t)le32toh(lba) * 512 + (blk) - 1) / (blk))
+#define MBR_LBA_TO_BLOCK(lba, blk) ((le32toh(lba) * 512 + (blk) - 1) / (blk))
 
 /****************************************************************************
  * Private Types
@@ -136,7 +135,6 @@ int parse_mbr_partition(FAR struct partition_state_s *state,
                           state->blocksize);
       pentry.nblocks    = MBR_LBA_TO_BLOCK(table[i].partition_size,
                           state->blocksize);
-      pentry.blocksize  = state->blocksize;
 
       if (pentry.nblocks != 0)
         {
@@ -171,7 +169,7 @@ int parse_mbr_partition(FAR struct partition_state_s *state,
 
           if (buffer[0x1fe] != 0x55 || buffer[0x1ff] != 0xaa)
             {
-              ferr("block %" PRIu32 " doesn't contain an EBR signature\n",
+              ferr("block %x doesn't contain an EBR signature\n",
                    ebr_block);
               ret = -EINVAL;
               goto out;

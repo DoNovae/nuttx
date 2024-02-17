@@ -203,9 +203,7 @@ static inline void sendto_ipselect(FAR struct net_driver_s *dev,
 {
   /* Which domain the socket support */
 
-  if (conn->domain == PF_INET ||
-      (conn->domain == PF_INET6 &&
-       ip6_is_ipv4addr((FAR struct in6_addr *)conn->u.ipv6.raddr)))
+  if (conn->domain == PF_INET)
     {
       /* Select the IPv4 domain */
 
@@ -288,16 +286,6 @@ static int sendto_next_transfer(FAR struct udp_conn_s *conn)
       nwarn("WARNING: device is DOWN\n");
       return -EHOSTUNREACH;
     }
-
-#ifndef CONFIG_NET_IPFRAG
-  /* Sanity check if the packet len (with IP hdr) is greater than the MTU */
-
-  if (wrb->wb_iob->io_pktlen > devif_get_mtu(dev))
-    {
-      nerr("ERROR: Packet too long to send!\n");
-      return -EMSGSIZE;
-    }
-#endif
 
   /* If this is not the same device that we used in the last call to
    * udp_callback_alloc(), then we need to release and reallocate the old
@@ -551,13 +539,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
   /* Get the underlying the UDP connection structure.  */
 
   conn = psock->s_conn;
-
-  /* The length of a datagram to be up to 65,535 octets */
-
-  if (len > 65535)
-    {
-      return -EMSGSIZE;
-    }
+  DEBUGASSERT(conn);
 
   /* If the UDP socket was previously assigned a remote peer address via
    * connect(), then as with connection-mode socket, sendto() may not be
@@ -593,7 +575,9 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
    * the ARP table.
    */
 
+#ifdef CONFIG_NET_ICMPv6_NEIGHBOR
   if (psock->s_domain == PF_INET)
+#endif
     {
       in_addr_t destipaddr;
 
@@ -630,7 +614,9 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
    * the neighbor table.
    */
 
-  if (psock->s_domain == PF_INET6)
+#ifdef CONFIG_NET_ARP_SEND
+  else
+#endif
     {
       FAR const uint16_t *destipaddr;
 
@@ -658,7 +644,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
 
       /* Make sure that the IP address mapping is in the Neighbor Table */
 
-      ret = icmpv6_neighbor(NULL, destipaddr);
+      ret = icmpv6_neighbor(destipaddr);
     }
 #endif /* CONFIG_NET_ICMPv6_NEIGHBOR */
 
@@ -788,7 +774,6 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
       else
         {
           memcpy(&wrb->wb_dest, to, tolen);
-          udp_connect(conn, to);
         }
 
       /* Skip l2/l3/l4 offset before copy */
@@ -796,7 +781,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
       udpiplen = udpip_hdrsize(conn);
 
       iob_reserve(wrb->wb_iob, CONFIG_NET_LL_GUARDSIZE);
-      iob_update_pktlen(wrb->wb_iob, udpiplen, false);
+      iob_update_pktlen(wrb->wb_iob, udpiplen);
 
       /* Copy the user data into the write buffer.  We cannot wait for
        * buffer space if the socket was opened non-blocking.

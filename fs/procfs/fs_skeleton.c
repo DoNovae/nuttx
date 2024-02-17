@@ -133,7 +133,6 @@ const struct procfs_operations skel_procfsoperations =
 #else
   skel_write,      /* write */
 #endif
-  NULL,            /* poll */
 
   skel_dup,        /* dup */
 
@@ -174,7 +173,7 @@ static int skel_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Allocate the open file structure */
 
-  priv = kmm_zalloc(sizeof(struct skel_file_s));
+  priv = (FAR struct skel_file_s *)kmm_zalloc(sizeof(struct skel_file_s));
   if (!priv)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -313,7 +312,7 @@ static int skel_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   /* Allocate a new container to hold the task and attribute selection */
 
-  newpriv = kmm_zalloc(sizeof(struct skel_file_s));
+  newpriv = (FAR struct skel_file_s *)kmm_zalloc(sizeof(struct skel_file_s));
   if (!newpriv)
     {
       ferr("ERROR: Failed to allocate file attributes\n");

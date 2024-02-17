@@ -1,5 +1,3 @@
-.. _esp32c3:
-
 ==================
 Espressif ESP32-C3
 ==================
@@ -28,47 +26,8 @@ core and supports 2.4 GHz Wi-Fi and Bluetooth Low Energy.
 ESP32-C3 Toolchain
 ==================
 
-A generic RISC-V toolchain can be used to build ESP32-C3 projects. It's recommended to use the same
-toolchain used by NuttX CI. Please refer to the Docker
-`container <https://github.com/apache/nuttx/tree/master/tools/ci/docker/linux/Dockerfile>`_ and
-check for the current compiler version being used. For instance:
-
-.. code-block::
-
-   ###############################################################################
-   # Build image for tool required by RISCV builds
-   ###############################################################################
-   FROM nuttx-toolchain-base AS nuttx-toolchain-riscv
-   # Download the latest RISCV GCC toolchain prebuilt by xPack
-   RUN mkdir riscv-none-elf-gcc && \
-   curl -s -L "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v12.3.0-2/xpack-riscv-none-elf-gcc-12.3.0-2-linux-x64.tar.gz" \
-   | tar -C riscv-none-elf-gcc --strip-components 1 -xz
-
-It uses the xPack's prebuilt toolchain based on GCC 12.3.0.
-
-Installing
-----------
-
-First, create a directory to hold the toolchain:
-
-.. code-block:: console
-
-   $ mkdir -p /path/to/your/toolchain/riscv-none-elf-gcc
-
-Download and extract toolchain:
-
-.. code-block:: console
-
-   $ curl -s -L "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v12.3.0-2/xpack-riscv-none-elf-gcc-12.3.0-2-linux-x64.tar.gz" \
-   | tar -C /path/to/your/toolchain/riscv-none-elf-gcc --strip-components 1 -xz
-
-Add the toolchain to your `PATH`:
-
-.. code-block:: console
-
-   $ echo "export PATH=/path/to/your/toolchain/riscv-none-elf-gcc/bin:$PATH" >> ~/.bashrc
-
-You can edit your shell's rc files if you don't use bash.
+A generic RISC-V toolchain can be used to build ESP32-C3 projects.
+SiFive's toolchain can be downloaded from: https://github.com/sifive/freedom-tools/releases
 
 Second stage bootloader and partition table
 ===========================================
@@ -145,26 +104,26 @@ The following list indicates the state of peripherals' support in NuttX:
 =========== ======= =====
 Peripheral  Support NOTES
 =========== ======= =====
-ADC          No
-AES          No
-Bluetooth    No
+ADC          Yes
+AES          Yes
+Bluetooth    Yes
 CDC Console  Yes    Rev.3
-DMA          No
-eFuse        No
+DMA          Yes
+eFuse        Yes
 GPIO         Yes
-I2C          No
+I2C          Yes
 LED_PWM      Yes
-RNG          No
-RSA          No
+RNG          Yes
+RSA          Yes
 RTC          Yes
-SHA          No
-SPI          No
-SPIFLASH     No
+SHA          Yes
+SPI          Yes
+SPIFLASH     Yes
 Timers       Yes
-Touch        No
+Touch        Yes
 UART         Yes
 Watchdog     Yes
-Wifi         No
+Wifi         Yes
 =========== ======= =====
 
 Secure Boot and Flash Encryption

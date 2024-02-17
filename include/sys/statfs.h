@@ -94,7 +94,6 @@
 #define USERFS_MAGIC          0x52455355
 #define CROMFS_MAGIC          0x4d4f5243
 #define RPMSGFS_MAGIC         0x54534f47
-#define ZIPFS_MAGIC           0x504b
 
 #if defined(CONFIG_FS_LARGEFILE)
 #  define statfs64            statfs
@@ -104,8 +103,6 @@
 /****************************************************************************
  * Type Definitions
  ****************************************************************************/
-
-typedef struct fsid_s fsid_t;
 
 struct statfs
 {
@@ -117,7 +114,6 @@ struct statfs
   fsblkcnt_t f_bavail;   /* Free blocks avail to non-superuser */
   fsfilcnt_t f_files;    /* Total file nodes in the file system */
   fsfilcnt_t f_ffree;    /* Free file nodes in the file system */
-  fsid_t     f_fsid;     /* Encode device type, not yet in use */
 };
 
 /****************************************************************************

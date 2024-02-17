@@ -1012,7 +1012,7 @@
 #define GPR_GPR2_L2_MEM_FORCE_DEEPSLEEP                         (1 << 14)
 #define GPR_GPR2_MQS_CLK_DIV_SHIFT                              (16)
 #define GPR_GPR2_MQS_CLK_DIV_MASK                               (255 << GPR_GPR2_MQS_CLK_DIV_SHIFT)
-#  define GPR_GPR2_MQS_CLK_DIV(n)                               ((n - 1) << GPR_GPR2_MQS_CLK_DIV_SHIFT)
+# define GPR_GPR2_MQS_CLK_DIV(n)                                ((n - 1) << GPR_GPR2_MQS_CLK_DIV_SHIFT)
 #define GPR_GPR2_MQS_SW_RST_EN                                  (1 << 24)
 #define GPR_GPR2_MQS_EN                                         (1 << 25)
 #define GPR_GPR2_MQS_OVERSAMPLE32                               (0 << 26)
@@ -1475,7 +1475,7 @@
 
 #define GPR_GPR16_INIT_ITCM_EN                                  (1 << 0)
 #define GPR_GPR16_INIT_DTCM_EN                                  (1 << 1)
-#define GPR_GPR16_FLEXRAM_BANK_CFG_SEL                          (1 << 2)
+#define GPR_GPR16_FLEXRAM_BANK_CFG_SELF                         (1 << 2)
 
 /* General Purpose Register 17 (GPR17) */
 

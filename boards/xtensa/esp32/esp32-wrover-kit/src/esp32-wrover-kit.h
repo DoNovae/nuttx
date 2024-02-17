@@ -28,6 +28,8 @@
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
 #include <stdint.h>
+//#include <nuttx/audio/cs4344.h>
+#include <nuttx/audio/i2s.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -107,8 +109,11 @@ int esp32_mmcsd_initialize(int minor);
 int esp32_spiflash_init(void);
 
 /****************************************************************************
- * Name: esp32_gpio_init
+ * Name: board_i2sdev_initialize
  ****************************************************************************/
+int board_i2sdev_initialize(int port, bool enable_tx, bool enable_rx);
+//int board_i2sdev_initialize(int port);
+int esp32_cs4344_initialize(int port);
 
 #ifdef CONFIG_DEV_GPIO
 int esp32_gpio_init(void);

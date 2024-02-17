@@ -102,7 +102,6 @@
  *     filter = T * (2*PI) * f_c
  *
  *     phase shift = -arctan(f_in/f_c)
- *     time constant = -T / (ln(1 - filter))
  *
  *     T    - period at which the digital filter is being calculated
  *     f_in - input frequency of the filter
@@ -448,14 +447,6 @@ struct pmsm_model_f32_s
   float                         iq_int; /* Iq integral part */
 };
 
-/* Average filter */
-
-struct avg_filter_data_s
-{
-  float prev_avg;      /* Previous average */
-  float k;             /* k counter */
-};
-
 /****************************************************************************
  * Public Functions Prototypes
  ****************************************************************************/
@@ -609,12 +600,6 @@ int pmsm_model_initialize(FAR struct pmsm_model_f32_s *model,
 int pmsm_model_elec(FAR struct pmsm_model_f32_s *model,
                     FAR ab_frame_f32_t *vab);
 int pmsm_model_mech(FAR struct pmsm_model_f32_s *model, float load);
-
-/* Average filter */
-
-void avg_filter_data_init(FAR struct avg_filter_data_s *data,
-                          float prev_avg, float k);
-float avg_filter(FAR struct avg_filter_data_s *data, float x);
 
 #undef EXTERN
 #if defined(__cplusplus)

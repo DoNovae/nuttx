@@ -33,7 +33,6 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/sched.h>
 #include <nuttx/kthread.h>
-#include <nuttx/fs/fs.h>
 
 #include "sched/sched.h"
 #include "group/group.h"
@@ -82,7 +81,7 @@ int nxthread_create(FAR const char *name, uint8_t ttype, int priority,
 
   /* Allocate a TCB for the new task. */
 
-  tcb = kmm_zalloc(sizeof(struct task_tcb_s));
+  tcb = (FAR struct task_tcb_s *)kmm_zalloc(sizeof(struct task_tcb_s));
   if (!tcb)
     {
       serr("ERROR: Failed to allocate TCB\n");
@@ -96,7 +95,7 @@ int nxthread_create(FAR const char *name, uint8_t ttype, int priority,
   /* Initialize the task */
 
   ret = nxtask_init(tcb, name, priority, stack_addr, stack_size,
-                    entry, argv, envp, NULL);
+                    entry, argv, envp);
   if (ret < OK)
     {
       kmm_free(tcb);
@@ -111,7 +110,7 @@ int nxthread_create(FAR const char *name, uint8_t ttype, int priority,
 
   nxtask_activate(&tcb->cmn);
 
-  return pid;
+  return (int)pid;
 }
 
 /****************************************************************************

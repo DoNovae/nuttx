@@ -397,7 +397,7 @@ void arm_l2ccinitialize(void)
 }
 
 /****************************************************************************
- * Name: l2cc_linesize
+ * Name: l2cc_get_linesize
  *
  * Description:
  *    Get L2CC-P310 L2 cache linesize
@@ -410,28 +410,9 @@ void arm_l2ccinitialize(void)
  *
  ****************************************************************************/
 
-uint32_t l2cc_linesize(void)
+uint32_t l2cc_get_linesize(void)
 {
   return PL310_CACHE_LINE_SIZE;
-}
-
-/****************************************************************************
- * Name: l2cc_size
- *
- * Description:
- *    Get L2CC-P310 L2 cache size
- *
- * Input Parameters:
- *    None
- *
- * Returned Value:
- *    L2 cache size
- *
- ****************************************************************************/
-
-uint32_t l2cc_size(void)
-{
-  return PL310_CACHE_SIZE;
 }
 
 /****************************************************************************
@@ -456,12 +437,6 @@ void l2cc_enable(void)
   /* Invalidate and enable the cache (must be disabled to do this!) */
 
   flags = enter_critical_section();
-
-  if ((getreg32(L2CC_CR) & L2CC_CR_L2CEN) != 0)
-    {
-      l2cc_disable();
-    }
-
   l2cc_invalidate_all();
   putreg32(L2CC_CR_L2CEN, L2CC_CR);
   ARM_DSB();
@@ -545,10 +520,16 @@ void l2cc_sync(void)
 void l2cc_invalidate_all(void)
 {
   irqstate_t flags;
+  uint32_t regval;
 
   /* Invalidate all ways */
 
   flags = enter_critical_section();
+
+  /* Disable the L2 cache while we invalidate it */
+
+  regval = getreg32(L2CC_CR);
+  l2cc_disable();
 
   /* Invalidate all ways by writing the bit mask of ways to be invalidated
    * the Invalidate Way Register (IWR).
@@ -566,6 +547,9 @@ void l2cc_invalidate_all(void)
 
   putreg32(0, L2CC_CSR);
 
+  /* Then re-enable the L2 cache if it was enabled before */
+
+  putreg32(regval, L2CC_CR);
   leave_critical_section(flags);
 }
 

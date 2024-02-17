@@ -24,6 +24,12 @@ ifeq ($(V),)
   MAKE := $(MAKE) -s --no-print-directory
 endif
 
+# Build any necessary tools needed early in the build.
+# incdir - Is needed immediately by all Make.defs file.
+
+DUMMY  := ${shell $(MAKE) -C tools -f Makefile.host incdir \
+          INCDIR="$(TOPDIR)/tools/incdir.sh"}
+
 include $(TOPDIR)/Make.defs
 
 # GIT directory present
@@ -216,13 +222,6 @@ include/setjmp.h: include/nuttx/lib/setjmp.h
 	$(Q) cp -f include/nuttx/lib/setjmp.h include/setjmp.h
 endif
 
-# Targets used to generate compiler-specific include paths
-# Build this tools needed early in the build
-# so we define it as a dependency of `context` target
-
-tools/incdir$(HOSTEXEEXT):
-	$(Q) $(MAKE) -C tools -f Makefile.host incdir INCDIR="$(TOPDIR)/tools/incdir.sh"
-
 # Targets used to build include/nuttx/version.h.  Creation of version.h is
 # part of the overall NuttX configuration sequence. Notice that the
 # tools/mkversion tool is built and used to create include/nuttx/version.h
@@ -245,17 +244,10 @@ include/nuttx/version.h: $(TOPDIR)/.version tools/mkversion$(HOSTEXEEXT)
 # part of the overall NuttX configuration sequence. Notice that the
 # tools/mkconfig tool is built and used to create include/nuttx/config.h
 
-tools/mkconfig$(HOSTEXEEXT): prebuild
+tools/mkconfig$(HOSTEXEEXT):
 	$(Q) $(MAKE) -C tools -f Makefile.host mkconfig$(HOSTEXEEXT)
 
 include/nuttx/config.h: $(TOPDIR)/.config tools/mkconfig$(HOSTEXEEXT)
-	$(Q) grep -v "CONFIG_BASE_DEFCONFIG" "$(TOPDIR)/.config" > "$(TOPDIR)/.config.tmp"
-	$(Q) if ! cmp -s "$(TOPDIR)/.config.tmp" "$(TOPDIR)/.config.orig" ; then \
-		sed -i.bak -e "/CONFIG_BASE_DEFCONFIG/ { /-dirty/! s/\"$$/-dirty\"/; }" "$(TOPDIR)/.config" ; \
-	else \
-		sed -i.bak "s/-dirty//g" "$(TOPDIR)/.config"; \
-	fi
-	$(Q) rm -f "$(TOPDIR)/.config.tmp" "$(TOPDIR)/.config.bak"
 	$(Q) tools/mkconfig $(TOPDIR) > $@.tmp
 	$(Q) $(call TESTANDREPLACEFILE, $@.tmp, $@)
 
@@ -280,18 +272,10 @@ include/arch:
 	$(Q) $(DIRLINK) $(TOPDIR)/$(ARCH_DIR)/include $@
 
 # Link the boards/<arch>/<chip>/<board>/include directory to include/arch/board
-# If the above path does not exist, then we try to link to common
-
-LINK_INCLUDE_DIR=$(BOARD_DIR)/include
-ifeq ($(wildcard $(LINK_INCLUDE_DIR)),)
-	ifneq ($(strip $(BOARD_COMMON_DIR)),)
-		LINK_INCLUDE_DIR = $(BOARD_COMMON_DIR)/include
-	endif
-endif
 
 include/arch/board: | include/arch
 	@echo "LN: $@ to $(BOARD_DIR)/include"
-	$(Q) $(DIRLINK) $(LINK_INCLUDE_DIR) $@
+	$(Q) $(DIRLINK) $(BOARD_DIR)/include $@
 
 # Link the boards/<arch>/<chip>/common dir to arch/<arch-name>/src/board
 # Link the boards/<arch>/<chip>/<board>/src dir to arch/<arch-name>/src/board/board
@@ -441,7 +425,7 @@ endif
 
 CONTEXTDIRS_DEPS = $(patsubst %,%/.context,$(CONTEXTDIRS))
 
-context: tools/incdir$(HOSTEXEEXT) include/nuttx/config.h include/nuttx/version.h .dirlinks $(CONTEXTDIRS_DEPS) | staging
+context: include/nuttx/config.h include/nuttx/version.h .dirlinks $(CONTEXTDIRS_DEPS) | staging
 
 staging:
 	$(Q) mkdir -p $@
@@ -494,16 +478,6 @@ clean_context: clean_dirlinks
 # build those libraries.
 
 include tools/LibTargets.mk
-
-# prebuild
-#
-# Some architectures require the use of special tools and special handling
-# BEFORE building NuttX. The `Make.defs` files for those architectures
-# should override the following define with the correct operations for
-# that platform.
-
-prebuild:
-	$(call PREBUILD, $(TOPDIR))
 
 # pass1 and pass2
 #
@@ -650,17 +624,10 @@ define kconfig_tweak_disable
 	kconfig-tweak --file $1 -u $2
 endef
 else
-  KCONFIG_WARNING       = if [ -s kwarning ]; \
-                            then rm kwarning; \
-                              exit 1; \
-                            else \
-                              rm kwarning; \
-                          fi
-  MODULE_WARNING        = "warning: the 'modules' option is not supported"
-  PURGE_MODULE_WARNING  = 2> >(grep -v ${MODULE_WARNING} | tee kwarning) | cat && ${KCONFIG_WARNING}
+  PURGE_MODULE_WARNING  = 2> >(grep -v "warning: the 'modules' option is not supported")
   KCONFIG_OLDCONFIG     = oldconfig ${PURGE_MODULE_WARNING}
   KCONFIG_OLDDEFCONFIG  = olddefconfig ${PURGE_MODULE_WARNING}
-  KCONFIG_MENUCONFIG    = menuconfig $(subst | cat,,${PURGE_MODULE_WARNING})
+  KCONFIG_MENUCONFIG    = menuconfig ${PURGE_MODULE_WARNING}
   KCONFIG_NCONFIG       = guiconfig ${PURGE_MODULE_WARNING}
   KCONFIG_QCONFIG       = ${KCONFIG_NCONFIG}
   KCONFIG_GCONFIG       = ${KCONFIG_NCONFIG}
@@ -711,7 +678,6 @@ gconfig: apps_preconfig
 savedefconfig: apps_preconfig
 	$(Q) ${KCONFIG_ENV} ${KCONFIG_SAVEDEFCONFIG}
 	$(Q) $(call kconfig_tweak_disable,defconfig.tmp,CONFIG_APPS_DIR)
-	$(Q) $(call kconfig_tweak_disable,defconfig.tmp,CONFIG_BASE_DEFCONFIG)
 	$(Q) grep "CONFIG_ARCH=" .config >> defconfig.tmp
 	$(Q) grep "^CONFIG_ARCH_CHIP_" .config >> defconfig.tmp; true
 	$(Q) grep "CONFIG_ARCH_CHIP=" .config >> defconfig.tmp; true
@@ -740,8 +706,7 @@ savedefconfig: apps_preconfig
 # that the archiver is 'ar'
 
 export: $(NUTTXLIBS)
-	$(Q) ZIG="${ZIG}" ZIGFLAGS="${ZIGFLAGS}" MAKE="${MAKE}" \
-		$(MKEXPORT) $(MKEXPORT_ARGS) -l "$(EXPORTLIBS)"
+	$(Q) MAKE="${MAKE}" $(MKEXPORT) $(MKEXPORT_ARGS) -l "$(EXPORTLIBS)"
 
 # General housekeeping targets:  dependencies, cleaning, etc.
 #
@@ -791,7 +756,6 @@ endif
 	$(call DELFILE, defconfig)
 	$(call DELFILE, .config)
 	$(call DELFILE, .config.old)
-	$(call DELFILE, .config.orig)
 	$(call DELFILE, .gdbinit)
 
 # Application housekeeping targets.  The APPDIR variable refers to the user

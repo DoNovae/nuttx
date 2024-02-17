@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_NRF53_NRF5340_DK_SRC_NRF5340_DK_H
-#define __BOARDS_ARM_NRF53_NRF5340_DK_SRC_NRF5340_DK_H
+#ifndef __BOARDS_ARM_NRF53_NRF5340_DK_SRC_NRF53_NRF5340_DK_H
+#define __BOARDS_ARM_NRF53_NRF5340_DK_SRC_NRF53_NRF5340_DK_H
 
 /****************************************************************************
  * Included Files
@@ -33,18 +33,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/* Configuration ************************************************************/
-
-/* procfs File System */
-
-#ifdef CONFIG_FS_PROCFS
-#  ifdef CONFIG_NSH_PROC_MOUNTPOINT
-#    define NRF53_PROCFS_MOUNTPOINT CONFIG_NSH_PROC_MOUNTPOINT
-#  else
-#    define NRF53_PROCFS_MOUNTPOINT "/proc"
-#  endif
-#endif
 
 /* LED definitions **********************************************************/
 
@@ -95,6 +83,18 @@
 int nrf53_bringup(void);
 
 /****************************************************************************
+ * Name: nrf53_timer_driver_setup
+ *
+ * Description:
+ *   Initialize TIMER driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_TIMER
+int nrf53_timer_driver_setup(const char *devpath, int timer);
+#endif
+
+/****************************************************************************
  * Name: nrf53_pwm_setup
  *
  * Description:
@@ -118,17 +118,5 @@ int nrf53_pwm_setup(void);
 int nrf53_adc_setup(void);
 #endif
 
-/****************************************************************************
- * Name: nrf53_mx25_initialize
- *
- * Description:
- *   Initialize the MX25RXX QSPI memeory
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NRF53_QSPI
-int nrf53_mx25_initialize(void);
-#endif
-
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_NRF53_NRF5340_DK_SRC_NRF5340_DK_H */
+#endif /* __BOARDS_ARM_NRF53_NRF5340_DK_SRC_NRF53_NRF5340_DK_H */

@@ -54,12 +54,6 @@
 #  elif defined(CONFIG_CONSOLE_SYSLOG)
 #    undef  USE_SERIALDRIVER
 #    undef  USE_EARLYSERIALINIT
-#  elif defined(CONFIG_SERIAL_RTT_CONSOLE)
-#    undef  USE_SERIALDRIVER
-#    undef  USE_EARLYSERIALINIT
-#  elif defined(CONFIG_RPMSG_UART_CONSOLE)
-#    undef  USE_SERIALDRIVER
-#    undef  USE_EARLYSERIALINIT
 #  else
 #    define USE_SERIALDRIVER 1
 #    define USE_EARLYSERIALINIT 1
@@ -139,15 +133,12 @@
 #define putreg16(v,a)  (*(volatile uint16_t *)(a) = (v))
 #define getreg32(a)    (*(volatile uint32_t *)(a))
 #define putreg32(v,a)  (*(volatile uint32_t *)(a) = (v))
-#define getreg64(a)    (*(volatile uint64_t *)(a))
-#define putreg64(v,a)  (*(volatile uint64_t *)(a) = (v))
 
 /* Non-atomic, but more effective modification of registers */
 
 #define modreg8(v,m,a)  putreg8((getreg8(a) & ~(m)) | ((v) & (m)), (a))
 #define modreg16(v,m,a) putreg16((getreg16(a) & ~(m)) | ((v) & (m)), (a))
 #define modreg32(v,m,a) putreg32((getreg32(a) & ~(m)) | ((v) & (m)), (a))
-#define modreg64(v,m,a) putreg64((getreg64(a) & ~(m)) | ((v) & (m)), (a))
 
 /* Context switching */
 
@@ -183,45 +174,6 @@ extern void arm_switchcontext(uint32_t **saveregs,
 #  define _snoinit Image$$noinit$$Base
 #  define _enoinit Image$$noinit$$Limit
 #endif
-
-/* MPIDR_EL1, Multiprocessor Affinity Register */
-
-#define MPIDR_AFFLVL_MASK   (0xff)
-#define MPIDR_ID_MASK       (0x00ffffff)
-
-#define MPIDR_AFF0_SHIFT    (0)
-#define MPIDR_AFF1_SHIFT    (8)
-#define MPIDR_AFF2_SHIFT    (16)
-
-/* mpidr register, the register is define:
- *   - bit 0~7:   Aff0
- *   - bit 8~15:  Aff1
- *   - bit 16~23: Aff2
- *   - bit 24:    MT, multithreading
- *   - bit 25~29: RES0
- *   - bit 30:    U, multiprocessor/Uniprocessor
- *   - bit 31:    RES1
- *  Different ARM/ARM64 cores will use different Affn define, the mpidr
- *  value is not CPU number, So we need to change CPU number to mpid
- *  and vice versa
- */
-
-#define GET_MPIDR()             CP15_GET(MPIDR)
-
-#define MPIDR_AFFLVL(mpidr, aff_level) \
-  (((mpidr) >> MPIDR_AFF ## aff_level ## _SHIFT) & MPIDR_AFFLVL_MASK)
-
-#define MPID_TO_CORE(mpid, aff_level) \
-  (((mpid) >> MPIDR_AFF ## aff_level ## _SHIFT) & MPIDR_AFFLVL_MASK)
-
-#define CORE_TO_MPID(core, aff_level) \
-  ({ \
-    uint64_t __mpidr = GET_MPIDR(); \
-    __mpidr &= ~(MPIDR_AFFLVL_MASK << MPIDR_AFF ## aff_level ## _SHIFT); \
-    __mpidr |= (cpu << MPIDR_AFF ## aff_level ## _SHIFT); \
-    __mpidr &= MPIDR_ID_MASK; \
-    __mpidr; \
-  })
 
 /****************************************************************************
  * Public Types
@@ -329,8 +281,6 @@ void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 
 void arm_boot(void);
 
-int arm_psci_init(const char *method);
-
 /* Context switching */
 
 uint32_t *arm_decodeirq(uint32_t *regs);
@@ -354,15 +304,6 @@ uintptr_t arm_intstack_alloc(void);
 uintptr_t arm_intstack_top(void);
 #endif
 
-#if CONFIG_ARCH_INTERRUPTSTACK > 7
-void weak_function arm_initialize_stack(void);
-#endif
-
-/* Interrupt acknowledge and dispatch */
-
-void arm_ack_irq(int irq);
-uint32_t *arm_doirq(int irq, uint32_t *regs);
-
 /* Exception handling logic unique to the Cortex-M family */
 
 #if defined(CONFIG_ARCH_ARMV6M) || defined(CONFIG_ARCH_ARMV7M) || \
@@ -375,17 +316,20 @@ uint32_t *arm_doirq(int irq, uint32_t *regs);
 #if defined(__ICCARM__)
 /* _vectors replaced on __vector_table for IAR C-SPY Simulator */
 
-EXTERN const void *__vector_table[];
+extern const void *__vector_table[];
 #else
-EXTERN const void * const _vectors[];
+extern const void * const _vectors[];
 #endif
+
+/* Interrupt acknowledge and dispatch */
+
+void arm_ack_irq(int irq);
+uint32_t *arm_doirq(int irq, uint32_t *regs);
 
 /* Exception Handlers */
 
 int  arm_svcall(int irq, void *context, void *arg);
 int  arm_hardfault(int irq, void *context, void *arg);
-int  arm_enable_dbgmonitor(void);
-int  arm_dbgmonitor(int irq, void *context, void *arg);
 
 #  if defined(CONFIG_ARCH_ARMV7M) || defined(CONFIG_ARCH_ARMV8M)
 
@@ -400,7 +344,11 @@ int  arm_securefault(int irq, void *context, void *arg);
 * (but should be back-ported to the ARM7 and ARM9 families).
  */
 
-#elif defined(CONFIG_ARCH_ARMV7A) || defined(CONFIG_ARCH_ARMV7R) || defined(CONFIG_ARCH_ARMV8R)
+#elif defined(CONFIG_ARCH_ARMV7A) || defined(CONFIG_ARCH_ARMV7R)
+
+/* Interrupt acknowledge and dispatch */
+
+uint32_t *arm_doirq(int irq, uint32_t *regs);
 
 /* Paging support */
 
@@ -408,7 +356,7 @@ int  arm_securefault(int irq, void *context, void *arg);
 void arm_pginitialize(void);
 uint32_t *arm_va2pte(uintptr_t vaddr);
 #else /* CONFIG_PAGING */
-#  define arm_pginitialize()
+# define arm_pginitialize()
 #endif /* CONFIG_PAGING */
 
 /* Exception Handlers */
@@ -422,6 +370,11 @@ uint32_t *arm_undefinedinsn(uint32_t *regs);
 
 #else /* ARM7 | ARM9 */
 
+/* Interrupt acknowledge and dispatch */
+
+void arm_ack_irq(int irq);
+void arm_doirq(int irq, uint32_t *regs);
+
 /* Paging support (and exception handlers) */
 
 #ifdef CONFIG_PAGING
@@ -429,7 +382,7 @@ void arm_pginitialize(void);
 uint32_t *arm_va2pte(uintptr_t vaddr);
 void arm_dataabort(uint32_t *regs, uint32_t far, uint32_t fsr);
 #else /* CONFIG_PAGING */
-#  define arm_pginitialize()
+# define arm_pginitialize()
 void arm_dataabort(uint32_t *regs);
 #endif /* CONFIG_PAGING */
 
@@ -489,7 +442,7 @@ void arm_l2ccinitialize(void);
 #if CONFIG_MM_REGIONS > 1
 void arm_addregion(void);
 #else
-#  define arm_addregion()
+# define arm_addregion()
 #endif
 
 /* Networking ***************************************************************/
@@ -508,7 +461,7 @@ void arm_addregion(void);
 #if defined(CONFIG_NET) && !defined(CONFIG_NETDEV_LATEINIT)
 void arm_netinitialize(void);
 #else
-#  define arm_netinitialize()
+# define arm_netinitialize()
 #endif
 
 /* USB **********************************************************************/
@@ -517,24 +470,14 @@ void arm_netinitialize(void);
 void arm_usbinitialize(void);
 void arm_usbuninitialize(void);
 #else
-#  define arm_usbinitialize()
-#  define arm_usbuninitialize()
+# define arm_usbinitialize()
+# define arm_usbuninitialize()
 #endif
 
 /* Debug ********************************************************************/
 #ifdef CONFIG_STACK_COLORATION
 size_t arm_stack_check(void *stackbase, size_t nbytes);
 void arm_stack_color(void *stackbase, size_t nbytes);
-#endif
-
-#ifdef CONFIG_ARCH_TRUSTZONE_SECURE
-int arm_gen_nonsecurefault(int irq, uint32_t *regs);
-#else
-# define arm_gen_nonsecurefault(i, r)  (0)
-#endif
-
-#if defined(CONFIG_ARMV7M_STACKCHECK) || defined(CONFIG_ARMV8M_STACKCHECK)
-void arm_stack_check_init(void) noinstrument_function;
 #endif
 
 #undef EXTERN

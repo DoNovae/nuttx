@@ -57,7 +57,6 @@
 #include "cxd56_bm1383glv.h"
 #include "cxd56_bm1422gmv.h"
 #include "cxd56_bmi160.h"
-#include "cxd56_bmi270.h"
 #include "cxd56_bmp280.h"
 #include "cxd56_emmcdev.h"
 #include "cxd56_spisd.h"
@@ -66,7 +65,6 @@
 #include "cxd56_rpr0521rs.h"
 #include "cxd56_scd41.h"
 #include "cxd56_sensors.h"
-#include "cxd56_gnss_addon.h"
 
 #ifdef CONFIG_VIDEO_ISX012
 #  include "cxd56_isx012.h"
@@ -217,11 +215,6 @@ enum board_power_device
 
 #define BOARD_POWEROFF_DEEP (0)
 #define BOARD_POWEROFF_COLD (1)
-
-/* Power domain definitions *************************************************/
-
-#define BOARD_PM_IDLE       (0)
-#define BOARD_PM_APPS       (1)
 
 /* CXD5247 audio control definitions ****************************************/
 

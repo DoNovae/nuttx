@@ -40,9 +40,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
-
 #if defined(CONFIG_NET_PKT)
 #  include <nuttx/net/pkt.h>
 #endif
@@ -237,6 +235,10 @@ static int wlan_ioctl(struct net_driver_s *dev, int cmd,
                       unsigned long arg);
 #endif
 
+#ifdef CONFIG_NET_ICMPv6
+static void wlan_ipv6multicast(struct wlan_priv_s *priv);
+#endif
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -267,11 +269,7 @@ static int wlan_ioctl(struct net_driver_s *dev, int cmd,
 
 static inline void wlan_cache_txpkt_tail(struct wlan_priv_s *priv)
 {
-  if (priv->dev.d_iob)
-    {
-      iob_tryadd_queue(priv->dev.d_iob, &priv->txb);
-    }
-
+    iob_tryadd_queue(priv->dev.d_iob, &priv->txb);
   netdev_iob_clear(&priv->dev);
 }
 
@@ -292,8 +290,13 @@ static inline void wlan_cache_txpkt_tail(struct wlan_priv_s *priv)
 static struct iob_s *wlan_recvframe(struct wlan_priv_s *priv)
 {
   struct iob_s *iob;
+  irqstate_t flags;
+
+  flags = spin_lock_irqsave(&priv->lock);
 
   iob = iob_remove_queue(&priv->rxb);
+
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return iob;
 }
@@ -441,21 +444,27 @@ static int wlan_rx_done(struct wlan_priv_s *priv, void *buffer,
       goto out;
     }
 
-out:
-
   if (eb != NULL)
     {
       esp_wifi_free_eb(eb);
     }
 
-  if (ret != OK && iob != NULL)
+  if (work_available(&priv->rxwork))
+    {
+      work_queue(WLAN_WORK, &priv->rxwork, wlan_rxpoll, priv, 0);
+    }
+
+  return 0;
+
+out:
+  if (iob != NULL)
     {
       iob_free_chain(iob);
     }
 
-  if (work_available(&priv->rxwork))
+  if (eb != NULL)
     {
-      work_queue(WLAN_WORK, &priv->rxwork, wlan_rxpoll, priv, 0);
+      esp_wifi_free_eb(eb);
     }
 
   wlan_txavail(&priv->dev);
@@ -625,7 +634,11 @@ static int wlan_txpoll(struct net_driver_s *dev)
   wlan_cache_txpkt_tail(priv);
   wlan_transmit(priv);
 
-  return OK;
+  /* If zero is returned, the polling will continue until
+   * all connections have been examined.
+   */
+
+  return 1;
 }
 
 /****************************************************************************
@@ -788,9 +801,9 @@ static int wlan_ifup(struct net_driver_s *dev)
   struct wlan_priv_s *priv = (struct wlan_priv_s *)dev->d_private;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (uint8_t)(dev->d_ipaddr), (uint8_t)(dev->d_ipaddr >> 8),
+        (uint8_t)(dev->d_ipaddr >> 16), (uint8_t)(dev->d_ipaddr >> 24));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -814,6 +827,13 @@ static int wlan_ifup(struct net_driver_s *dev)
       nerr("ERROR: Failed to start Wi-Fi ret=%d\n", ret);
       return ret;
     }
+
+#ifdef CONFIG_NET_ICMPv6
+
+  /* Set up IPv6 multicast address filtering */
+
+  wlan_ipv6multicast(priv);
+#endif
 
   IOB_QINIT(&priv->rxb);
   IOB_QINIT(&priv->txb);
@@ -982,6 +1002,76 @@ static int wlan_rmmac(struct net_driver_s *dev, const uint8_t *mac)
   return OK;
 }
 #endif
+
+/****************************************************************************
+ * Name: wlan_ipv6multicast
+ *
+ * Description:
+ *   Configure the IPv6 multicast MAC address.
+ *
+ * Input Parameters:
+ *   priv - A reference to the private driver state structure
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_ICMPv6
+static void wlan_ipv6multicast(struct wlan_priv_s *priv)
+{
+  struct net_driver_s *dev;
+  uint16_t tmp16;
+  uint8_t mac[6];
+
+  /* For ICMPv6, we need to add the IPv6 multicast address
+   *
+   * For IPv6 multicast addresses, the Ethernet MAC is derived by
+   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
+   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
+   * to the Ethernet MAC address 33:33:00:01:00:03.
+   *
+   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
+   * Message, but the ICMPv6 Neighbor Solicitation message seems to
+   * use 33:33:ff:01:00:03.
+   */
+
+  mac[0] = 0x33;
+  mac[1] = 0x33;
+
+  dev    = &priv->dev;
+  tmp16  = dev->d_ipv6addr[6];
+  mac[2] = 0xff;
+  mac[3] = tmp16 >> 8;
+
+  tmp16  = dev->d_ipv6addr[7];
+  mac[4] = tmp16 & 0xff;
+  mac[5] = tmp16 >> 8;
+
+  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  wlan_addmac(dev, mac);
+
+#ifdef CONFIG_NET_ICMPv6_AUTOCONF
+  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
+   * address that we expect to receive ICMPv6 Router Advertisement
+   * packets.
+   */
+
+  wlan_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
+#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
+
+#ifdef CONFIG_NET_ICMPv6_ROUTER
+  /* Add the IPv6 all link-local routers Ethernet address.  This is the
+   * address that we expect to receive ICMPv6 Router Solicitation
+   * packets.
+   */
+
+  wlan_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
+#endif /* CONFIG_NET_ICMPv6_ROUTER */
+}
+#endif /* CONFIG_NET_ICMPv6 */
 
 /****************************************************************************
  * Name: wlan_ioctl
@@ -1177,7 +1267,7 @@ static int wlan_ioctl(struct net_driver_s *dev,
 
   return ret;
 }
-#endif /* CONFIG_NETDEV_IOCTL */
+#endif  /* CONFIG_NETDEV_IOCTL */
 
 /****************************************************************************
  * Name: esp32s3_net_initialize
@@ -1371,18 +1461,27 @@ static void wlan_softap_tx_done(uint8_t *data, uint16_t *len, bool status)
 #ifdef ESP32S3_WLAN_HAS_STA
 int esp32s3_wlan_sta_set_linkstatus(bool linkstatus)
 {
-  struct wlan_priv_s *priv = &g_wlan_priv[ESP32S3_WLAN_STA_DEVNO];
+  int ret = -EINVAL;
+  FAR struct wlan_priv_s *priv = &g_wlan_priv[ESP32S3_WLAN_STA_DEVNO];
 
-  if (linkstatus == true)
+  if (priv != NULL)
     {
-      netdev_carrier_on(&priv->dev);
-    }
-  else
-    {
-      netdev_carrier_off(&priv->dev);
+      if (linkstatus == true)
+        {
+          ret = netdev_carrier_on(&priv->dev);
+        }
+      else
+        {
+          ret = netdev_carrier_off(&priv->dev);
+        }
+
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to notify the networking layer\n");
+        }
     }
 
-  return OK;
+  return ret;
 }
 
 /****************************************************************************
@@ -1505,4 +1604,4 @@ int esp32s3_wlan_softap_initialize(void)
 }
 #endif /* ESP32S3_WLAN_HAS_SOFTAP */
 
-#endif /* CONFIG_ESP32S3_WIFI */
+#endif  /* CONFIG_ESP32S3_WIFI */

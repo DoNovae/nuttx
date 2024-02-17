@@ -75,13 +75,13 @@ extern "C"
 #define EXTERN extern
 #endif
 
-EXTERN const struct file_operations g_bch_fops;
+EXTERN const struct file_operations bch_fops;
 
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
-EXTERN int  bchlib_flushsector(FAR struct bchlib_s *bch, bool discard);
+EXTERN int  bchlib_flushsector(FAR struct bchlib_s *bch);
 EXTERN int  bchlib_readsector(FAR struct bchlib_s *bch, size_t sector);
 
 #undef EXTERN

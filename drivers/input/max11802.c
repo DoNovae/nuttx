@@ -107,7 +107,7 @@ static int max11802_poll(FAR struct file *filep, struct pollfd *fds,
 
 /* This the vtable that supports the character driver interface */
 
-static const struct file_operations g_max11802_fops =
+static const struct file_operations max11802_fops =
 {
   max11802_open,    /* open */
   max11802_close,   /* close */
@@ -329,6 +329,7 @@ static int max11802_waitsample(FAR struct max11802_dev_s *priv,
    * from getting control while we muck with the semaphores.
    */
 
+  sched_lock();
   flags = enter_critical_section();
 
   /* Now release the semaphore that manages mutually exclusive access to
@@ -374,6 +375,14 @@ errout:
    */
 
   leave_critical_section(flags);
+
+  /* Restore pre-emption.  We might get suspended here but that is okay
+   * because we already have our sample.  Note:  this means that if there
+   * were two threads reading from the MAX11802 for some reason, the data
+   * might be read out of order.
+   */
+
+  sched_unlock();
   return ret;
 }
 
@@ -706,10 +715,11 @@ static int max11802_open(FAR struct file *filep)
 
   iinfo("Opening\n");
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct max11802_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -759,10 +769,11 @@ static int max11802_close(FAR struct file *filep)
   int                       ret;
 
   iinfo("Closing\n");
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct max11802_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -802,10 +813,11 @@ static ssize_t max11802_read(FAR struct file *filep, FAR char *buffer,
   int                        ret;
 
   iinfo("buffer:%p len:%d\n", buffer, len);
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct max11802_dev_s *)inode->i_private;
 
   /* Verify that the caller has provided a buffer large enough to receive
    * the touch data.
@@ -928,10 +940,11 @@ static int max11802_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   int                       ret;
 
   iinfo("cmd: %d arg: %ld\n", cmd, arg);
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct max11802_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -983,11 +996,11 @@ static int max11802_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int i;
 
   iinfo("setup: %d\n", (int)setup);
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct max11802_dev_s *)inode->i_private;
 
   /* Are we setting up the poll?  Or tearing it down? */
 
@@ -1027,8 +1040,8 @@ static int max11802_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (i >= CONFIG_MAX11802_NPOLLWAITERS)
         {
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
 
@@ -1036,7 +1049,7 @@ static int max11802_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (priv->penchange)
         {
-          poll_notify(&fds, 1, POLLIN);
+          max11802_notify(priv);
         }
     }
   else if (fds->priv)
@@ -1048,8 +1061,8 @@ static int max11802_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       /* Remove all memory of the poll setup */
 
-      *slot     = NULL;
-      fds->priv = NULL;
+      *slot                = NULL;
+      fds->priv            = NULL;
     }
 
 errout:
@@ -1198,7 +1211,7 @@ int max11802_register(FAR struct spi_dev_s *spi,
   snprintf(devname, sizeof(devname), DEV_FORMAT, minor);
   iinfo("Registering %s\n", devname);
 
-  ret = register_driver(devname, &g_max11802_fops, 0666, priv);
+  ret = register_driver(devname, &max11802_fops, 0666, priv);
   if (ret < 0)
     {
       ierr("ERROR: register_driver() failed: %d\n", ret);

@@ -44,16 +44,6 @@ extern "C"
  * Pre-processor Macros
  ****************************************************************************/
 
-/* The offset between different input/output GDMA channels' registers */
-
-#define GDMA_REG_OFFSET  (DMA_OUT_CONF0_CH1_REG - DMA_OUT_CONF0_CH0_REG)
-
-#define SET_GDMA_CH_REG(_r, _ch, _v)    putreg32((_v), (_r) + (_ch) * GDMA_REG_OFFSET)
-#define GET_GDMA_CH_REG(_r, _ch)        getreg32((_r) + (_ch) * GDMA_REG_OFFSET)
-
-#define SET_GDMA_CH_BITS(_r, _ch, _b)   modifyreg32((_r) + (_ch) * GDMA_REG_OFFSET, 0, (_b))
-#define CLR_GDMA_CH_BITS(_r, _ch, _b)   modifyreg32((_r) + (_ch) * GDMA_REG_OFFSET, (_b), 0)
-
 /* DMA max data length */
 
 #define ESP32S3_DMA_DATALEN_MAX       (0x1000 - 4)
@@ -64,7 +54,7 @@ extern "C"
 
 /* DMA channel number */
 
-#define ESP32S3_DMA_CHAN_MAX          (5)
+#define ESP32S3_DMA_CHAN_MAX          (3)
 
 /* DMA RX MAX priority */
 
@@ -104,13 +94,6 @@ enum esp32s3_dma_periph_e
   ESP32S3_DMA_PERIPH_NUM,
 };
 
-enum esp32s3_dma_ext_memblk_e
-{
-  ESP32S3_DMA_EXT_MEMBLK_16B = 0,
-  ESP32S3_DMA_EXT_MEMBLK_32B = 1,
-  ESP32S3_DMA_EXT_MEMBLK_64B = 2
-};
-
 /* DMA descriptor type */
 
 struct esp32s3_dmadesc_s
@@ -146,61 +129,27 @@ int32_t esp32s3_dma_request(enum esp32s3_dma_periph_e periph,
                             bool burst_en);
 
 /****************************************************************************
- * Name: esp32s3_dma_release
- *
- * Description:
- *   Release DMA channel from peripheral.
- *
- * Input Parameters:
- *   chan - Peripheral for which the DMA channel request was made
- *
- * Returned Value:
- *   None.
- *
- ****************************************************************************/
-
-void esp32s3_dma_release(int chan);
-
-/****************************************************************************
  * Name: esp32s3_dma_setup
  *
  * Description:
- *   Initialize the DMA inlink/outlink (linked list) and bind the target
- *   buffer to its DMA descriptors.
+ *   Set up DMA descriptor with given parameters.
  *
  * Input Parameters:
- *   dmadesc - Pointer to the DMA descriptors
- *   num     - Number of DMA descriptors
- *   pbuf    - RX/TX buffer pointer
- *   len     - RX/TX buffer length
- *   tx      - true: TX mode (transmitter); false: RX mode (receiver)
+ *   chan    - DMA channel
+ *   tx      - true: TX mode; false: RX mode
+ *   dmadesc - DMA descriptor pointer
+ *   num     - DMA descriptor number
+ *   pbuf    - Buffer pointer
+ *   len     - Buffer length by byte
  *
  * Returned Value:
- *   Bound pbuf data bytes
+ *   Bind pbuf data bytes.
  *
  ****************************************************************************/
 
-uint32_t esp32s3_dma_setup(struct esp32s3_dmadesc_s *dmadesc, uint32_t num,
-                           uint8_t *pbuf, uint32_t len, bool tx);
-
-/****************************************************************************
- * Name: esp32s3_dma_load
- *
- * Description:
- *   Load the address of the first DMA descriptor of an already bound
- *   inlink/outlink to the corresponding GDMA_<IN/OUT>LINK_ADDR_CHn register
- *
- * Input Parameters:
- *   dmadesc - Pointer of the previously bound inlink/outlink
- *   chan    - DMA channel of the receiver/transmitter
- *   tx      - true: TX mode (transmitter); false: RX mode (receiver)
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void esp32s3_dma_load(struct esp32s3_dmadesc_s *dmadesc, int chan, bool tx);
+uint32_t esp32s3_dma_setup(int chan, bool tx,
+                           struct esp32s3_dmadesc_s *dmadesc, uint32_t num,
+                           uint8_t *pbuf, uint32_t len);
 
 /****************************************************************************
  * Name: esp32s3_dma_enable
@@ -254,25 +203,6 @@ void esp32s3_dma_disable(int chan, bool tx);
 void esp32s3_dma_wait_idle(int chan, bool tx);
 
 /****************************************************************************
- * Name: esp32s3_dma_set_ext_memblk
- *
- * Description:
- *   Configure DMA external memory block size.
- *
- * Input Parameters:
- *   chan - DMA channel
- *   tx   - true: TX mode; false: RX mode
- *   type - block size type
- *
- * Returned Value:
- *   None.
- *
- ****************************************************************************/
-
-void esp32s3_dma_set_ext_memblk(int chan, bool tx,
-                                enum esp32s3_dma_ext_memblk_e type);
-
-/****************************************************************************
  * Name: esp32s3_dma_init
  *
  * Description:
@@ -287,22 +217,6 @@ void esp32s3_dma_set_ext_memblk(int chan, bool tx,
  ****************************************************************************/
 
 void esp32s3_dma_init(void);
-
-/****************************************************************************
- * Name: esp32s3_dma_deinit
- *
- * Description:
- *   Deinitialize DMA driver.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None.
- *
- ****************************************************************************/
-
-void esp32s3_dma_deinit(void);
 
 #ifdef __cplusplus
 }

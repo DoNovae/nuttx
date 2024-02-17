@@ -38,6 +38,24 @@
 #include "modlib/modlib.h"
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+/* CONFIG_DEBUG_FEATURES, CONFIG_DEBUG_INFO, and CONFIG_MODLIB_DUMPBUFFER
+ * have to be defined or CONFIG_MODLIB_DUMPBUFFER does nothing.
+ */
+
+#if !defined(CONFIG_DEBUG_INFO) || !defined (CONFIG_MODLIB_DUMPBUFFER)
+#  undef CONFIG_MODLIB_DUMPBUFFER
+#endif
+
+#ifdef CONFIG_MODLIB_DUMPBUFFER
+# define modlib_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
+#else
+# define modlib_dumpbuffer(m,b,n)
+#endif
+
+/****************************************************************************
  * Private Functions
  ****************************************************************************/
 
@@ -53,14 +71,15 @@
  *
  ****************************************************************************/
 
-static inline int modlib_filelen(FAR struct mod_loadinfo_s *loadinfo)
+static inline int modlib_filelen(FAR struct mod_loadinfo_s *loadinfo,
+                                 FAR const char *filename)
 {
   struct stat buf;
   int ret;
 
   /* Get the file stats */
 
-  ret = _NX_STAT(loadinfo->filfd, &buf);
+  ret = _NX_STAT(filename, &buf);
   if (ret < 0)
     {
       int errval = _NX_GETERRNO(ret);
@@ -75,6 +94,10 @@ static inline int modlib_filelen(FAR struct mod_loadinfo_s *loadinfo)
       berr("ERROR: Not a regular file.  mode: %d\n", buf.st_mode);
       return -ENOENT;
     }
+
+  /* TODO:  Verify that the file is readable.  Not really important because
+   * we will detect this when we try to open the file read-only.
+   */
 
   /* Return the size of the file in the loadinfo structure */
 
@@ -109,6 +132,16 @@ int modlib_initialize(FAR const char *filename,
   /* Clear the load info structure */
 
   memset(loadinfo, 0, sizeof(struct mod_loadinfo_s));
+  loadinfo->filfd = -1;
+
+  /* Get the length of the file. */
+
+  ret = modlib_filelen(loadinfo, filename);
+  if (ret < 0)
+    {
+      berr("ERROR: modlib_filelen failed: %d\n", ret);
+      return ret;
+    }
 
   /* Open the binary file for reading (only) */
 
@@ -118,15 +151,6 @@ int modlib_initialize(FAR const char *filename,
       int errval = _NX_GETERRNO(loadinfo->filfd);
       berr("ERROR: Failed to open ELF binary %s: %d\n", filename, errval);
       return -errval;
-    }
-
-  /* Get the length of the file. */
-
-  ret = modlib_filelen(loadinfo);
-  if (ret < 0)
-    {
-      berr("ERROR: modlib_filelen failed: %d\n", ret);
-      return ret;
     }
 
   /* Read the ELF ehdr from offset 0 */
@@ -155,7 +179,8 @@ int modlib_initialize(FAR const char *filename,
        */
 
       berr("ERROR: Bad ELF header: %d\n", ret);
+      return ret;
     }
 
-  return ret;
+  return OK;
 }

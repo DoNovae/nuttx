@@ -24,15 +24,13 @@
 
 #include <nuttx/config.h>
 
-#include <assert.h>
-#include <debug.h>
-#include <pthread.h>
-#include <sched.h>
-#include <stdint.h>
 #include <sys/types.h>
+#include <stdint.h>
+#include <sched.h>
+#include <pthread.h>
+#include <debug.h>
 
 #include <nuttx/sched.h>
-#include <nuttx/signal.h>
 
 #include "sched/sched.h"
 #include "group/group.h"
@@ -58,37 +56,7 @@
  *
  ****************************************************************************/
 
-#if defined(CONFIG_GROUP_KILL_CHILDREN_TIMEOUT_MS) && \
-            CONFIG_GROUP_KILL_CHILDREN_TIMEOUT_MS != 0
 static int group_kill_children_handler(pid_t pid, FAR void *arg)
-{
-  /* Cancel all threads except for the one specified by the argument */
-
-  if (pid != (pid_t)((uintptr_t)arg))
-    {
-      pthread_kill(pid, SIGTERM);
-    }
-
-  return OK;
-}
-#endif
-
-/****************************************************************************
- * Name: group_cancel_children_handler
- *
- * Description:
- *   Callback from group_foreachchild that handles one member of the group.
- *
- * Input Parameters:
- *   pid - The ID of the group member that may be signaled.
- *   arg - The PID of the thread to be retained.
- *
- * Returned Value:
- *   0 (OK) always
- *
- ****************************************************************************/
-
-static int group_cancel_children_handler(pid_t pid, FAR void *arg)
 {
   FAR struct tcb_s *rtcb;
   int ret;
@@ -97,12 +65,22 @@ static int group_cancel_children_handler(pid_t pid, FAR void *arg)
 
   if (pid != (pid_t)((uintptr_t)arg))
     {
+      /* Cancel this thread.  This is a forced cancellation.  Make sure that
+       * cancellation is not disabled by the task/thread.  That bit will
+       * prevent pthread_cancel() or nxtask_delete() from doing what they
+       * need to do.
+       */
+
       rtcb = nxsched_get_tcb(pid);
       if (rtcb != NULL)
         {
-          /* Cancel this thread.  This is a forced cancellation. */
+          /* This is a forced cancellation.  Make sure that cancellation is
+           * not disabled by the task/thread.  That bit would prevent
+           * pthread_cancel() or task_delete() from doing what they need
+           * to do.
+           */
 
-          rtcb->flags |= TCB_FLAG_FORCED_CANCEL;
+          rtcb->flags &= ~TCB_FLAG_NONCANCELABLE;
 
           /* 'pid' could refer to the main task of the thread.  That pid
            * will appear in the group member list as well!
@@ -156,11 +134,6 @@ int group_kill_children(FAR struct tcb_s *tcb)
 
   DEBUGASSERT(tcb->group);
 
-  if (tcb->group->tg_flags & GROUP_FLAG_EXITING)
-    {
-      return 0;
-    }
-
 #ifdef CONFIG_SMP
   /* NOTE: sched_lock() is not enough for SMP
    * because tcb->group will be accessed from the child tasks
@@ -179,37 +152,7 @@ int group_kill_children(FAR struct tcb_s *tcb)
 
   tcb->group->tg_flags |= GROUP_FLAG_EXITING;
 
-#if defined(CONFIG_GROUP_KILL_CHILDREN_TIMEOUT_MS) && \
-            CONFIG_GROUP_KILL_CHILDREN_TIMEOUT_MS != 0
-  /* Send SIGTERM for each first */
-
-  group_foreachchild(tcb->group, group_kill_children_handler,
-                     (FAR void *)((uintptr_t)tcb->pid));
-
-  /* Wait a bit for child exit */
-
-  ret = CONFIG_GROUP_KILL_CHILDREN_TIMEOUT_MS;
-  while (1)
-    {
-      if (tcb->group->tg_nmembers <= 1)
-        {
-          break;
-        }
-
-      nxsig_usleep(USEC_PER_MSEC);
-
-#  if CONFIG_GROUP_KILL_CHILDREN_TIMEOUT_MS > 0
-      if (--ret < 0)
-        {
-          break;
-        }
-#  endif
-    }
-#endif
-
-  /* Force cancel/delete again */
-
-  ret = group_foreachchild(tcb->group, group_cancel_children_handler,
+  ret = group_foreachchild(tcb->group, group_kill_children_handler,
                            (FAR void *)((uintptr_t)tcb->pid));
 
 #ifdef CONFIG_SMP

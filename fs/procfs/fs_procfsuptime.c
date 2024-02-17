@@ -95,13 +95,12 @@ static int     uptime_stat(FAR const char *relpath, FAR struct stat *buf);
  * with any compiler.
  */
 
-const struct procfs_operations g_uptime_operations =
+const struct procfs_operations uptime_operations =
 {
   uptime_open,       /* open */
   uptime_close,      /* close */
   uptime_read,       /* read */
   NULL,              /* write */
-  NULL,              /* poll */
 
   uptime_dup,        /* dup */
 
@@ -191,11 +190,11 @@ static ssize_t uptime_read(FAR struct file *filep, FAR char *buffer,
 #if defined(CONFIG_HAVE_DOUBLE) && defined(CONFIG_LIBC_FLOATINGPOINT)
   double now;
 #else
-#  if defined(CONFIG_SYSTEM_TIME64)
+# if defined(CONFIG_SYSTEM_TIME64)
   uint64_t sec;
-#  else
+# else
   uint32_t sec;
-#  endif
+# endif
   unsigned int remainder;
   unsigned int csec;
 #endif

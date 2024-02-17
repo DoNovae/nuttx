@@ -34,12 +34,9 @@
 #include <syslog.h>
 #include <debug.h>
 #include <stdio.h>
+
 #include <errno.h>
-
 #include <nuttx/fs/fs.h>
-#include <arch/board/board.h>
-
-#include "esp32s2_gpio.h"
 
 #ifdef CONFIG_USERLED
 #  include <nuttx/leds/userled.h>
@@ -57,35 +54,12 @@
 #  include "esp32s2_i2c.h"
 #endif
 
-#ifdef CONFIG_ESP32_I2S
-#  include "esp32s2_i2s.h"
-#endif
-
 #ifdef CONFIG_ESP32S2_RT_TIMER
 #  include "esp32s2_rt_timer.h"
 #endif
 
 #ifdef CONFIG_WATCHDOG
 #  include "esp32s2_board_wdt.h"
-#endif
-
-#ifdef CONFIG_LCD_DEV
-#  include <nuttx/board.h>
-#  include <nuttx/lcd/lcd_dev.h>
-#endif
-
-#ifdef CONFIG_SPI_DRIVER
-#  include "esp32s2_spi.h"
-#  include "esp32s2_board_spidev.h"
-#endif
-
-#ifdef CONFIG_SPI_SLAVE_DRIVER
-#  include "esp32s2_spi.h"
-#  include "esp32s2_board_spislavedev.h"
-#endif
-
-#ifdef CONFIG_RTC_DRIVER
-#  include "esp32s2_rtc_lowerhalf.h"
 #endif
 
 #include "esp32s2-kaluga-1.h"
@@ -149,33 +123,6 @@ int esp32s2_bringup(void)
     {
       syslog(LOG_ERR, "Failed to initialize GPIO Driver: %d\n", ret);
       return ret;
-    }
-#endif
-
-#ifdef CONFIG_ESP32S2_SPI2
-# ifdef CONFIG_SPI_DRIVER
-  ret = board_spidev_initialize(ESP32S2_SPI2);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize SPI%d driver: %d\n",
-             ESP32S2_SPI2, ret);
-    }
-# elif defined(CONFIG_SPI_SLAVE_DRIVER) && defined(CONFIG_ESP32S2_SPI2_SLAVE)
-  ret = board_spislavedev_initialize(ESP32S2_SPI2);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize SPI%d Slave driver: %d\n",
-             ESP32S2_SPI2, ret);
-    }
-# endif
-#endif
-
-#if defined(CONFIG_SPI_SLAVE_DRIVER) && defined(CONFIG_ESP32S2_SPI3_SLAVE)
-  ret = board_spislavedev_initialize(ESP32S2_SPI3);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize SPI%d Slave driver: %d\n",
-              ESP32S2_SPI3, ret);
     }
 #endif
 
@@ -259,17 +206,6 @@ int esp32s2_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_ESP32S2_TWAI
-
-  /* Initialize TWAI and register the TWAI driver. */
-
-  ret = board_twai_setup();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: board_twai_setup failed: %d\n", ret);
-    }
-#endif
-
 #ifdef CONFIG_INPUT_BUTTONS
   /* Register the BUTTON driver */
 
@@ -277,53 +213,6 @@ int esp32s2_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_LCD_DEV
-  ret = board_lcd_initialize();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: board_lcd_initialize() failed: %d\n", ret);
-    }
-
-  ret = lcddev_register(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_ESP32S2_I2S
-
-  /* Configure I2S0 */
-
-#ifdef CONFIG_AUDIO_ES8311
-
-  /* Configure ES8311 audio on I2C0 and I2S0 */
-
-  esp32s2_configgpio(SPEAKER_ENABLE_GPIO, OUTPUT);
-  esp32s2_gpiowrite(SPEAKER_ENABLE_GPIO, true);
-
-  ret = esp32s2_es8311_initialize(ESP32S2_I2C0, ES8311_I2C_ADDR,
-                                  ES8311_I2C_FREQ);
-  if (ret != OK)
-    {
-      syslog(LOG_ERR, "Failed to initialize ES8311 audio: %d\n", ret);
-    }
-
-#endif /* CONFIG_AUDIO_ES8311 */
-
-#endif /* CONFIG_ESP32S2_I2S */
-
-#ifdef CONFIG_RTC_DRIVER
-  /* Instantiate the ESP32 RTC driver */
-
-  ret = esp32s2_rtc_driverinit();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to Instantiate the RTC driver: %d\n", ret);
     }
 #endif
 

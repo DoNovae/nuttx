@@ -26,7 +26,9 @@
  ****************************************************************************/
 
 #include <elf.h>
+#ifdef CONFIG_ELF_COREDUMP
 #include <arch/elf.h>
+#endif
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -142,9 +144,9 @@ bool up_checkarch(FAR const Elf_Ehdr *hdr);
 
 #ifdef CONFIG_LIBC_ARCH_ELF
 int up_relocate(FAR const Elf_Rel *rel, FAR const Elf_Sym *sym,
-                uintptr_t addr, FAR void *arch_data);
-int up_relocateadd(FAR const Elf_Rela *rel, FAR const Elf_Sym *sym,
-                   uintptr_t addr, FAR void *arch_data);
+                uintptr_t addr);
+int up_relocateadd(FAR const Elf_Rela *rel,
+                   FAR const Elf_Sym *sym, uintptr_t addr);
 #endif
 
 /****************************************************************************

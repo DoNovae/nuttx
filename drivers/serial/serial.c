@@ -26,10 +26,8 @@
 
 #include <ctype.h>
 #include <sys/types.h>
-#include <sys/param.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <time.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
@@ -181,7 +179,7 @@ static int uart_putxmitchar(FAR uart_dev_t *dev, int ch, bool oktoblock)
 
           dev->xmit.buffer[dev->xmit.head] = ch;
           dev->xmit.head = nexthead;
-          break;
+          return OK;
         }
 
       /* The TX buffer is full.  Should be block, waiting for the hardware
@@ -225,6 +223,10 @@ static int uart_putxmitchar(FAR uart_dev_t *dev, int ch, bool oktoblock)
 #endif
           else
             {
+              /* Inform the interrupt level logic that we are waiting. */
+
+              dev->xmitwaiting = true;
+
               /* Wait for some characters to be sent from the buffer with
                * the TX interrupt enabled.  When the TX interrupt is enabled,
                * uart_xmitchars() should execute and remove some of the data
@@ -411,6 +413,10 @@ static int uart_tcdrain(FAR uart_dev_t *dev,
           ret = OK;
           while (ret >= 0 && dev->xmit.head != dev->xmit.tail)
             {
+              /* Inform the interrupt level logic that we are waiting. */
+
+              dev->xmitwaiting = true;
+
               /* Wait for some characters to be sent from the buffer with
                * the TX interrupt enabled.  When the TX interrupt is
                * enabled, uart_xmitchars() should execute and remove some
@@ -500,6 +506,20 @@ static int uart_tcsendbreak(FAR uart_dev_t *dev, FAR struct file *filep,
 {
   int ret;
 
+  /* tcsendbreak is a cancellation point */
+
+  if (enter_cancellation_point())
+    {
+#ifdef CONFIG_CANCELLATION_POINTS
+      /* If there is a pending cancellation, then do not perform
+       * the wait.  Exit now with ECANCELED.
+       */
+
+      leave_cancellation_point();
+      return -ECANCELED;
+#endif
+    }
+
   /* REVISIT: Do we need to perform the equivalent of tcdrain() before
    * beginning the Break to avoid corrupting the transmit data? If so, note
    * that just calling uart_tcdrain() here would create a race condition,
@@ -539,6 +559,7 @@ static int uart_tcsendbreak(FAR uart_dev_t *dev, FAR struct file *filep,
       ret = -ENOTTY;
     }
 
+  leave_cancellation_point();
   return ret;
 }
 
@@ -833,7 +854,7 @@ static ssize_t uart_read(FAR struct file *filep,
 
               /* Discarding \r ? */
 
-              if ((ch == '\r') && (dev->tc_iflag & IGNCR))
+              if ((ch == '\r') & (dev->tc_iflag & IGNCR))
                 {
                   continue;
                 }
@@ -870,17 +891,10 @@ static ssize_t uart_read(FAR struct file *filep,
 
                   dev->escape = 0;
                 }
-              else if (dev->escape > 0)
-                {
-                  /* Skipping character count down */
-
-                  dev->escape--;
-                  continue;
-                }
 
               /* Echo if the character is not a control byte */
 
-              if (!iscntrl(ch & 0xff) || ch == '\n')
+              if ((!iscntrl(ch & 0xff) || (ch == '\n')) && dev->escape == 0)
                 {
                   if (ch == '\n')
                     {
@@ -895,6 +909,13 @@ static ssize_t uart_read(FAR struct file *filep,
                    */
 
                   echoed = true;
+                }
+
+              /* Skipping character count down */
+
+              if (dev->escape > 0)
+                {
+                  dev->escape--;
                 }
             }
         }
@@ -1025,18 +1046,8 @@ static ssize_t uart_read(FAR struct file *filep,
                    * thread goes to sleep.
                    */
 
-#ifdef CONFIG_SERIAL_TERMIOS
-                  dev->minrecv = MIN(buflen - recvd, dev->minread - recvd);
-                  if (dev->timeout)
-                    {
-                      ret = nxsem_tickwait(&dev->recvsem,
-                                           DSEC2TICK(dev->timeout));
-                    }
-                  else
-#endif
-                    {
-                      ret = nxsem_wait(&dev->recvsem);
-                    }
+                  dev->recvwaiting = true;
+                  ret = nxsem_wait(&dev->recvsem);
                 }
 
               leave_critical_section(flags);
@@ -1067,9 +1078,9 @@ static ssize_t uart_read(FAR struct file *filep,
                        */
 
 #ifdef CONFIG_SERIAL_REMOVABLE
-                      recvd = dev->disconnected ? -ENOTCONN : ret;
+                      recvd = dev->disconnected ? -ENOTCONN : -EINTR;
 #else
-                      recvd = ret;
+                      recvd = -EINTR;
 #endif
                     }
 
@@ -1528,10 +1539,6 @@ static int uart_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
               termiosp->c_iflag = dev->tc_iflag;
               termiosp->c_oflag = dev->tc_oflag;
               termiosp->c_lflag = dev->tc_lflag;
-#ifdef CONFIG_SERIAL_TERMIOS
-              termiosp->c_cc[VTIME] = dev->timeout;
-              termiosp->c_cc[VMIN] = dev->minread;
-#endif
 
               ret = 0;
             }
@@ -1553,10 +1560,6 @@ static int uart_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
               dev->tc_iflag = termiosp->c_iflag;
               dev->tc_oflag = termiosp->c_oflag;
               dev->tc_lflag = termiosp->c_lflag;
-#ifdef CONFIG_SERIAL_TERMIOS
-              dev->timeout = termiosp->c_cc[VTIME];
-              dev->minread = termiosp->c_cc[VMIN];
-#endif
               ret = 0;
             }
             break;
@@ -1615,8 +1618,8 @@ static int uart_poll(FAR struct file *filep,
             {
               /* Bind the poll structure and this slot */
 
-              dev->fds[i] = fds;
-              fds->priv   = &dev->fds[i];
+              dev->fds[i]  = fds;
+              fds->priv    = &dev->fds[i];
               break;
             }
         }
@@ -1676,7 +1679,7 @@ static int uart_poll(FAR struct file *filep,
         }
 #endif
 
-      poll_notify(&fds, 1, eventset);
+      poll_notify(dev->fds, CONFIG_SERIAL_NPOLLWAITERS, eventset);
     }
   else if (fds->priv != NULL)
     {
@@ -1747,8 +1750,7 @@ static void uart_launch_worker(void *arg)
                  CONFIG_TTY_LAUNCH_ENTRYPOINT,
                  NULL, &attr, argv, NULL);
 #else
-      exec_spawn(CONFIG_TTY_LAUNCH_FILEPATH,
-                 argv, NULL, NULL, 0, NULL, &attr);
+      exec_spawn(CONFIG_TTY_LAUNCH_FILEPATH, argv, NULL, NULL, 0, &attr);
 #endif
       posix_spawnattr_destroy(&attr);
     }
@@ -1759,23 +1761,6 @@ static void uart_launch(void)
   work_queue(HPWORK, &g_serial_work, uart_launch_worker, NULL, 0);
 }
 #endif
-
-static void uart_wakeup(FAR sem_t *sem)
-{
-  int sval;
-
-  if (nxsem_get_value(sem, &sval) != OK)
-    {
-      return;
-    }
-
-  /* Yes... wake up all waiting threads */
-
-  while (sval++ < 1)
-    {
-      nxsem_post(sem);
-    }
-}
 
 /****************************************************************************
  * Public Functions
@@ -1827,19 +1812,7 @@ int uart_register(FAR const char *path, FAR uart_dev_t *dev)
   nxsem_init(&dev->recvsem, 0, 0);
   nxmutex_init(&dev->polllock);
 
-#ifdef CONFIG_SERIAL_TERMIOS
-  dev->timeout = 0;
-  dev->minread = 1;
-#endif
-
   /* Register the serial driver */
-
-#ifdef CONFIG_SERIAL_GDBSTUB
-  if (strcmp(path, CONFIG_SERIAL_GDBSTUB_PATH) == 0)
-    {
-      return uart_gdbstub_register(dev);
-    }
-#endif
 
   sinfo("Registering %s\n", path);
   return register_driver(path, &g_serialops, 0666, dev);
@@ -1863,7 +1836,13 @@ void uart_datareceived(FAR uart_dev_t *dev)
 
   /* Is there a thread waiting for read data?  */
 
-  uart_wakeup(&dev->recvsem);
+  if (dev->recvwaiting)
+    {
+      /* Yes... wake it up */
+
+      dev->recvwaiting = false;
+      nxsem_post(&dev->recvsem);
+    }
 
 #if defined(CONFIG_PM) && defined(CONFIG_SERIAL_CONSOLE)
   /* Call pm_activity when characters are received on the console device */
@@ -1895,7 +1874,13 @@ void uart_datasent(FAR uart_dev_t *dev)
 
   /* Is there a thread waiting for space in xmit.buffer?  */
 
-  uart_wakeup(&dev->xmitsem);
+  if (dev->xmitwaiting)
+    {
+      /* Yes... wake it up */
+
+      dev->xmitwaiting = false;
+      nxsem_post(&dev->xmitsem);
+    }
 }
 
 /****************************************************************************
@@ -1943,11 +1928,23 @@ void uart_connected(FAR uart_dev_t *dev, bool connected)
 
       /* Is there a thread waiting for space in xmit.buffer?  */
 
-      uart_wakeup(&dev->xmitsem);
+      if (dev->xmitwaiting)
+        {
+          /* Yes... wake it up */
+
+          dev->xmitwaiting = false;
+          nxsem_post(&dev->xmitsem);
+        }
 
       /* Is there a thread waiting for read data?  */
 
-      uart_wakeup(&dev->recvsem);
+      if (dev->recvwaiting)
+        {
+          /* Yes... wake it up */
+
+          dev->recvwaiting = false;
+          nxsem_post(&dev->recvsem);
+        }
     }
 
   leave_critical_section(flags);

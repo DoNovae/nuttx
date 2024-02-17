@@ -235,7 +235,7 @@ static inline struct sam_flex_spidev_s
 static void     flex_spi_dumpregs(struct sam_flex_spidev_s *flex_spi,
                                   const char *msg);
 #else
-#  define       flex_spi_dumpregs(flex_spi,msg)
+# define        flex_spi_dumpregs(flex_spi,msg)
 #endif
 
 static inline void flex_spi_flush(struct sam_flex_spidev_s *flex_spi);
@@ -1857,7 +1857,8 @@ struct spi_dev_s *sam_flex_spibus_initialize(int port)
    * chip select structures.
    */
 
-  flex_spics = kmm_zalloc(sizeof(struct sam_flex_spics_s));
+  flex_spics = (struct sam_flex_spics_s *)kmm_zalloc(
+                sizeof(struct sam_flex_spics_s));
   if (!flex_spics)
     {
       spierr("ERROR: Failed to allocate a flexcom chip select structure\n");

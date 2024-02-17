@@ -24,7 +24,6 @@
 
 #include <nuttx/config.h>
 
-#include <arch/chip/chip.h>
 #include "arch/syscall.h"
 #include "arm64_macro.inc"
 #include "arch/irq.h"
@@ -61,15 +60,16 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Function: up_saveusercontext
+ * Function: arm64_context_snapshot
  *
  * Description:
  *   Take a snapshot of the thread GP registers context
  *   x0 --- pointer to struct regs_context
  *
  ****************************************************************************/
-GTEXT(up_saveusercontext)
-SECTION_FUNC(text, up_saveusercontext)
+GTEXT(arm64_context_snapshot)
+SECTION_FUNC(text, arm64_context_snapshot)
+    str    x0, [sp, #-16]!
 
     stp    x0,  x1,  [x0, #8 * REG_X0]
     stp    x2,  x3,  [x0, #8 * REG_X2]
@@ -98,6 +98,8 @@ SECTION_FUNC(text, up_saveusercontext)
 
     arm64_exception_context_save x4 x5 x0
 
+    ldr    x0, [sp], #16
+
     ret
 
 /****************************************************************************
@@ -119,16 +121,8 @@ SECTION_FUNC(text, arm64_context_switch)
     cmp    x1, #0x0
     beq    restore_new
 
-#if defined(CONFIG_ARCH_FPU) && defined(CONFIG_SMP)
-    stp    x0, x1, [sp, #-16]!
-    stp    xzr, x30, [sp, #-16]!
-    bl     arm64_fpu_context_save
-    ldp    xzr, x30, [sp], #16
-    ldp    x0, x1, [sp], #16
-#endif
-
     /* Save the current SP_EL0 */
-    add    x4, sp, #8 * XCPTCONTEXT_GP_REGS
+    mov    x4,  sp
     str    x4, [x1, #8 * REG_SP_ELX]
 
     /* Save the current task's SP_EL0 and exception depth */
@@ -157,7 +151,13 @@ restore_new:
 
     /* retrieve new thread's SP_ELx */
     ldr    x4, [x0, #8 * REG_SP_ELX]
-    sub    sp, x4, #8 * XCPTCONTEXT_GP_REGS
+    mov    sp, x4
+
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SWITCH
+    stp    xzr, x30, [sp, #-16]!
+    bl     arm64_trace_context_switch
+    ldp    xzr, x30, [sp], #16
+#endif
 
 #ifdef CONFIG_ARCH_FPU
     stp    xzr, x30, [sp, #-16]!
@@ -333,7 +333,7 @@ exc_handle:
 
 GTEXT(arm64_irq_handler)
 SECTION_FUNC(text, arm64_irq_handler)
-    /* Switch to IRQ stack and save current sp on it. */
+    /* switch to IRQ stack and save current sp on it. */
 #ifdef CONFIG_SMP
     get_cpu_id x1
     ldr    x0, =(g_cpu_int_stacktop)
@@ -342,7 +342,7 @@ SECTION_FUNC(text, arm64_irq_handler)
 #else
     ldr    x0, =(g_interrupt_stack + CONFIG_ARCH_INTERRUPTSTACK)
 #endif
-    /* Save the task's stack and switch irq stack */
+    /* save the task's stack and switch irq stack */
 
     mov    x1, sp
     mov    sp, x0
@@ -424,9 +424,8 @@ SECTION_FUNC(text, arm64_mode32_error)
 
     b    arm64_exit_exception
 
-GTEXT(arm64_fiq_handler)
-SECTION_FUNC(text, arm64_fiq_handler)
-#ifndef CONFIG_ARM64_DECODEFIQ
+GTEXT(arm64_irq_spurious)
+SECTION_FUNC(text, arm64_irq_spurious)
     arm64_exception_context_save x0 x1 sp
 
     mov    x1, sp
@@ -437,68 +436,3 @@ SECTION_FUNC(text, arm64_fiq_handler)
     /* Return here only in case of recoverable error */
 
     b    arm64_exit_exception
-#else
-   /* Switch to FIQ stack and save current sp on it. */
-#ifdef CONFIG_SMP
-    get_cpu_id x1
-    ldr    x0, =(g_cpu_int_fiq_stacktop)
-    lsl    x1, x1, #3
-    ldr    x0, [x0, x1]
-#else
-    ldr    x0, =(g_interrupt_fiq_stack + CONFIG_ARCH_INTERRUPTSTACK)
-#endif
-    /* Save the task's stack and switch fiq stack */
-
-    mov    x1, sp
-    mov    sp, x0
-    str    x1, [sp, #-16]!
-
-    mov    x0, x1 /* x0 = reg frame */
-
-    /* Call arm64_decodefiq() on the interrupt stack
-     * with interrupts disabled
-     */
-
-    bl     arm64_decodefiq
-
-    /* Upon return from arm64_decodefiq, x0 holds the pointer to the
-     * call reg context area, which can be use to restore context.
-     * This may or may not be the same value that was passed to arm64_decodefiq:
-     * It will differ if a context switch is required.
-     */
-
-    ldr    x1, [sp], #16
-
-    /* retrieve the task's stack. */
-
-    mov    sp, x1
-
-    cmp    x0, x1
-    beq    fiq_exit
-
-
-#ifdef CONFIG_SMP
-    /* Notes:
-     * Complete any pending TLB or cache maintenance on this CPU in case
-     * the thread migrates to a different CPU.
-     * This full barrier is also required by the membarrier system
-     * call.
-     */
-    dsb   ish
-
-#endif
-
-    /*  Switch thread
-     *  - x0: restore task reg context, return by arm64_decodefiq,
-     *  - x1: save task reg context, save before call arm64_decodefiq
-     *    call arm64_context_switch(x0) to switch
-     */
-    bl    arm64_context_switch
-#ifdef CONFIG_ARCH_FPU
-    /* when the fpu trap is handled */
-
-    b     arm64_exit_exc_fpu_done
-#endif
-fiq_exit:
-    b     arm64_exit_exception
-#endif

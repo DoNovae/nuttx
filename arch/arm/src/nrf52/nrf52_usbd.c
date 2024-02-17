@@ -24,6 +24,8 @@
 
 #include <nuttx/config.h>
 
+#include <nuttx/config.h>
+
 #include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
@@ -47,7 +49,6 @@
 
 #include "hardware/nrf52_usbd.h"
 #include "hardware/nrf52_power.h"
-#include "hardware/nrf52_utils.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -77,7 +78,6 @@
 #define NRF52_TRACEERR_INVALIDCTRLREQ       0x17
 #define NRF52_TRACEERR_BADGETSTATUS         0x18
 #define NRF52_TRACEERR_EPINREQEMPTY         0x19
-#define NRF52_TRACEERR_DMABUSY              0x20
 
 /* Trace interrupt codes */
 
@@ -183,22 +183,10 @@
                                USBD_INT_EP0DATADONE |                  \
                                USBD_INT_USBEVENT |                     \
                                USBD_INT_EP0SETUP |                     \
-                               USBD_INT_EPDATA)
+                               USBD_INT_EPDATA |                       \
+                               USBD_INT_ENDEPIN(0) |                   \
+                               USBD_INT_ENDEPOUT(0))
 #endif
-
-/* Interrupts that signal DMA transfer complete:
- *   ENDEPIN0-7, ENDEPOUT0-7, ENDISOIN, ENDISOOUT
- */
-
-#define NRF52_USBD_DMAIRQ (USBD_INT_ENDEPIN(0) | USBD_INT_ENDEPIN(1)   | \
-                           USBD_INT_ENDEPIN(2) | USBD_INT_ENDEPIN(3)   | \
-                           USBD_INT_ENDEPIN(4) | USBD_INT_ENDEPIN(5)   | \
-                           USBD_INT_ENDEPIN(6) | USBD_INT_ENDEPIN(7)   | \
-                           USBD_INT_ENDEPOUT(0) | USBD_INT_ENDEPOUT(1) | \
-                           USBD_INT_ENDEPOUT(2) | USBD_INT_ENDEPOUT(3) | \
-                           USBD_INT_ENDEPOUT(4) | USBD_INT_ENDEPOUT(5) | \
-                           USBD_INT_ENDEPOUT(6) | USBD_INT_ENDEPOUT(7) | \
-                           USBD_INT_ENDISOIN | USBD_INT_ENDISOOUT)
 
 /****************************************************************************
  * Private Type Definitions
@@ -270,12 +258,7 @@ struct nrf52_usbdev_s
   uint8_t                 ep0indone;     /* 1: EP0 IN transfer complete */
   uint8_t                 ep0outdone;    /* 1: EP0 OUT transfer complete */
   uint8_t                 epavail[2];    /* Bitset of available OUT/IN endpoints */
-
-  /* DMA access control */
-
   bool                    dmanow;        /* DMA transfer pending */
-  uint16_t                dmaepinwait;   /* EP IN waiting for DMA */
-  uint16_t                dmaepoutwait;  /* EP OUT waitning for DMA */
 
   /* E0 SETUP data buffering.
    *
@@ -376,10 +359,8 @@ static void nrf52_eventinterrupt(struct nrf52_usbdev_s *priv);
 static void nrf52_ep0setupinterrupt(struct nrf52_usbdev_s *priv);
 static void nrf52_ep0datainterrupt(struct nrf52_usbdev_s *priv);
 static void nrf52_epdatainterrupt(struct nrf52_usbdev_s *priv);
-static void nrf52_endepininterrupt(struct nrf52_usbdev_s *priv,
-                                   uint32_t irqnow);
-static void nrf52_endepoutinterrupt(struct nrf52_usbdev_s *priv,
-                                    uint32_t irqnow);
+static void nrf52_endepininterrupt(struct nrf52_usbdev_s *priv);
+static void nrf52_endepoutinterrupt(struct nrf52_usbdev_s *priv);
 
 /* First level interrupt processing */
 
@@ -581,7 +562,10 @@ const struct trace_msg_t g_usb_trace_strings_intdecode[] =
 static void nrf52_startdma_task(struct nrf52_usbdev_s *priv, uint32_t addr)
 {
   usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_DMATASK), addr);
+
+  *(volatile uint32_t *)0x40027c1c = 0x00000082;
   nrf52_putreg(1, addr);
+
   priv->dmanow = true;
 }
 
@@ -590,6 +574,9 @@ static void nrf52_startdma_ack(struct nrf52_usbdev_s *priv)
   if (priv->dmanow == true)
     {
       usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_DMAACK), 0);
+
+      *(volatile uint32_t *)0x40027c1c = 0x00000000;
+
       priv->dmanow = false;
     }
 }
@@ -1032,26 +1019,17 @@ static void nrf52_epin_transfer(struct nrf52_ep_s *privep, uint8_t *buf,
   DEBUGASSERT(privep->eptype != USB_EP_ATTR_XFER_ISOC);
   DEBUGASSERT(nbytes <= 64);
 
-  /* Configure EasyDMA */
-
-  if (buf)
+  if (nbytes > 0)
     {
-      DEBUGASSERT(nrf52_easydma_valid((uint32_t)buf));
+      /* Configure EasyDMA */
+
+      nrf52_putreg((uint32_t)buf, NRF52_USBD_EPIN_PTR(privep->epphy));
+      nrf52_putreg(nbytes, NRF52_USBD_EPIN_MAXCNT(privep->epphy));
+
+      /* Start EPIN task - DMA transfer */
+
+      nrf52_epin_start(priv, privep->epphy);
     }
-
-  nrf52_putreg((uint32_t)buf, NRF52_USBD_EPIN_PTR(privep->epphy));
-  nrf52_putreg(nbytes, NRF52_USBD_EPIN_MAXCNT(privep->epphy));
-
-  /* Start EPIN task - DMA transfer */
-
-  nrf52_epin_start(priv, privep->epphy);
-
-  /* Busy wait for ENDEPIN to prevent any access to USBD registers during
-   * EasyDMA transfer. Otherwise USBD is not stable.
-   */
-
-  while (nrf52_getreg(NRF52_USBD_EVENTS_ENDEPIN(privep->epphy)) == 0 &&
-         nrf52_getreg(NRF52_USBD_EVENTS_USBRESET) == 0);
 }
 
 /****************************************************************************
@@ -1087,22 +1065,12 @@ static void nrf52_epout_transfer(struct nrf52_ep_s *privep)
   DEBUGASSERT(privep && privep->dev);
   priv = (struct nrf52_usbdev_s *)privep->dev;
 
-  if (privep->epphy == 0)
-    {
-      nbytes = USBDEV_EP0_MAXSIZE;
-    }
-  else
-    {
-      /* Number of bytes received last in the data stage of this OUT
-       * endpoint
-       */
+  /* Number of bytes received last in the data stage of this OUT endpoint */
 
-      nbytes = nrf52_getreg(NRF52_USBD_SIZE_EPOUT(privep->epphy));
-    }
+  nbytes = nrf52_getreg(NRF52_USBD_SIZE_EPOUT(privep->epphy));
 
   /* Configure EasyDMA */
 
-  DEBUGASSERT(nrf52_easydma_valid((uint32_t)privep->rxbuff));
   nrf52_putreg((uint32_t)privep->rxbuff,
                NRF52_USBD_EPOUT_PTR(privep->epphy));
   nrf52_putreg(nbytes, NRF52_USBD_EPOUT_MAXCNT(privep->epphy));
@@ -1110,13 +1078,6 @@ static void nrf52_epout_transfer(struct nrf52_ep_s *privep)
   /* Start EPOUT task */
 
   nrf52_epout_start(priv, privep->epphy);
-
-  /* Busy wait for ENDEPOUT to prevent any access to USBD registers during
-   * EasyDMA transfer. Otherwise USBD is not stable.
-   */
-
-  while (nrf52_getreg(NRF52_USBD_EVENTS_ENDEPOUT(privep->epphy)) == 0 &&
-         nrf52_getreg(NRF52_USBD_EVENTS_USBRESET) == 0);
 }
 
 /****************************************************************************
@@ -1134,15 +1095,6 @@ static void nrf52_epin_request(struct nrf52_usbdev_s *priv,
   uint8_t            *buf       = NULL;
   int                 bytesleft = 0;
   int                 nbytes    = 0;
-
-  /* If DMA is busy, add EP IN to the waiting list */
-
-  if (priv->dmanow == true)
-    {
-      usbtrace(TRACE_DEVERROR(NRF52_TRACEERR_DMABUSY), privep->epphy);
-      priv->dmaepinwait |= (1 << privep->epphy);
-      return;
-    }
 
   /* Check the request from the head of the endpoint request queue */
 
@@ -1190,20 +1142,8 @@ static void nrf52_epin_request(struct nrf52_usbdev_s *priv,
 
       privreq->req.xfrd += nbytes;
     }
-  else if (privreq->req.len == 0)
-    {
-      /* Zero-length packet */
 
-      nrf52_epin_transfer(privep, NULL, 0);
-
-      /* ACK zero-length DMA transfer right away */
-
-      nrf52_startdma_ack(priv);
-    }
-
-  /* Has all the request data been sent? */
-
-  if (privreq->req.xfrd >= privreq->req.len)
+  else if (privreq->req.xfrd >= privreq->req.len)
     {
       usbtrace(TRACE_COMPLETE(privep->epphy), privreq->req.xfrd);
 
@@ -1244,6 +1184,7 @@ static void nrf52_epout_complete(struct nrf52_ep_s *privep)
 
   privreq = nrf52_rqpeek(privep);
   DEBUGASSERT(privreq);
+
   if (!privreq)
     {
       /* An OUT transfer completed, but no packet to receive the data.  This
@@ -1264,6 +1205,10 @@ static void nrf52_epout_complete(struct nrf52_ep_s *privep)
 
   usbtrace(TRACE_COMPLETE(privep->epphy), privreq->req.xfrd);
   nrf52_req_complete(privep, OK);
+
+  /* Allow OUT trafic on this endpoint */
+
+  nrf52_epout_allow(privep);
 }
 
 /****************************************************************************
@@ -1391,15 +1336,6 @@ static void nrf52_epout_handle(struct nrf52_usbdev_s *priv,
   /* Not for EP0 */
 
   DEBUGASSERT(privep->epphy != EP0);
-
-  /* If DMA is busy, add EP OUT to the waiting list */
-
-  if (priv->dmanow == true)
-    {
-      usbtrace(TRACE_DEVERROR(NRF52_TRACEERR_DMABUSY), privep->epphy);
-      priv->dmaepoutwait |= (1 << privep->epphy);
-      return;
-    }
 
   /* Loop until a valid request is found (or the request queue is empty).
    * The loop is only need to look at the request queue again is an
@@ -1835,6 +1771,8 @@ static void nrf52_ep0datainterrupt(struct nrf52_usbdev_s *priv)
 {
   struct nrf52_ep_s *privep = NULL;
 
+  nrf52_startdma_ack(priv);
+
   if (USB_REQ_ISOUT(priv->ctrlreq.type))
     {
       /* Prepare EP OUT DMA transfer */
@@ -1844,19 +1782,17 @@ static void nrf52_ep0datainterrupt(struct nrf52_usbdev_s *priv)
     }
   else
     {
+      /* Handle IN request */
+
+      privep = &priv->epin[EP0];
+      nrf52_epin_request(priv, privep);
+
       if (priv->ep0indone)
         {
           /* Allows status stage on control endpoint 0 */
 
           nrf52_ep0status_start(priv);
           priv->ep0indone  = false;
-        }
-      else
-        {
-          /* Handle IN request */
-
-          privep = &priv->epin[EP0];
-          nrf52_epin_request(priv, privep);
         }
     }
 }
@@ -1875,13 +1811,11 @@ static void nrf52_epdatainterrupt(struct nrf52_usbdev_s *priv)
   uint32_t           datastatus = 0;
   int                epno       = 0;
 
+  nrf52_startdma_ack(priv);
+
   /* Get pending data status */
 
   datastatus = nrf52_getreg(NRF52_USBD_EPDATASTATUS);
-
-  /* Clear register */
-
-  nrf52_putreg(datastatus, NRF52_USBD_EPDATASTATUS);
 
   /* Ignore EP0 */
 
@@ -1903,51 +1837,61 @@ static void nrf52_epdatainterrupt(struct nrf52_usbdev_s *priv)
           nrf52_epout_handle(priv, privep);
         }
     }
+
+  /* Clear register */
+
+  nrf52_putreg(datastatus, NRF52_USBD_EPDATASTATUS);
 }
 
 /****************************************************************************
- * Name: nrf52_endepininterrupt
+ * Name: nrf52_endepin
  *
  * Description:
  *   Handle ENDEPIN events
  *
  ****************************************************************************/
 
-static void nrf52_endepininterrupt(struct nrf52_usbdev_s *priv,
-                                   uint32_t irqnow)
+static void nrf52_endepininterrupt(struct nrf52_usbdev_s *priv)
 {
   int epno = 0;
+
+  nrf52_startdma_ack(priv);
 
   /* Process each pending IN endpoint interrupt */
 
   for (epno = 0; epno < NRF52_NENDPOINTS; epno += 1)
     {
-      if (irqnow & USBD_INT_ENDEPIN(epno))
+      if (nrf52_getreg(NRF52_USBD_EVENTS_ENDEPIN(epno)))
         {
           usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_ENDEPIN), epno);
+
+          /* Clear event */
+
+          nrf52_putreg(0, NRF52_USBD_EVENTS_ENDEPIN(epno));
         }
     }
 }
 
 /****************************************************************************
- * Name: nrf52_endepoutinterrupt
+ * Name: nrf52_endepout
  *
  * Description:
  *   Handle ENDEPOUT events
  *
  ****************************************************************************/
 
-static void nrf52_endepoutinterrupt(struct nrf52_usbdev_s *priv,
-                                    uint32_t irqnow)
+static void nrf52_endepoutinterrupt(struct nrf52_usbdev_s *priv)
 {
   struct nrf52_ep_s *privep = NULL;
   int                epno   = 0;
+
+  nrf52_startdma_ack(priv);
 
   /* Process each pending OUT endpoint interrupt */
 
   for (epno = 0; epno < NRF52_NENDPOINTS; epno += 1)
     {
-      if (irqnow & USBD_INT_ENDEPOUT(epno))
+      if (nrf52_getreg(NRF52_USBD_EVENTS_ENDEPOUT(epno)))
         {
           usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_ENDEPOUT), epno);
 
@@ -1976,6 +1920,10 @@ static void nrf52_endepoutinterrupt(struct nrf52_usbdev_s *priv,
               privep = &priv->epout[epno];
               nrf52_epout_receive(privep);
             }
+
+          /* Clear event */
+
+          nrf52_putreg(0, NRF52_USBD_EVENTS_ENDEPOUT(epno));
         }
     }
 }
@@ -1990,135 +1938,70 @@ static void nrf52_endepoutinterrupt(struct nrf52_usbdev_s *priv,
 
 static int nrf52_usbinterrupt(int irq, void *context, void *arg)
 {
-  struct nrf52_usbdev_s *priv   = &g_usbdev;
-  struct nrf52_ep_s     *privep = NULL;
-  uint32_t               irqnow = 0;
-  uint32_t               offset = 0;
-  int                    i      = 0;
+  struct nrf52_usbdev_s *priv = &g_usbdev;
 
   usbtrace(TRACE_INTENTRY(NRF52_TRACEINTID_USB), 0);
 
-  /* Handle all events */
-
-  for (i = 0; i < USBD_INT_ALL_NUM; i++)
-    {
-      /* Get EVENT offset */
-
-      offset = NRF52_USBD_EVENTS_USBRESET + 0x04 * i;
-
-      /* Get EVENT state */
-
-      irqnow |= nrf52_getreg(offset) << i;
-
-      /* Clear EVENT */
-
-      nrf52_putreg(0, offset);
-    }
-
   /* USB reset interrupt */
 
-  if (irqnow & USBD_INT_USBRESET)
+  if (nrf52_getreg(NRF52_USBD_EVENTS_USBRESET))
     {
       usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_DEVRESET), 0);
       nrf52_usbreset(priv);
+      nrf52_putreg(0, NRF52_USBD_EVENTS_USBRESET);
       goto intout;
     }
 
 #ifdef CONFIG_USBDEV_SOFINTERRUPT
   /* Handle SOF */
 
-  if (irqnow & USBD_INT_SOF)
+  if (nrf52_getreg(NRF52_USBD_EVENTS_SOF))
     {
       usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_SOF), 0);
+      nrf52_putreg(0, NRF52_USBD_EVENTS_SOF);
     }
 #endif
 
   /* Handle USBEVENT */
 
-  if (irqnow & USBD_INT_USBEVENT)
+  if (nrf52_getreg(NRF52_USBD_EVENTS_USBEVENT))
     {
       usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_USBEVENT), 0);
       nrf52_eventinterrupt(priv);
-    }
-
-  /* DMA transfer complete */
-
-  if (irqnow & NRF52_USBD_DMAIRQ)
-    {
-      nrf52_startdma_ack(priv);
+      nrf52_putreg(0, NRF52_USBD_EVENTS_USBEVENT);
     }
 
   /* Handle EP0SETUP */
 
-  if (irqnow & USBD_INT_EP0SETUP)
+  if (nrf52_getreg(NRF52_USBD_EVENTS_EP0SETUP))
     {
       usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_EP0SETUP), 0);
       nrf52_ep0setupinterrupt(priv);
+      nrf52_putreg(0, NRF52_USBD_EVENTS_EP0SETUP);
     }
 
   /* Handle EP0DATADONE */
 
-  if (irqnow & USBD_INT_EP0DATADONE)
+  if (nrf52_getreg(NRF52_USBD_EVENTS_EP0DATADONE))
     {
       usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_EP0DATADONE), 0);
       nrf52_ep0datainterrupt(priv);
+      nrf52_putreg(0, NRF52_USBD_EVENTS_EP0DATADONE);
     }
-
-  /* Handle ENDEPOUT */
-
-  nrf52_endepoutinterrupt(priv, irqnow);
-
-  /* Handle ENDEPIN */
-
-  nrf52_endepininterrupt(priv, irqnow);
 
   /* Handle EPDATA */
 
-  if (irqnow & USBD_INT_EPDATA)
+  if (nrf52_getreg(NRF52_USBD_EVENTS_EPDATA))
     {
       usbtrace(TRACE_INTDECODE(NRF52_TRACEINTID_EPDATA), 0);
       nrf52_epdatainterrupt(priv);
+      nrf52_putreg(0, NRF52_USBD_EVENTS_EPDATA);
     }
 
-  /* Try to handle waiting OUT DMA requests */
+  /* Handle all END events */
 
-  if (priv->dmanow == false)
-    {
-      if (priv->dmaepoutwait)
-        {
-          for (i = 0; i < NRF52_NENDPOINTS; i++)
-            {
-              if (priv->dmaepoutwait & (1 << i))
-                {
-                  priv->dmaepoutwait &= ~(1 << i);
-
-                  privep = &priv->epout[i];
-                  nrf52_epout_handle(priv, privep);
-                  break;
-                }
-            }
-        }
-    }
-
-  /* Try to handle waiting IN DMA requests */
-
-  if (priv->dmanow == false)
-    {
-      if (priv->dmaepinwait)
-        {
-          for (i = 0; i < NRF52_NENDPOINTS; i++)
-            {
-              if (priv->dmaepinwait & (1 << i))
-                {
-                  priv->dmaepinwait &= ~(1 << i);
-
-                  privep = &priv->epin[i];
-                  nrf52_epin_request(priv, privep);
-                  break;
-                }
-            }
-        }
-    }
+  nrf52_endepininterrupt(priv);
+  nrf52_endepoutinterrupt(priv);
 
 intout:
   usbtrace(TRACE_INTEXIT(NRF52_TRACEINTID_USB), 0);
@@ -2141,6 +2024,7 @@ intout:
 static int nrf52_epout_configure(struct nrf52_ep_s *privep, uint8_t eptype,
                                  uint16_t maxpacket)
 {
+  uint32_t mpsiz  = 0;
   uint32_t regval = 0;
 
   usbtrace(TRACE_EPCONFIGURE, privep->epphy);
@@ -2151,9 +2035,14 @@ static int nrf52_epout_configure(struct nrf52_ep_s *privep, uint8_t eptype,
     {
       DEBUGASSERT(eptype == USB_EP_ATTR_XFER_CONTROL);
 
-      /* EP0OUT EPTYP is read only ! */
+      /* EP0OUT MPSIZ and EPTYP is read only ! */
 
+      mpsiz  = 0;
       eptype = 0;
+    }
+  else
+    {
+      mpsiz = maxpacket;
     }
 
   /* Enable the endpoint */
@@ -2161,6 +2050,10 @@ static int nrf52_epout_configure(struct nrf52_ep_s *privep, uint8_t eptype,
   regval = nrf52_getreg(NRF52_USBD_EPOUTEN);
   regval |= USBD_EPOUTEN_OUT(privep->epphy);
   nrf52_putreg(regval, NRF52_USBD_EPOUTEN);
+
+  /* Configure the max packet size */
+
+  nrf52_putreg(mpsiz, NRF52_USBD_EPOUT_MAXCNT(privep->epphy));
 
   /* Save the endpoint configuration */
 
@@ -2197,9 +2090,14 @@ static int nrf52_epout_configure(struct nrf52_ep_s *privep, uint8_t eptype,
 static int nrf52_epin_configure(struct nrf52_ep_s *privep, uint8_t eptype,
                                 uint16_t maxpacket)
 {
+  uint32_t mpsiz  = 0;
   uint32_t regval = 0;
 
   usbtrace(TRACE_EPCONFIGURE, privep->epphy);
+
+  /* The packet size is in bytes for all EP */
+
+  mpsiz = maxpacket;
 
   if (privep->epphy == EP0)
     {
@@ -2216,13 +2114,21 @@ static int nrf52_epin_configure(struct nrf52_ep_s *privep, uint8_t eptype,
   regval |= USBD_EPINEN_IN(privep->epphy);
   nrf52_putreg(regval, NRF52_USBD_EPINEN);
 
+  /* Configure the max packet size */
+
+  nrf52_putreg(mpsiz, NRF52_USBD_EPIN_MAXCNT(privep->epphy));
+
   /* Save the endpoint configuration */
 
   privep->ep.maxpacket = maxpacket;
   privep->eptype       = eptype;
   privep->stalled      = false;
 
-  /* NOTE: don't enable EPIN END interrupts as they cause EPIN locks */
+  /* Enable the interrupt for this endpoint */
+
+  regval = nrf52_getreg(NRF52_USBD_INTEN);
+  regval |= USBD_INT_ENDEPIN(privep->epphy);
+  nrf52_putreg(regval, NRF52_USBD_INTEN);
 
   return OK;
 }
@@ -2354,6 +2260,12 @@ static void nrf52_epin_disable(struct nrf52_ep_s *privep)
   regval &= ~USBD_EPINEN_IN(privep->epphy);
   nrf52_putreg(regval, NRF52_USBD_EPINEN);
 
+  /* Disable endpoint interrupts */
+
+  regval = nrf52_getreg(NRF52_USBD_INTEN);
+  regval &= ~USBD_INT_ENDEPIN(privep->epphy);
+  nrf52_putreg(regval, NRF52_USBD_INTEN);
+
   /* Cancel any queued write requests */
 
   nrf52_req_cancel(privep, -ESHUTDOWN);
@@ -2422,7 +2334,7 @@ static struct usbdev_req_s *nrf52_ep_allocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, ((struct nrf52_ep_s *)ep)->epphy);
 
-  privreq = kmm_malloc(sizeof(struct nrf52_req_s));
+  privreq = (struct nrf52_req_s *)kmm_malloc(sizeof(struct nrf52_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(NRF52_TRACEERR_ALLOCFAIL), 0);
@@ -3052,8 +2964,9 @@ static void nrf52_hwinitialize(struct nrf52_usbdev_s *priv)
 {
   /* Wait for VBUS */
 
-  while ((getreg32(NRF52_POWER_USBREGSTATUS) &
-          NRF52_POWER_USBREGSTATUS_VBUSDETECT) == 0) ;
+  /* TODO: connect to POWER USB events */
+
+  while (getreg32(NRF52_POWER_EVENTS_USBDETECTED) == 0);
 
   /* Errata [187] USBD: USB cannot be enabled */
 

@@ -9,18 +9,11 @@ config DEV_SIMPLE_ADDRENV
 
 config DEV_NULL
 	bool "Enable /dev/null"
-	default !DEFAULT_SMALL
+	default y
 
 config DEV_ZERO
 	bool "Enable /dev/zero"
 	default n
-
-config DEV_ASCII
-	bool "Enable /dev/ascii"
-	default n
-	---help---
-		Enable the /dev/ascii device driver.  This is a character driver
-		that will return all characters from 0x21-0x7f.
 
 config DEV_RPMSG
 	bool "RPMSG Device Client Support"
@@ -31,36 +24,6 @@ config DEV_RPMSG_SERVER
 	bool "RPMSG Device Server Support"
 	default n
 	depends on RPTUN
-
-choice
-	prompt "Select OP-TEE dev implementation"
-	default DEV_OPTEE_NONE
-	---help---
-		There are two implementations of optee server,
-		one is soft tee server which does not distinguish
-		between secure and non-secure states and uses socket communication,
-		and the other is teeos which runs in the secure state of
-		the cpu and uses rpmsg cross-core communication.
-
-config DEV_OPTEE_LOCAL
-	bool "OPTEE Local Socket Support"
-	depends on NET_LOCAL
-	depends on ALLOW_BSD_COMPONENTS
-
-config DEV_OPTEE_RPMSG
-	bool "OP-TEE RPMSG Socket Support"
-	depends on NET_RPMSG
-	depends on ALLOW_BSD_COMPONENTS
-
-config DEV_OPTEE_NONE
-	bool "Disable OP-TEE driver"
-
-endchoice
-
-config OPTEE_REMOTE_CPU_NAME
-	string "The cpuname on which the OP-TEE server runs"
-	default "tee"
-	depends on DEV_OPTEE_RPMSG
 
 config DRVR_MKRD
 	bool "RAM disk wrapper (mkrd)"
@@ -130,7 +93,8 @@ if DRVR_WRITEBUFFER || DRVR_READAHEAD
 
 config DRVR_READBYTES
 	bool "Support byte read method"
-	default MTD_BYTE_WRITE
+	default y if MTD_BYTE_WRITE
+	default n if !MTD_BYTE_WRITE
 
 config DRVR_REMOVABLE
 	bool "Support removable media"

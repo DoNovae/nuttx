@@ -26,7 +26,6 @@
 
 #include <sys/types.h>
 
-#include <assert.h>
 #include <errno.h>
 
 #include <nuttx/mutex.h>
@@ -84,6 +83,7 @@ static int relay_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct inode *inode;
   int ret;
 
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private != NULL);
   dev = inode->i_private;

@@ -44,7 +44,6 @@
 #include <nuttx/irq.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/semaphore.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/usb/usbdev.h>
 #include <nuttx/usb/cdc.h>
@@ -54,7 +53,7 @@
 #  include <nuttx/net/pkt.h>
 #endif
 
-#ifdef CONFIG_BOARD_USBDEV_SERIALSTR
+#ifdef CONFIG_CDCECM_BOARD_SERIALSTR
 #include <nuttx/board.h>
 #endif
 
@@ -175,6 +174,9 @@ static int  cdcecm_addmac(FAR struct net_driver_s *dev,
 static int  cdcecm_rmmac(FAR struct net_driver_s *dev,
               FAR const uint8_t *mac);
 #endif
+#ifdef CONFIG_NET_ICMPv6
+static void cdcecm_ipv6multicast(FAR struct cdcecm_driver_s *priv);
+#endif
 #endif
 #ifdef CONFIG_NETDEV_IOCTL
 static int  cdcecm_ioctl(FAR struct net_driver_s *dev, int cmd,
@@ -199,6 +201,11 @@ static void cdcecm_disconnect(FAR struct usbdevclass_driver_s *driver,
                               FAR struct usbdev_s *dev);
 
 /* USB Device Class helpers */
+
+static struct usbdev_req_s *cdcecm_allocreq(FAR struct usbdev_ep_s *ep,
+              uint16_t len);
+static void cdcecm_freereq(FAR struct usbdev_ep_s *ep,
+              FAR struct usbdev_req_s *req);
 
 static void cdcecm_ep0incomplete(FAR struct usbdev_ep_s *ep,
               FAR struct usbdev_req_s *req);
@@ -348,8 +355,8 @@ static int cdcecm_txpoll(FAR struct net_driver_s *dev)
  *
  * Description:
  *   After a packet has been received and dispatched to the network, it
- *   may return with an outgoing packet.  This function checks for that
- *   case and performs the transmission if necessary.
+ *   may return return with an outgoing packet.  This function checks for
+ *   that case and performs the transmission if necessary.
  *
  * Input Parameters:
  *   priv - Reference to the driver state structure
@@ -401,7 +408,7 @@ static void cdcecm_receive(FAR struct cdcecm_driver_s *self)
    * configuration.
    */
 
-  /* Copy the data from the hardware to self->dev.d_buf.  Set
+  /* Copy the data data from the hardware to self->dev.d_buf.  Set
    * amount of data in self->dev.d_len
    */
 
@@ -583,15 +590,27 @@ static int cdcecm_ifup(FAR struct net_driver_s *dev)
     (FAR struct cdcecm_driver_s *)dev->d_private;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
         dev->d_ipv6addr[0], dev->d_ipv6addr[1], dev->d_ipv6addr[2],
         dev->d_ipv6addr[3], dev->d_ipv6addr[4], dev->d_ipv6addr[5],
         dev->d_ipv6addr[6], dev->d_ipv6addr[7]);
+#endif
+
+  /* Initialize PHYs, Ethernet interface, and setup up Ethernet interrupts */
+
+  /* Instantiate MAC address from priv->dev.d_mac.ether.ether_addr_octet */
+
+#ifdef CONFIG_NET_ICMPv6
+  /* Set up IPv6 multicast address filtering */
+
+  cdcecm_ipv6multicast(priv);
 #endif
 
   priv->bifup = true;
@@ -775,6 +794,78 @@ static int cdcecm_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 #endif
 
 /****************************************************************************
+ * Name: cdcecm_ipv6multicast
+ *
+ * Description:
+ *   Configure the IPv6 multicast MAC address.
+ *
+ * Input Parameters:
+ *   priv - A reference to the private driver state structure
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_ICMPv6
+static void cdcecm_ipv6multicast(FAR struct cdcecm_driver_s *priv)
+{
+  FAR struct net_driver_s *dev;
+  uint16_t tmp16;
+  uint8_t mac[6];
+
+  /* For ICMPv6, we need to add the IPv6 multicast address
+   *
+   * For IPv6 multicast addresses, the Ethernet MAC is derived by
+   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
+   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
+   * to the Ethernet MAC address 33:33:00:01:00:03.
+   *
+   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
+   * Message, but the ICMPv6 Neighbor Solicitation message seems to
+   * use 33:33:ff:01:00:03.
+   */
+
+  mac[0] = 0x33;
+  mac[1] = 0x33;
+
+  dev    = &priv->dev;
+  tmp16  = dev->d_ipv6addr[6];
+  mac[2] = 0xff;
+  mac[3] = tmp16 >> 8;
+
+  tmp16  = dev->d_ipv6addr[7];
+  mac[4] = tmp16 & 0xff;
+  mac[5] = tmp16 >> 8;
+
+  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  cdcecm_addmac(dev, mac);
+
+#ifdef CONFIG_NET_ICMPv6_AUTOCONF
+  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
+   * address that we expect to receive ICMPv6 Router Advertisement
+   * packets.
+   */
+
+  cdcecm_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
+
+#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
+
+#ifdef CONFIG_NET_ICMPv6_ROUTER
+  /* Add the IPv6 all link-local routers Ethernet address.  This is the
+   * address that we expect to receive ICMPv6 Router Solicitation
+   * packets.
+   */
+
+  cdcecm_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
+
+#endif /* CONFIG_NET_ICMPv6_ROUTER */
+}
+#endif /* CONFIG_NET_ICMPv6 */
+
+/****************************************************************************
  * Name: cdcecm_ioctl
  *
  * Description:
@@ -905,6 +996,59 @@ static void cdcecm_wrcomplete(FAR struct usbdev_ep_s *ep,
 
   self->txdone = true;
   work_queue(ETHWORK, &self->irqwork, cdcecm_interrupt_work, self, 0);
+}
+
+/****************************************************************************
+ * Name: cdcecm_allocreq
+ *
+ * Description:
+ *   Allocate a request instance along with its buffer
+ *
+ ****************************************************************************/
+
+static struct usbdev_req_s *cdcecm_allocreq(FAR struct usbdev_ep_s *ep,
+                                            uint16_t len)
+{
+  FAR struct usbdev_req_s *req;
+
+  req = EP_ALLOCREQ(ep);
+
+  if (req != NULL)
+    {
+      req->len   = len;
+      req->buf   = EP_ALLOCBUFFER(ep, len);
+      req->flags = USBDEV_REQFLAGS_NULLPKT;
+
+      if (req->buf == NULL)
+        {
+          EP_FREEREQ(ep, req);
+          req = NULL;
+        }
+    }
+
+  return req;
+}
+
+/****************************************************************************
+ * Name: cdcecm_freereq
+ *
+ * Description:
+ *   Free a request instance along with its buffer
+ *
+ ****************************************************************************/
+
+static void cdcecm_freereq(FAR struct usbdev_ep_s *ep,
+                           FAR struct usbdev_req_s *req)
+{
+  if (ep != NULL && req != NULL)
+    {
+      if (req->buf != NULL)
+        {
+          EP_FREEBUFFER(ep, req->buf);
+        }
+
+      EP_FREEREQ(ep, req);
+    }
 }
 
 /****************************************************************************
@@ -1088,7 +1232,7 @@ static int cdcecm_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
       break;
 
     case CDCECM_SERIALSTRID:
-#ifdef CONFIG_BOARD_USBDEV_SERIALSTR
+#ifdef CONFIG_CDCECM_BOARD_SERIALSTR
       str = board_usbdev_serialstr();
 #else
       str = "0";
@@ -1517,13 +1661,11 @@ static int cdcecm_bind(FAR struct usbdevclass_driver_s *driver,
 
   uinfo("\n");
 
-#ifndef CONFIG_CDCECM_COMPOSITE
   dev->ep0->priv = self;
-#endif
 
   /* Preallocate control request */
 
-  self->ctrlreq = usbdev_allocreq(dev->ep0, CDCECM_MXDESCLEN);
+  self->ctrlreq = cdcecm_allocreq(dev->ep0, CDCECM_MXDESCLEN);
 
   if (self->ctrlreq == NULL)
     {
@@ -1559,7 +1701,7 @@ static int cdcecm_bind(FAR struct usbdevclass_driver_s *driver,
 
   /* Pre-allocate read requests.  The buffer size is one full packet. */
 
-  self->rdreq = usbdev_allocreq(self->epbulkout,
+  self->rdreq = cdcecm_allocreq(self->epbulkout,
                   CONFIG_NET_ETH_PKTSIZE + CONFIG_NET_GUARDSIZE);
   if (self->rdreq == NULL)
     {
@@ -1572,7 +1714,7 @@ static int cdcecm_bind(FAR struct usbdevclass_driver_s *driver,
 
   /* Pre-allocate a single write request.  Buffer size is one full packet. */
 
-  self->wrreq = usbdev_allocreq(self->epbulkin,
+  self->wrreq = cdcecm_allocreq(self->epbulkin,
                   CONFIG_NET_ETH_PKTSIZE + CONFIG_NET_GUARDSIZE);
   if (self->wrreq == NULL)
     {
@@ -1650,7 +1792,7 @@ static void cdcecm_unbind(FAR struct usbdevclass_driver_s *driver,
 
   if (self->ctrlreq != NULL)
     {
-      usbdev_freereq(dev->ep0, self->ctrlreq);
+      cdcecm_freereq(dev->ep0, self->ctrlreq);
       self->ctrlreq = NULL;
     }
 
@@ -1660,7 +1802,7 @@ static void cdcecm_unbind(FAR struct usbdevclass_driver_s *driver,
 
   if (self->rdreq != NULL)
     {
-      usbdev_freereq(self->epbulkout, self->rdreq);
+      cdcecm_freereq(self->epbulkout, self->rdreq);
       self->rdreq = NULL;
     }
 
@@ -1678,7 +1820,7 @@ static void cdcecm_unbind(FAR struct usbdevclass_driver_s *driver,
 
   if (self->wrreq != NULL)
     {
-      usbdev_freereq(self->epbulkin, self->wrreq);
+      cdcecm_freereq(self->epbulkin, self->wrreq);
       self->wrreq = NULL;
     }
 

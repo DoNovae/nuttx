@@ -147,58 +147,11 @@
                            GPIO_CFG_PORT_B | GPIO_CFG_PIN_1)
 #define GPIO_INT1         (GPIO_CFG_MODE_INPUT | GPIO_CFG_PUPD_NONE | GPIO_CFG_PORT_B | GPIO_CFG_PIN_2)
 
-/* Can't support MMC/SD features if mountpoints are disabled or if SDIO
- * support is not enabled.
- */
-
-#if defined(CONFIG_DISABLE_MOUNTPOINT) || !defined(CONFIG_GD32_SDIO)
-#  undef HAVE_SDIO
-#endif
-
-#define  SDIO_MINOR   0 /* Any minor number, default 0 */
-#define  SDIO_SLOTNO  0 /* Only one slot */
-
-#ifdef HAVE_SDIO
-#  if !defined(CONFIG_NSH_MMCSDSLOTNO)
-#    define CONFIG_NSH_MMCSDSLOTNO SDIO_SLOTNO
-#  elif CONFIG_NSH_MMCSDSLOTNO != 0
-#    warning "Only one MMC/SD slot, slot 0"
-#    undef CONFIG_NSH_MMCSDSLOTNO
-#    define CONFIG_NSH_MMCSDSLOTNO SDIO_SLOTNO
-#  endif
-
-#  if defined(CONFIG_NSH_MMCSDMINOR)
-#    define SDIO_MINOR CONFIG_NSH_MMCSDMINOR
-#  else
-#    define SDIO_MINOR 0
-#  endif
-#endif
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
-
-/****************************************************************************
- * Name: gd32_bringup
- *
- * Description:
- *   Perform architecture specific initialization
- *
- *   CONFIG_BOARDCTL=y:
- *     If CONFIG_NSH_ARCHINIT=y:
- *       Called from the NSH library (or other application)
- *     Otherwise, assumed to be called from some other application.
- *
- *   Otherwise CONFIG_BOARD_LATE_INITIALIZE=y:
- *     Called from board_late_initialize().
- *
- *   Otherwise, bad news:  Never called
- *
- ****************************************************************************/
-
-int gd32_bringup(void);
 
 /****************************************************************************
  * Name: gd32_spidev_initialize

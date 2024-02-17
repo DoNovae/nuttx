@@ -1,7 +1,7 @@
 /****************************************************************************
  * arch/arm/src/s32k3xx/s32k3xx_edma.c
  *
- *   Copyright (C) 2019, 2021, 2023 Gregory Nutt. All rights reserved.
+ *   Copyright (C) 2019, 2021 Gregory Nutt. All rights reserved.
  *   Copyright 2022 NXP
  *   Authors: Gregory Nutt <gnutt@nuttx.org>
  *            David Sidrane <david.sidrane@nscdg.com>
@@ -616,9 +616,7 @@ static inline void s32k3xx_tcd_configure(struct s32k3xx_edmatcd_s *tcd,
                    EDMA_TCD_ATTR_DMOD(config->dmod);
 #endif
   tcd->nbytes   = config->nbytes;
-  tcd->slast    = config->flags & EDMA_CONFIG_LOOPSRC ?
-                                  -(config->iter * config->nbytes) : 0;
-
+  tcd->slast    = config->flags & EDMA_CONFIG_LOOPSRC ? -config->iter : 0;
   tcd->daddr    = config->daddr;
   tcd->doff     = config->doff;
   tcd->citer    = config->iter & EDMA_TCD_CITER_MASK;
@@ -627,8 +625,7 @@ static inline void s32k3xx_tcd_configure(struct s32k3xx_edmatcd_s *tcd,
                                   0 : EDMA_TCD_CSR_DREQ;
   tcd->csr     |= config->flags & EDMA_CONFIG_INTHALF ?
                                   EDMA_TCD_CSR_INTHALF : 0;
-  tcd->dlastsga = config->flags & EDMA_CONFIG_LOOPDEST ?
-                                  -(config->iter * config->nbytes) : 0;
+  tcd->dlastsga = config->flags & EDMA_CONFIG_LOOPDEST ? -config->iter : 0;
 
 #ifdef CONFIG_S32K3XX_DTCM_HEAP
   /* Remap address to backdoor address for eDMA */
@@ -708,8 +705,6 @@ static void s32k3xx_dmaterminate(struct s32k3xx_dmach_s *dmach, int result)
   struct s32k3xx_edmatcd_s *next;
 #endif
   uint8_t chan;
-  edma_callback_t callback;
-  void *arg;
 
   chan            = dmach->chan;
 
@@ -751,17 +746,14 @@ static void s32k3xx_dmaterminate(struct s32k3xx_dmach_s *dmach, int result)
 
   /* Perform the DMA complete callback */
 
-  callback = dmach->callback;
-  arg      = dmach->arg;
+  if (dmach->callback)
+    {
+      dmach->callback((DMACH_HANDLE)dmach, dmach->arg, true, result);
+    }
 
   dmach->callback = NULL;
   dmach->arg      = NULL;
   dmach->state    = S32K3XX_DMA_IDLE;
-
-  if (callback)
-    {
-      callback((DMACH_HANDLE)dmach, arg, true, result);
-    }
 }
 
 /****************************************************************************
@@ -1498,24 +1490,6 @@ unsigned int s32k3xx_dmach_getcount(DMACH_HANDLE *handle)
     }
 
   return remaining;
-}
-
-/****************************************************************************
- * Name: s32k3xx_dmach_idle
- *
- * Description:
- *   This function checks if the dma is idle
- *
- * Returned Value:
- *   0  - if idle
- *   !0 - not
- *
- ****************************************************************************/
-
-unsigned int s32k3xx_dmach_idle(DMACH_HANDLE handle)
-{
-  struct s32k3xx_dmach_s *dmach = (struct s32k3xx_dmach_s *)handle;
-  return dmach->state == S32K3XX_DMA_IDLE ? 0 : -1;
 }
 
 /****************************************************************************

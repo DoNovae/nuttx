@@ -187,12 +187,20 @@ static int sim_loop_task(int argc, char **argv)
       host_usrsock_loop();
 #endif
 
+#ifdef CONFIG_RPTUN
+      sim_rptun_loop();
+#endif
+
+#ifdef CONFIG_SIM_HCISOCKET
+      sim_bthcisock_loop();
+#endif
+
 #ifdef CONFIG_SIM_SOUND
       sim_audio_loop();
 #endif
 
-#ifdef CONFIG_SIM_CAMERA
-      sim_camera_loop();
+#ifdef CONFIG_SIM_VIDEO
+      sim_video_loop();
 #endif
 
 #ifdef CONFIG_SIM_USB_DEV
@@ -246,10 +254,6 @@ static int sim_loop_task(int argc, char **argv)
 
 void up_initialize(void)
 {
-#ifdef CONFIG_SIM_IMAGEPATH_AS_CWD
-  host_init_cwd();
-#endif
-
 #ifdef CONFIG_PM
   /* Initialize the power management subsystem.  This MCU-specific function
    * must be called *very* early in the initialization sequence *before* any
@@ -291,11 +295,6 @@ void up_initialize(void)
 
   audio_register("pcm1p", sim_audio_initialize(true, true));
   audio_register("pcm1c", sim_audio_initialize(false, true));
-
-  /* register independent mixer device, simulate amixer ioctl */
-
-  audio_register("mixer", sim_audio_initialize(false, false));
-
 #endif
 
 #ifdef CONFIG_SIM_USB_DEV
@@ -306,7 +305,7 @@ void up_initialize(void)
   sim_usbhost_initialize();
 #endif
 
-  kthread_create("loop_task", CONFIG_SIM_LOOPTASK_PRIORITY,
+  kthread_create("loop_task", SCHED_PRIORITY_MAX,
                  CONFIG_DEFAULT_TASK_STACKSIZE,
                  sim_loop_task, NULL);
 }

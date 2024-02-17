@@ -22,15 +22,14 @@ include $(TOPDIR)/Make.defs
 
 CSRCS = gd32f4xx_boot.c
 
-# ifeq ($(CONFIG_BOARDCTL),y)
-# CSRCS += gd32f4xx_appinit.c
-# endif
-
 ifeq ($(CONFIG_BOARDCTL),y)
-CSRCS += gd32f4xx_appinit.c gd32f4xx_bringup.c
-else ifeq ($(CONFIG_BOARD_LATE_INITIALIZE),y)
-CSRCS += gd32f4xx_bringup.c
+CSRCS += gd32f4xx_appinit.c
 endif
+# ifeq ($(CONFIG_BOARDCTL),y)
+# CSRCS += gd32f4xx_appinit.c gd32f4xx_bringup.c
+# else ifeq ($(CONFIG_BOARD_LATE_INITIALIZE),y)
+# CSRCS += gd32f4xx_bringup.c
+# endif
 
 ifeq ($(CONFIG_ARCH_LEDS),y)
 CSRCS += gd32f4xx_autoleds.c
@@ -43,15 +42,11 @@ CSRCS += gd32f4xx_gpio.c
 endif
 
 ifeq ($(CONFIG_ARCH_BUTTONS),y)
-CSRCS += gd32f4xx_buttons.c
+CSRCS +=  gd32f4xx_buttons.c
 endif
 
 ifeq ($(CONFIG_SPI),y)
-CSRCS += gd32f4xx_spi.c
-endif
-
-ifeq ($(CONFIG_MMCSD),y)
-CSRCS += gd32f4xx_sdio.c
+CSRCS +=  gd32f4xx_spi.c
 endif
 
 ifeq ($(CONFIG_MTD_GD25),y)

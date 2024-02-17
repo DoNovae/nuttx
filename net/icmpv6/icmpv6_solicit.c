@@ -95,7 +95,7 @@ void icmpv6_solicit(FAR struct net_driver_s *dev,
   dstaddr[7] = ipaddr[7];
 
   ipv6_build_header(IPv6BUF, l3size, IP_PROTO_ICMP6,
-                    netdev_ipv6_srcaddr(dev, ipaddr), dstaddr, 255, 0);
+                    dev->d_ipv6addr, dstaddr, 255, 0);
 
   /* Set up the ICMPv6 Neighbor Solicitation message */
 
@@ -122,7 +122,7 @@ void icmpv6_solicit(FAR struct net_driver_s *dev,
 
   /* Update device buffer length */
 
-  iob_update_pktlen(dev->d_iob, IPv6_HDRLEN + l3size, false);
+  iob_update_pktlen(dev->d_iob, IPv6_HDRLEN + l3size);
 
   /* Calculate the checksum over both the ICMP header and payload */
 

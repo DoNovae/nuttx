@@ -29,18 +29,6 @@
  *
  ****************************************************************************/
 
-#include "libc.h"
-
-#ifdef LIBC_BUILD_MEMCPY
-
-#ifndef __ARM_FEATURE_BTI_DEFAULT
-#  define __ARM_FEATURE_BTI_DEFAULT 0
-#endif
-
-#ifndef __ARM_FEATURE_PAC_DEFAULT
-#  define __ARM_FEATURE_PAC_DEFAULT 0
-#endif
-
 #ifndef __ARM_FEATURE_MVE
 /* This memcpy routine is optimised for Cortex-M3/M4 cores with/without
    unaligned access.
@@ -73,18 +61,12 @@
 #if __OPT_BIG_BLOCK_SIZE == 16
 #define BEGIN_UNROLL_BIG_BLOCK \
   .irp offset, 0,4,8,12
-#define BEGIN_UNROLL_BIG_BLOCK_X4 \
-  .irp offset, 0
 #elif __OPT_BIG_BLOCK_SIZE == 32
 #define BEGIN_UNROLL_BIG_BLOCK \
   .irp offset, 0,4,8,12,16,20,24,28
-#define BEGIN_UNROLL_BIG_BLOCK_X4 \
-  .irp offset, 0,16
 #elif __OPT_BIG_BLOCK_SIZE == 64
 #define BEGIN_UNROLL_BIG_BLOCK \
   .irp offset, 0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60
-#define BEGIN_UNROLL_BIG_BLOCK_X4 \
-  .irp offset, 0,16,32,48
 #else
 #error "Illegal __OPT_BIG_BLOCK_SIZE"
 #endif
@@ -113,13 +95,6 @@ memcpy:
 	@ r0: dst
 	@ r1: src
 	@ r2: len
-#if __ARM_FEATURE_PAC_DEFAULT
-#  if __ARM_FEATURE_BTI_DEFAULT
-	pacbti	ip, lr, sp
-#  else
-	pac	ip, lr, sp
-#  endif /* __ARM_FEATURE_BTI_DEFAULT */
-#endif /* __ARM_FEATURE_PAC_DEFAULT */
 #ifdef __ARM_FEATURE_MVE
 	mov	r3, lr
 	wlstp.8	lr, r2, 2f
@@ -129,9 +104,6 @@ memcpy:
 	vstrb.8	q0, [r2], #16
 	letp	lr, 1b
 2:
-#if __ARM_FEATURE_PAC_DEFAULT
-	aut	ip, lr, sp
-#endif /* __ARM_FEATURE_PAC_DEFAULT */
 	bx	r3
 #else
 #ifdef __ARM_FEATURE_UNALIGNED
@@ -144,21 +116,6 @@ memcpy:
 	orr	r3, r1, r0
 	ands	r3, r3, #3
 	bne	.Lmisaligned_copy
-
-.Lbig_aligned:
-	subs	r2, __OPT_BIG_BLOCK_SIZE
-	blo	.Lmid_block
-
-	stmfd	sp!, {r4-r7}
-.Lbig_aligned_loop:
-	BEGIN_UNROLL_BIG_BLOCK_X4
-	ldmia	r1!, {r4, r5, r6, r7}
-	stmia	r0!, {r4, r5, r6, r7}
-	END_UNROLL
-	subs	r2, __OPT_BIG_BLOCK_SIZE
-	bhs .Lbig_aligned_loop
-	ldmfd	sp!, {r4-r7}
-	b	.Lmid_block
 
 .Lbig_block:
 	subs	r2, __OPT_BIG_BLOCK_SIZE
@@ -242,9 +199,6 @@ memcpy:
 #else
 	pop	{r0}
 #endif
-#if __ARM_FEATURE_PAC_DEFAULT
-	aut	ip, lr, sp
-#endif /* __ARM_FEATURE_PAC_DEFAULT */
 	bx	lr
 
 	.align 2
@@ -386,11 +340,6 @@ memcpy:
 #else
 	pop	{r0}
 #endif
-#if __ARM_FEATURE_PAC_DEFAULT
-	aut	ip, lr, sp
-#endif /* __ARM_FEATURE_PAC_DEFAULT */
 	bx	lr
 #endif
 	.size	memcpy, .-memcpy
-
-#endif

@@ -34,6 +34,7 @@
 #include <nuttx/mm/mempool.h>
 
 #include <assert.h>
+#include <execinfo.h>
 #include <sys/types.h>
 #include <stdbool.h>
 #include <string.h>
@@ -75,7 +76,6 @@
        { \
          FAR struct mm_allocnode_s *tmp = (FAR struct mm_allocnode_s *)(ptr); \
          tmp->pid = _SCHED_GETTID(); \
-         tmp->seqno = g_mm_seqno++; \
        } \
      while (0)
 #elif CONFIG_MM_BACKTRACE > 0
@@ -88,8 +88,7 @@
          tcb = nxsched_get_tcb(tmp->pid); \
          if ((heap)->mm_procfs.backtrace || (tcb && tcb->flags & TCB_FLAG_HEAP_DUMP)) \
            { \
-             int n = sched_backtrace(tmp->pid, tmp->backtrace, CONFIG_MM_BACKTRACE, \
-                                     CONFIG_MM_BACKTRACE_SKIP); \
+             int n = backtrace(tmp->backtrace, CONFIG_MM_BACKTRACE); \
              if (n < CONFIG_MM_BACKTRACE) \
                { \
                  tmp->backtrace[n] = NULL; \
@@ -99,7 +98,6 @@
            { \
              tmp->backtrace[0] = NULL; \
            } \
-         tmp->seqno = g_mm_seqno++; \
        } \
      while (0)
 #else
@@ -129,33 +127,25 @@
 #define MM_PREVFREE_BIT  0x2
 #define MM_MASK_BIT      (MM_ALLOC_BIT | MM_PREVFREE_BIT)
 #ifdef CONFIG_MM_SMALL
-#  define MMSIZE_MAX     UINT16_MAX
+# define MMSIZE_MAX      UINT16_MAX
 #else
-#  define MMSIZE_MAX     UINT32_MAX
+# define MMSIZE_MAX      UINT32_MAX
 #endif
 
 /* What is the size of the allocnode? */
 
-#define MM_SIZEOF_ALLOCNODE sizeof(struct mm_allocnode_s)
+#define SIZEOF_MM_ALLOCNODE sizeof(struct mm_allocnode_s)
 
 /* What is the overhead of the allocnode
  * Remove the space of preceding field since it locates at the end of the
  * previous freenode
  */
 
-#define MM_ALLOCNODE_OVERHEAD (MM_SIZEOF_ALLOCNODE - sizeof(mmsize_t))
+#define OVERHEAD_MM_ALLOCNODE (SIZEOF_MM_ALLOCNODE - sizeof(mmsize_t))
 
 /* Get the node size */
 
-#define MM_SIZEOF_NODE(node) ((node)->size & (~MM_MASK_BIT))
-
-/* Check if node/prenode is free */
-
-#define MM_NODE_IS_ALLOC(node) (((node)->size & MM_ALLOC_BIT) != 0)
-#define MM_NODE_IS_FREE(node) (((node)->size & MM_ALLOC_BIT) == 0)
-
-#define MM_PREVNODE_IS_ALLOC(node) (((node)->size & MM_PREVFREE_BIT) == 0)
-#define MM_PREVNODE_IS_FREE(node) (((node)->size & MM_PREVFREE_BIT) != 0)
+#define SIZEOF_MM_NODE(node) ((node)->size & (~MM_MASK_BIT))
 
 /****************************************************************************
  * Public Types
@@ -180,7 +170,6 @@ struct mm_allocnode_s
   mmsize_t size;                            /* Size of this chunk */
 #if CONFIG_MM_BACKTRACE >= 0
   pid_t pid;                                /* The pid for caller */
-  unsigned long seqno;                      /* The sequence of memory malloc */
 #  if CONFIG_MM_BACKTRACE > 0
   FAR void *backtrace[CONFIG_MM_BACKTRACE]; /* The backtrace buffer for caller */
 #  endif
@@ -195,7 +184,6 @@ struct mm_freenode_s
   mmsize_t size;                            /* Size of this chunk */
 #if CONFIG_MM_BACKTRACE >= 0
   pid_t pid;                                /* The pid for caller */
-  unsigned long seqno;                      /* The sequence of memory malloc */
 #  if CONFIG_MM_BACKTRACE > 0
   FAR void *backtrace[CONFIG_MM_BACKTRACE]; /* The backtrace buffer for caller */
 #  endif
@@ -204,12 +192,12 @@ struct mm_freenode_s
   FAR struct mm_freenode_s *blink;
 };
 
-static_assert(MM_SIZEOF_ALLOCNODE <= MM_MIN_CHUNK,
+static_assert(SIZEOF_MM_ALLOCNODE <= MM_MIN_CHUNK,
               "Error size for struct mm_allocnode_s\n");
 
 static_assert(MM_ALIGN >= sizeof(uintptr_t) &&
               (MM_ALIGN & MM_GRAN_MASK) == 0,
-              "Error memory alignment\n");
+              "Error memory aligment\n");
 
 struct mm_delaynode_s
 {
@@ -229,14 +217,6 @@ struct mm_heap_s
   /* This is the size of the heap provided to mm */
 
   size_t mm_heapsize;
-
-  /* This is the heap maximum used memory size */
-
-  size_t mm_maxused;
-
-  /* This is the current used size of the heap */
-
-  size_t mm_curused;
 
   /* This is the first and last nodes of the heap */
 
@@ -259,10 +239,6 @@ struct mm_heap_s
    */
 
   FAR struct mm_delaynode_s *mm_delaylist[CONFIG_SMP_NCPUS];
-
-#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
-  size_t mm_delaycount[CONFIG_SMP_NCPUS];
-#endif
 
   /* The is a multiple mempool of the heap */
 
@@ -307,9 +283,5 @@ int mm_size2ndx(size_t size);
 
 void mm_foreach(FAR struct mm_heap_s *heap, mm_node_handler_t handler,
                 FAR void *arg);
-
-/* Functions contained in mm_free.c *****************************************/
-
-void mm_delayfree(FAR struct mm_heap_s *heap, FAR void *mem, bool delay);
 
 #endif /* __MM_MM_HEAP_MM_H */

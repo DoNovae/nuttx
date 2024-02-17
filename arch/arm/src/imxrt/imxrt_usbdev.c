@@ -46,9 +46,7 @@
 #include "arm_internal.h"
 #include "hardware/imxrt_usbotg.h"
 #include "hardware/imxrt_usbphy.h"
-#ifdef CONFIG_ARCH_FAMILY_IMXRT106x
-#  include "hardware/rt106x/imxrt106x_ccm.h"
-#endif
+#include "hardware/rt106x/imxrt106x_ccm.h"
 #include "imxrt_periphclks.h"
 
 /****************************************************************************
@@ -410,8 +408,8 @@ struct imxrt_usbdev_s
 static uint32_t imxrt_getreg(uint32_t addr);
 static void imxrt_putreg(uint32_t val, uint32_t addr);
 #else
-#  define imxrt_getreg(addr)     getreg32(addr)
-#  define imxrt_putreg(val,addr) putreg32(val,addr)
+# define imxrt_getreg(addr)     getreg32(addr)
+# define imxrt_putreg(val,addr) putreg32(val,addr)
 #endif
 
 static inline void imxrt_clrbits(uint32_t mask, uint32_t addr);
@@ -2283,7 +2281,7 @@ static struct usbdev_req_s *imxrt_epallocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, ((struct imxrt_ep_s *)ep)->epphy);
 
-  privreq = kmm_malloc(sizeof(struct imxrt_req_s));
+  privreq = (struct imxrt_req_s *)kmm_malloc(sizeof(struct imxrt_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(IMXRT_TRACEERR_ALLOCFAIL), 0);
@@ -2882,32 +2880,6 @@ void arm_usbinitialize(void)
   /* Clock run */
 
   imxrt_clockall_usboh3();
-
-#ifdef CONFIG_ARCH_FAMILY_IMXRT117x
-  up_mdelay(1);
-
-  putreg32(USBPHY1_PLL_SIC_PLL_POWER |
-           USBPHY1_PLL_SIC_PLL_REG_ENABLE,
-           IMXRT_USBPHY1_PLL_SIC_SET);
-
-  putreg32(USBPHY1_PLL_SIC_PLL_DIV_SEL_MASK,
-           IMXRT_USBPHY1_PLL_SIC_CLR);
-
-  putreg32(USBPHY1_PLL_SIC_PLL_DIV_SEL(3),
-           IMXRT_USBPHY1_PLL_SIC_SET);
-
-  putreg32(USBPHY1_PLL_SIC_PLL_BYPASS,
-           IMXRT_USBPHY1_PLL_SIC_CLR);
-
-  putreg32(USBPHY1_PLL_SIC_PLL_EN_USB_CLKS,
-           IMXRT_USBPHY1_PLL_SIC_SET);
-
-  putreg32(USBPHY_CTRL_CLKGATE,
-           IMXRT_USBPHY1_CTRL_CLR);
-
-  while ((getreg32(IMXRT_USBPHY1_PLL_SIC) & USBPHY1_PLL_SIC_PLL_LOCK) == 0);
-
-#endif
 
   /* Disable USB interrupts */
 

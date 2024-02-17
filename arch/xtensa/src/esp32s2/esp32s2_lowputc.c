@@ -90,14 +90,6 @@ struct esp32s2_uart_s g_uart0_config =
   .oflow          = false,   /* output flow control (CTS) disabled */
 #endif
 #endif
-#ifdef CONFIG_ESP32S2_UART0_RS485
-  .rs485_dir_gpio = CONFIG_ESP32S2_UART0_RS485_DIR_PIN,
-#if (CONFIG_ESP32S2_UART0_RS485_DIR_POLARITY == 0)
-  .rs485_dir_polarity = false,
-#else
-  .rs485_dir_polarity = true,
-#endif
-#endif
 };
 
 #endif /* CONFIG_ESP32S2_UART0 */
@@ -135,14 +127,6 @@ struct esp32s2_uart_s g_uart1_config =
   .oflow          = true,    /* output flow control (CTS) enabled */
 #else
   .oflow          = false,   /* output flow control (CTS) disabled */
-#endif
-#endif
-#ifdef CONFIG_ESP32S2_UART1_RS485
-  .rs485_dir_gpio = CONFIG_ESP32S2_UART1_RS485_DIR_PIN,
-#if (CONFIG_ESP32S2_UART1_RS485_DIR_POLARITY == 0)
-  .rs485_dir_polarity = false,
-#else
-  .rs485_dir_polarity = true,
 #endif
 #endif
 };
@@ -518,25 +502,6 @@ void esp32s2_lowputc_stop_length(const struct esp32s2_uart_s *priv)
 }
 
 /****************************************************************************
- * Name: esp32s2_lowputc_set_tx_idle_time
- *
- * Description:
- *   Set the idle time between transfers.
- *
- * Parameters:
- *   priv           - Pointer to the private driver struct.
- *   time           - Desired time interval between the transfers.
- *
- ****************************************************************************/
-
-void esp32s2_lowputc_set_tx_idle_time(const struct esp32s2_uart_s *priv,
-                                      uint32_t time)
-{
-  modifyreg32(UART_IDLE_CONF_REG(priv->id), UART_TX_IDLE_NUM_M,
-              VALUE_TO_FIELD(time, UART_TX_IDLE_NUM));
-}
-
-/****************************************************************************
  * Name: esp32s2_lowputc_send_byte
  *
  * Description:
@@ -570,9 +535,18 @@ void esp32s2_lowputc_send_byte(const struct esp32s2_uart_s * priv,
 
 bool esp32s2_lowputc_is_tx_fifo_full(const struct esp32s2_uart_s *priv)
 {
+  uint32_t reg;
   uint32_t val;
-  val = REG_MASK(getreg32(UART_STATUS_REG(priv->id)), UART_TXFIFO_CNT);
-  return val >= (UART_TX_FIFO_SIZE - 1);
+  reg = getreg32(UART_STATUS_REG(priv->id));
+  val = REG_MASK(reg, UART_TXFIFO_CNT);
+  if (val < (UART_TX_FIFO_SIZE -1))
+    {
+      return false;
+    }
+  else
+    {
+      return true;
+    }
 }
 
 /****************************************************************************
@@ -709,12 +683,6 @@ void esp32s2_lowputc_config_pins(const struct esp32s2_uart_s *priv)
 {
   /* Configure the pins */
 
-  /* Keep TX pin in high level to avoid "?" trash character
-   * This "?" is the Unicode replacement character (U+FFFD)
-   */
-
-  esp32s2_gpiowrite(priv->txpin, true);
-
   /* Route UART TX signal to the selected TX pin */
 
   esp32s2_gpio_matrix_out(priv->txpin, priv->txsig, 0, 0);
@@ -751,15 +719,6 @@ void esp32s2_lowputc_config_pins(const struct esp32s2_uart_s *priv)
       esp32s2_gpio_matrix_in(priv->ctspin, priv->ctssig, 0);
     }
 #endif
-
-#ifdef HAVE_RS485
-  if (priv->rs485_dir_gpio != 0)
-    {
-      esp32s2_configgpio(priv->rs485_dir_gpio, OUTPUT);
-      esp32s2_gpio_matrix_out(priv->rs485_dir_gpio, SIG_GPIO_OUT_IDX, 0, 0);
-      esp32s2_gpiowrite(priv->rs485_dir_gpio, !priv->rs485_dir_polarity);
-    }
-#endif
 }
 
 /****************************************************************************
@@ -777,11 +736,11 @@ void xtensa_lowputc(char ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
 
-#  if defined(CONFIG_UART0_SERIAL_CONSOLE)
+#if defined(CONFIG_UART0_SERIAL_CONSOLE)
   struct esp32s2_uart_s *priv = &g_uart0_config;
-#  elif defined (CONFIG_UART1_SERIAL_CONSOLE)
+#elif defined (CONFIG_UART1_SERIAL_CONSOLE)
   struct esp32s2_uart_s *priv = &g_uart1_config;
-#  endif
+# endif
 
   /* Wait until the TX FIFO has space to insert new char */
 

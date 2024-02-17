@@ -118,7 +118,7 @@ struct up_dev_s
   bool            oflow;         /* output flow control (CTS) enabled */
 #  endif
 
-  uint16_t        oversamp;      /* USART oversample mode */
+  uint16_t        oversamp       /* USART oversample mode */
   uintptr_t       usartbase;     /* Base address of UART registers */
   uint32_t        baud;          /* Configured baud */
   uint32_t        clock;         /* Frequency of the UART */
@@ -356,65 +356,65 @@ static const struct uart_ops_s g_uart_ops_no_dma =
 #ifdef CONFIG_GD32F4_USART0_SERIALDRIVER
 static char g_usart0rxbuffer[CONFIG_USART0_RXBUFSIZE];
 static char g_usart0txbuffer[CONFIG_USART0_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_USART0_RXDMA
+# ifdef CONFIG_GD32F4_USART0_RXDMA
 static char g_usart0rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 #ifdef CONFIG_GD32F4_USART1_SERIALDRIVER
 static char g_usart1rxbuffer[CONFIG_USART1_RXBUFSIZE];
 static char g_usart1txbuffer[CONFIG_USART1_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_USART1_RXDMA
+# ifdef CONFIG_GD32F4_USART1_RXDMA
 static char g_usart1rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 #ifdef CONFIG_GD32F4_USART2_SERIALDRIVER
 static char g_usart2rxbuffer[CONFIG_USART2_RXBUFSIZE];
 static char g_usart2txbuffer[CONFIG_USART2_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_USART2_RXDMA
+# ifdef CONFIG_GD32F4_USART2_RXDMA
 static char g_usart2rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 #ifdef CONFIG_GD32F4_UART3_SERIALDRIVER
 static char g_uart3rxbuffer[CONFIG_UART3_RXBUFSIZE];
 static char g_uart3txbuffer[CONFIG_UART3_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_UART3_RXDMA
+# ifdef CONFIG_GD32F4_UART3_RXDMA
 static char g_uart3rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 #ifdef CONFIG_GD32F4_UART4_SERIALDRIVER
 static char g_uart4rxbuffer[CONFIG_UART4_RXBUFSIZE];
 static char g_uart4txbuffer[CONFIG_UART4_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_UART4_RXDMA
+# ifdef CONFIG_GD32F4_UART4_RXDMA
 static char g_uart4rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 #ifdef CONFIG_GD32F4_USART5_SERIALDRIVER
 static char g_usart5rxbuffer[CONFIG_USART5_RXBUFSIZE];
 static char g_usart5txbuffer[CONFIG_USART5_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_USART5_RXDMA
+# ifdef CONFIG_GD32F4_USART5_RXDMA
 static char g_usart5rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 #ifdef CONFIG_GD32F4_UART6_SERIALDRIVER
 static char g_uart6rxbuffer[CONFIG_UART6_RXBUFSIZE];
 static char g_uart6txbuffer[CONFIG_UART6_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_UART6_RXDMA
+# ifdef CONFIG_GD32F4_UART6_RXDMA
 static char g_uart6rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 #ifdef CONFIG_GD32F4_UART7_SERIALDRIVER
 static char g_uart7rxbuffer[CONFIG_UART7_RXBUFSIZE];
 static char g_uart7txbuffer[CONFIG_UART7_TXBUFSIZE];
-#  ifdef CONFIG_GD32F4_UART7_RXDMA
+# ifdef CONFIG_GD32F4_UART7_RXDMA
 static char g_uart7rxfifo[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 #endif
 
 /* This describes the state of the GD32 USART0 ports. */
@@ -1214,6 +1214,14 @@ static void gd32_usart_configure(struct uart_dev_s *dev)
   uint32_t fradiv;
   uint32_t regval;
 
+  /* Reset USART */
+
+  gd32_usart_reset(priv->usartbase);
+
+  /* Enable USART clock */
+
+  gd32_usart_clock_enable(priv->usartbase);
+
   /* Configure the USART oversample mode. */
 
   regval = up_serialin(priv, GD32_USART_CTL0_OFFSET);
@@ -1326,10 +1334,6 @@ static int up_setup(struct uart_dev_s *dev)
 
 #ifndef CONFIG_SUPPRESS_UART_CONFIG
   uint32_t regval;
-
-  /* Enable USART clock */
-
-  gd32_usart_clock_enable(priv->usartbase);
 
   /* Configure pins for USART use */
 
@@ -2101,8 +2105,6 @@ static void up_rxint(struct uart_dev_s *dev, bool enable)
     {
       ie &= ~(USART_CFG_CTL0_INT_RBNEIE | USART_CFG_CTL0_INT_PERRIE |
               USART_CFG_CTL2_INT_ERRIE);
-      ie |= ((USART_CFG_CTL0_INT << USART_CFG_SHIFT) |
-             (USART_CFG_CTL2_INT << USART_CFG_SHIFT));
     }
 
   /* Then set the new interrupt state */

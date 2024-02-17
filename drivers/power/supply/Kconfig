@@ -67,13 +67,13 @@ config REGULATOR_GPIO
 		control to regulator.
 
 config REGULATOR_RPMSG
-	bool "Regulator RPMSG driver support"
+	bool "Regulator rpmsg driver support"
 	depends on RPTUN
 	default n
 	---help---
-		The RPMSG regulator driver implements the common regulator APIs, inside which
+		The rpmsg regulator driver implements the common regulator APIs, inside which
 		the regulator operations are sent from the client to the remote device via
-		the RPMSG channel. The remote device(namely server) is responsible for
+		the rpmsg channel. The remote device(namely server) is responsible for
 		the parse and the completion.
 
 menuconfig REGULATOR_ACT8945A
@@ -94,7 +94,7 @@ menu "ACT8945A Regulator System Functions"
 choice
 	prompt "ACT8945A SYSLEV threshold"
 	default ACT8945A_SYSLEV_3000
-	---help---
+		---help---
 		The SYSLEV voltage below which the configured SYSLEV mode will be triggered.
 
 config ACT8945A_SYSLEV_2300

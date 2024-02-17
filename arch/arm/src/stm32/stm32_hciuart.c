@@ -189,7 +189,7 @@
                  DMA_CCR_PSIZE_8BITS   | \
                  DMA_CCR_MSIZE_8BITS   | \
                  CONFIG_STM32_HCIUART_RXDMAPRIO)
-#  endif
+# endif
 #endif
 
 /* All interrupts */
@@ -240,7 +240,7 @@ struct hciuart_state_s
   volatile uint16_t txtail;
   volatile bool rxwaiting;           /* A thread is waiting for more Rx data */
   volatile bool txwaiting;           /* A thread is waiting for space in the Tx buffer */
-#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifndef CONFIG_STM32_HCIUART_SW_RXFLOW
   bool rxflow;                       /* True: software flow control is enable */
 #endif
 
@@ -266,7 +266,7 @@ struct hciuart_config_s
 #endif
   uint16_t rxbufsize;                /* Size of the Rx buffer */
   uint16_t txbufsize;                /* Size of the tx buffer */
-#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifndef CONFIG_STM32_HCIUART_SW_RXFLOW
   uint16_t rxupper;                  /* Upper watermark to enable Rx flow control */
   uint16_t rxlower;                  /* Lower watermark to disable Rx flow control */
 #endif
@@ -352,9 +352,9 @@ static int  hciuart_pm_prepare(struct pm_callback_s *cb, int domain,
 
 static uint8_t g_usart1_rxbuffer[CONFIG_STM32_HCIUART1_RXBUFSIZE];
 static uint8_t g_usart1_txbuffer[CONFIG_STM32_HCIUART1_TXBUFSIZE];
-#  ifdef CONFIG_STM32_HCIUART1_RXDMA
+# ifdef CONFIG_STM32_HCIUART1_RXDMA
 static uint8_t g_usart1_rxdmabuffer[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 
 /* HCI USART1 variable state information */
 
@@ -369,38 +369,38 @@ static struct hciuart_state_s g_hciusart1_state =
 static const struct hciuart_config_s g_hciusart1_config =
 {
   .lower         =
-    {
+  {
     .rxattach    = hciuart_rxattach,
     .rxenable    = hciuart_rxenable,
     .setbaud     = hciuart_setbaud,
     .read        = hciuart_read,
     .write       = hciuart_write,
     .rxdrain     = hciuart_rxdrain,
-    },
+  },
   .state         = &g_hciusart1_state,
 
   .rxbuffer      = g_usart1_rxbuffer,
   .txbuffer      = g_usart1_txbuffer,
-#  ifdef CONFIG_STM32_HCIUART1_RXDMA
+#ifdef CONFIG_STM32_HCIUART1_RXDMA
   .rxdmabuffer   = g_usart1_rxdmabuffer,
-#  endif
+#endif
   .rxbufsize     = CONFIG_STM32_HCIUART1_RXBUFSIZE,
   .txbufsize     = CONFIG_STM32_HCIUART1_TXBUFSIZE,
-#  ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
   .rxupper       = RXFLOW_UPPER(CONFIG_STM32_HCIUART1_RXBUFSIZE),
   .rxlower       = RXFLOW_LOWER(CONFIG_STM32_HCIUART1_RXBUFSIZE),
-#  endif
-#  ifdef CONFIG_STM32_HCIUART_RXDMA
+#endif
+#ifdef CONFIG_STM32_HCIUART_RXDMA
   .rxdmachan     = DMAMAP_USART1_RX,
-#  endif
+#endif
 
   .irq           = STM32_IRQ_USART1,
   .baud          = CONFIG_STM32_HCIUART1_BAUD,
-#  if defined(CONFIG_STM32_STM32F33XX)
+#if defined(CONFIG_STM32_STM32F33XX)
   .apbclock      = STM32_PCLK1_FREQUENCY, /* Errata 2.5.1 */
-#  else
+#else
   .apbclock      = STM32_PCLK2_FREQUENCY,
-#  endif
+#endif
   .usartbase     = STM32_USART1_BASE,
   .tx_gpio       = GPIO_USART1_TX,
   .rx_gpio       = GPIO_USART1_RX,
@@ -416,9 +416,9 @@ static const struct hciuart_config_s g_hciusart1_config =
 
 static uint8_t g_usart2_rxbuffer[CONFIG_STM32_HCIUART2_RXBUFSIZE];
 static uint8_t g_usart2_txbuffer[CONFIG_STM32_HCIUART2_TXBUFSIZE];
-#  ifdef CONFIG_STM32_HCIUART2_RXDMA
+# ifdef CONFIG_STM32_HCIUART2_RXDMA
 static uint8_t g_usart2_rxdmabuffer[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
 
 /* HCI USART2 variable state information */
 
@@ -433,30 +433,30 @@ static struct hciuart_state_s g_hciusart2_state =
 static const struct hciuart_config_s g_hciusart2_config =
 {
   .lower         =
-    {
+  {
     .rxattach    = hciuart_rxattach,
     .rxenable    = hciuart_rxenable,
     .setbaud     = hciuart_setbaud,
     .read        = hciuart_read,
     .write       = hciuart_write,
     .rxdrain     = hciuart_rxdrain,
-    },
+  },
   .state         = &g_hciusart2_state,
 
   .rxbuffer      = g_usart2_rxbuffer,
   .txbuffer      = g_usart2_txbuffer,
-#  ifdef CONFIG_STM32_HCIUART2_RXDMA
+#ifdef CONFIG_STM32_HCIUART2_RXDMA
   .rxdmabuffer   = g_usart2_rxdmabuffer,
-#  endif
+#endif
   .rxbufsize     = CONFIG_STM32_HCIUART2_RXBUFSIZE,
   .txbufsize     = CONFIG_STM32_HCIUART2_TXBUFSIZE,
-#  ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
   .rxupper       = RXFLOW_UPPER(CONFIG_STM32_HCIUART2_RXBUFSIZE),
   .rxlower       = RXFLOW_LOWER(CONFIG_STM32_HCIUART2_RXBUFSIZE),
-#  endif
-#  ifdef CONFIG_STM32_HCIUART_RXDMA
+#endif
+#ifdef CONFIG_STM32_HCIUART_RXDMA
   .rxdmachan     = DMAMAP_USART2_RX,
-#  endif
+#endif
 
   .irq           = STM32_IRQ_USART2,
   .baud          = CONFIG_STM32_HCIUART2_BAUD,
@@ -476,9 +476,9 @@ static const struct hciuart_config_s g_hciusart2_config =
 
 static uint8_t g_usart3_rxbuffer[CONFIG_STM32_HCIUART3_RXBUFSIZE];
 static uint8_t g_usart3_txbuffer[CONFIG_STM32_HCIUART3_TXBUFSIZE];
-#  ifdef CONFIG_STM32_HCIUART3_RXDMA
+#ifdef CONFIG_STM32_HCIUART3_RXDMA
 static uint8_t g_usart3_rxdmabuffer[RXDMA_BUFFER_SIZE];
-#  endif
+#endif
 
 /* HCI USART3 variable state information */
 
@@ -493,30 +493,30 @@ static struct hciuart_state_s g_hciusart3_state =
 static const struct hciuart_config_s g_hciusart3_config =
 {
   .lower         =
-    {
+  {
     .rxattach    = hciuart_rxattach,
     .rxenable    = hciuart_rxenable,
     .setbaud     = hciuart_setbaud,
     .read        = hciuart_read,
     .write       = hciuart_write,
     .rxdrain     = hciuart_rxdrain,
-    },
+  },
   .state         = &g_hciusart3_state,
 
   .rxbuffer      = g_usart3_rxbuffer,
   .txbuffer      = g_usart3_txbuffer,
-#  ifdef CONFIG_STM32_HCIUART3_RXDMA
+#ifdef CONFIG_STM32_HCIUART3_RXDMA
   .rxdmabuffer   = g_usart3_rxdmabuffer,
-#  endif
+#endif
   .rxbufsize     = CONFIG_STM32_HCIUART3_RXBUFSIZE,
   .txbufsize     = CONFIG_STM32_HCIUART3_TXBUFSIZE,
-#  ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
   .rxupper       = RXFLOW_UPPER(CONFIG_STM32_HCIUART3_RXBUFSIZE),
   .rxlower       = RXFLOW_LOWER(CONFIG_STM32_HCIUART3_RXBUFSIZE),
-#  endif
-#  ifdef CONFIG_STM32_HCIUART_RXDMA
+#endif
+#ifdef CONFIG_STM32_HCIUART_RXDMA
   .rxdmachan     = DMAMAP_USART3_RX,
-#  endif
+#endif
 
   .irq           = STM32_IRQ_USART3,
   .baud          = CONFIG_STM32_HCIUART3_BAUD,
@@ -534,11 +534,13 @@ static const struct hciuart_config_s g_hciusart3_config =
 #ifdef CONFIG_STM32_USART6_HCIUART
 /* I/O buffers */
 
+#ifdef CONFIG_STM32_USART6_HCIUART
 static uint8_t g_usart6_rxbuffer[CONFIG_STM32_HCIUART6_RXBUFSIZE];
 static uint8_t g_usart6_txbuffer[CONFIG_STM32_HCIUART6_TXBUFSIZE];
-#  ifdef CONFIG_STM32_HCIUART6_RXDMA
+# ifdef CONFIG_STM32_HCIUART6_RXDMA
 static uint8_t g_usart6_rxdmabuffer[RXDMA_BUFFER_SIZE];
-#  endif
+# endif
+#endif
 
 /* HCI USART6 variable state information */
 
@@ -553,30 +555,30 @@ static struct hciuart_state_s g_hciusart6_state =
 static const struct hciuart_config_s g_hciusart6_config =
 {
   .lower         =
-    {
+  {
     .rxattach    = hciuart_rxattach,
     .rxenable    = hciuart_rxenable,
     .setbaud     = hciuart_setbaud,
     .read        = hciuart_read,
     .write       = hciuart_write,
     .rxdrain     = hciuart_rxdrain,
-    },
+  },
   .state         = &g_hciusart6_state,
 
   .rxbuffer      = g_usart6_rxbuffer,
   .txbuffer      = g_usart6_txbuffer,
-#  ifdef CONFIG_STM32_HCIUART6_RXDMA
+#ifdef CONFIG_STM32_HCIUART6_RXDMA
   .rxdmabuffer   = g_usart6_rxdmabuffer,
-#  endif
+#endif
   .rxbufsize     = CONFIG_STM32_HCIUART6_RXBUFSIZE,
   .txbufsize     = CONFIG_STM32_HCIUART6_TXBUFSIZE,
-#  ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
   .rxupper       = RXFLOW_UPPER(CONFIG_STM32_HCIUART6_RXBUFSIZE),
   .rxlower       = RXFLOW_LOWER(CONFIG_STM32_HCIUART6_RXBUFSIZE),
-#  endif
-#  ifdef CONFIG_STM32_HCIUART_RXDMA
+#endif
+#ifdef CONFIG_STM32_HCIUART_RXDMA
   .rxdmachan     = DMAMAP_USART6_RX,
-#  endif
+#endif
 
   .irq           = STM32_IRQ_USART6,
   .baud          = CONFIG_STM32_HCIUART6_BAUD,
@@ -596,9 +598,9 @@ static const struct hciuart_config_s g_hciusart6_config =
 
 static uint8_t g_uart7_rxbuffer[CONFIG_STM32_HCIUART7_RXBUFSIZE];
 static uint8_t g_uart7_txbuffer[CONFIG_STM32_HCIUART7_TXBUFSIZE];
-#  ifdef CONFIG_STM32_HCIUART7_RXDMA
+#ifdef CONFIG_STM32_HCIUART7_RXDMA
 static uint8_t g_uart7_rxdmabuffer[RXDMA_BUFFER_SIZE];
-#  endif
+#endif
 
 /* HCI UART7 variable state information */
 
@@ -613,30 +615,30 @@ static struct hciuart_state_s g_hciuart7_state =
 static const struct hciuart_config_s g_hciuart7_config =
 {
   .lower         =
-    {
+  {
     .rxattach    = hciuart_rxattach,
     .rxenable    = hciuart_rxenable,
     .setbaud     = hciuart_setbaud,
     .read        = hciuart_read,
     .write       = hciuart_write,
     .rxdrain     = hciuart_rxdrain,
-    },
+  },
   .state         = &g_hciuart7_state,
 
   .rxbuffer      = g_uart7_rxbuffer,
   .txbuffer      = g_uart7_txbuffer,
-#  ifdef CONFIG_STM32_HCIUART7_RXDMA
+#ifdef CONFIG_STM32_HCIUART7_RXDMA
   .rxdmabuffer   = g_uart7_rxdmabuffer,
-#  endif
+#endif
   .rxbufsize     = CONFIG_STM32_HCIUART7_RXBUFSIZE,
   .txbufsize     = CONFIG_STM32_HCIUART7_TXBUFSIZE,
-#  ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
   .rxupper       = RXFLOW_UPPER(CONFIG_STM32_HCIUART7_RXBUFSIZE),
   .rxlower       = RXFLOW_LOWER(CONFIG_STM32_HCIUART7_RXBUFSIZE),
-#  endif
-#  ifdef CONFIG_STM32_HCIUART_RXDMA
+#endif
+#ifdef CONFIG_STM32_HCIUART_RXDMA
   .rxdmachan     = DMAMAP_UART7_RX,
-#  endif
+#endif
 
   .irq           = STM32_IRQ_UART7,
   .baud          = CONFIG_STM32_HCIUART7_BAUD,
@@ -656,9 +658,9 @@ static const struct hciuart_config_s g_hciuart7_config =
 
 static uint8_t g_uart8_rxbuffer[CONFIG_STM32_HCIUART8_RXBUFSIZE];
 static uint8_t g_uart8_txbuffer[CONFIG_STM32_HCIUART8_TXBUFSIZE];
-#  ifdef CONFIG_STM32_HCIUART8_RXDMA
+#ifdef CONFIG_STM32_HCIUART8_RXDMA
 static uint8_t g_uart8_rxdmabuffer[RXDMA_BUFFER_SIZE];
-#  endif
+#endif
 
 /* HCI UART8 variable state information */
 
@@ -673,30 +675,30 @@ static struct hciuart_state_s g_hciuart8_state =
 static const struct hciuart_config_s g_hciuart8_config =
 {
   .lower         =
-    {
+  {
     .rxattach    = hciuart_rxattach,
     .rxenable    = hciuart_rxenable,
     .setbaud     = hciuart_setbaud,
     .read        = hciuart_read,
     .write       = hciuart_write,
     .rxdrain     = hciuart_rxdrain,
-    },
+  },
   .state         = &g_hciuart8_state,
 
   .rxbuffer      = g_uart8_rxbuffer,
   .txbuffer      = g_uart8_txbuffer,
-#  ifdef CONFIG_STM32_HCIUART8_RXDMA
+#ifdef CONFIG_STM32_HCIUART8_RXDMA
   .rxdmabuffer   = g_uart8_rxdmabuffer,
-#  endif
+#endif
   .rxbufsize     = CONFIG_STM32_HCIUART8_RXBUFSIZE,
   .txbufsize     = CONFIG_STM32_HCIUART8_TXBUFSIZE,
-#  ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
+#ifdef CONFIG_STM32_HCIUART_SW_RXFLOW
   .rxupper       = RXFLOW_UPPER(CONFIG_STM32_HCIUART8_RXBUFSIZE),
   .rxlower       = RXFLOW_LOWER(CONFIG_STM32_HCIUART8_RXBUFSIZE),
-#  endif
-#  ifdef CONFIG_STM32_HCIUART_RXDMA
+#endif
+#ifdef CONFIG_STM32_HCIUART_RXDMA
   .rxdmachan     = DMAMAP_UART8_RX,
-#  endif
+#endif
 
   .irq           = STM32_IRQ_UART8,
   .baud          = CONFIG_STM32_HCIUART8_BAUD,
@@ -985,9 +987,9 @@ static void hciuart_rxflow_enable(const struct hciuart_config_s *config)
 
   if (!state->rxflow)
     {
-      uint16_t inused = hciuart_rxinuse(config);
+      uin16_t inused = hciuart_rxinuse(config);
 
-      if (inused >= config->rxupper)
+      if (inuse >= config->rxupper)
         {
           wlinfo("Enable RTS flow control\n");
 
@@ -1022,7 +1024,7 @@ static void hciuart_rxflow_disable(const struct hciuart_config_s *config)
     {
       uint16_t inused = hciuart_rxinuse(config);
 
-      if (inused <= config->rxlower)
+      if (inuse <= config->rxlower)
         {
           wlinfo("Disable RTS flow control\n");
 
@@ -1613,7 +1615,7 @@ static int hciuart_configure(const struct hciuart_config_s *config)
    */
 
   regval = GPIO_MODE_MASK | GPIO_PUPD_MASK | GPIO_OPENDRAIN | GPIO_EXTI;
-  pinset = (config->rts_gpio & ~regval) | GPIO_OUTPUT | GPIO_OUTPUT_SET;
+  pinset = (config & ~regval) | GPIO_OUTPUT | GPIO_OUTPUT_SET;
 #endif
   stm32_configgpio(pinset);
 

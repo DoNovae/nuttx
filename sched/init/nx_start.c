@@ -36,12 +36,10 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/net/net.h>
 #include <nuttx/mm/iob.h>
-#include <nuttx/mm/kmap.h>
 #include <nuttx/mm/mm.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/pgalloc.h>
 #include <nuttx/sched_note.h>
-#include <nuttx/trace.h>
 #include <nuttx/binfmt/binfmt.h>
 #include <nuttx/drivers/drivers.h>
 #include <nuttx/init.h>
@@ -56,7 +54,6 @@
 #include "irq/irq.h"
 #include "group/group.h"
 #include "init/init.h"
-#include "instrument/instrument.h"
 #include "tls/tls.h"
 
 /****************************************************************************
@@ -156,7 +153,7 @@ dq_queue_t g_waitingforfill;
 dq_queue_t g_stoppedtasks;
 #endif
 
-/* This list of all tasks that have been initialized, but not yet
+/* This the list of all tasks that have been initialized, but not yet
  * activated. NOTE:  This is the only list that is not prioritized.
  */
 
@@ -176,9 +173,9 @@ volatile pid_t g_lastpid;
 FAR struct tcb_s **g_pidhash;
 volatile int g_npidhash;
 
-/* This is a table of task lists.  This table is indexed by the task state
+/* This is a table of task lists.  This table is indexed by the task stat
  * enumeration type (tstate_t) and provides a pointer to the associated
- * static task list (if there is one) as well as a set of attribute flags
+ * static task list (if there is one) as well as a a set of attribute flags
  * indicating properties of the list, for example, if the list is an
  * ordered list or not.
  */
@@ -279,16 +276,16 @@ static struct task_tcb_s g_idletcb[CONFIG_SMP_NCPUS];
 /* This is the name of the idle task */
 
 #if CONFIG_TASK_NAME_SIZE <= 0 || !defined(CONFIG_SMP)
-#  ifdef CONFIG_SMP
-static const char g_idlename[] = "CPU_Idle";
-#  else
-static const char g_idlename[] = "Idle_Task";
-#  endif
+#ifdef CONFIG_SMP
+static const char g_idlename[] = "CPU Idle";
+#else
+static const char g_idlename[] = "Idle Task";
+#endif
 #endif
 
-/* This is IDLE threads argument list.  NOTE: Normally the argument
+/* This the IDLE idle threads argument list.  NOTE: Normally the argument
  * list is created on the stack prior to starting the task.  We have to
- * do things little differently here for the IDLE tasks.
+ * do things s little differently here for the IDLE tasks.
  */
 
 static FAR char *g_idleargv[CONFIG_SMP_NCPUS][2];
@@ -303,7 +300,7 @@ static FAR char *g_idleargv[CONFIG_SMP_NCPUS][2];
  * Description:
  *   This function is called to initialize the operating system and to spawn
  *   the user initialization thread of execution.  This is the initial entry
- *   point into NuttX.
+ *   point into NuttX
  *
  * Input Parameters:
  *   None
@@ -324,8 +321,6 @@ void nx_start(void)
   g_nx_initstate = OSINIT_BOOT;
 
   /* Initialize RTOS Data ***************************************************/
-
-  sched_trace_begin();
 
   /* Initialize the IDLE task TCB *******************************************/
 
@@ -368,7 +363,9 @@ void nx_start(void)
        */
 
 #ifdef CONFIG_SMP
-      g_idletcb[i].cmn.flags = (TCB_FLAG_TTYPE_KERNEL | TCB_FLAG_CPU_LOCKED);
+      g_idletcb[i].cmn.flags = (TCB_FLAG_TTYPE_KERNEL |
+                                TCB_FLAG_NONCANCELABLE |
+                                TCB_FLAG_CPU_LOCKED);
       g_idletcb[i].cmn.cpu   = i;
 
       /* Set the affinity mask to allow the thread to run on all CPUs.  No,
@@ -379,10 +376,10 @@ void nx_start(void)
        * the IDLE task.
        */
 
-      g_idletcb[i].cmn.affinity =
-        (cpu_set_t)(CONFIG_SMP_DEFAULT_CPUSET & SCHED_ALL_CPUS);
+      g_idletcb[i].cmn.affinity = SCHED_ALL_CPUS;
 #else
-      g_idletcb[i].cmn.flags = TCB_FLAG_TTYPE_KERNEL;
+      g_idletcb[i].cmn.flags = (TCB_FLAG_TTYPE_KERNEL |
+                                TCB_FLAG_NONCANCELABLE);
 #endif
 
 #if CONFIG_TASK_NAME_SIZE > 0
@@ -474,12 +471,6 @@ void nx_start(void)
     }
 #endif
 
-#ifdef CONFIG_MM_KMAP
-  /* Initialize the kernel dynamic mapping module */
-
-  kmm_map_initialize();
-#endif
-
 #ifdef CONFIG_ARCH_HAVE_EXTRA_HEAPS
   /* Initialize any extra heap. */
 
@@ -564,10 +555,6 @@ void nx_start(void)
    */
 
   sched_lock();
-
-  /* Initialize the instrument function */
-
-  instrument_initialize();
 
   /* Initialize the file system (needed to support device drivers) */
 
@@ -654,7 +641,7 @@ void nx_start(void)
         {
           /* Clone stdout, stderr, stdin from the CPU0 IDLE task. */
 
-          DEBUGVERIFY(group_setuptaskfiles(&g_idletcb[i], NULL, true));
+          DEBUGVERIFY(group_setuptaskfiles(&g_idletcb[i]));
         }
       else
         {
@@ -663,7 +650,7 @@ void nx_start(void)
            * IDLE task.
            */
 
-          DEBUGVERIFY(group_setupidlefiles());
+          DEBUGVERIFY(group_setupidlefiles(&g_idletcb[i]));
         }
     }
 
@@ -696,7 +683,6 @@ void nx_start(void)
 
   /* Let other threads have access to the memory manager */
 
-  sched_trace_end();
   sched_unlock();
 
   /* The IDLE Loop **********************************************************/
@@ -704,12 +690,10 @@ void nx_start(void)
   /* When control is return to this point, the system is idle. */
 
   sinfo("CPU0: Beginning Idle Loop\n");
-#ifndef CONFIG_DISABLE_IDLE_LOOP
   for (; ; )
     {
       /* Perform any processor-specific idle state operations */
 
       up_idle();
     }
-#endif
 }

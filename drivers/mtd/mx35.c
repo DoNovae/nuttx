@@ -64,11 +64,11 @@
 /* Debug ********************************************************************/
 
 #ifdef CONFIG_MX35_DEBUG
-#  define mx35err(format, ...)    _err(format, ##__VA_ARGS__)
-#  define mx35info(format, ...)   _info(format, ##__VA_ARGS__)
+# define mx35err(format, ...)    _err(format, ##__VA_ARGS__)
+# define mx35info(format, ...)   _info(format, ##__VA_ARGS__)
 #else
-#  define mx35err(x...)
-#  define mx35info(x...)
+# define mx35err(x...)
+# define mx35info(x...)
 #endif
 
 /* Identification register values *******************************************/
@@ -941,7 +941,7 @@ FAR struct mtd_dev_s *mx35_initialize(FAR struct spi_dev_s *dev)
    * have to be extended to handle multiple FLASH parts on the same SPI bus.
    */
 
-  priv = kmm_zalloc(sizeof(struct mx35_dev_s));
+  priv = (FAR struct mx35_dev_s *)kmm_zalloc(sizeof(struct mx35_dev_s));
   if (priv)
     {
       /* Initialize the allocated structure. (unsupported methods were

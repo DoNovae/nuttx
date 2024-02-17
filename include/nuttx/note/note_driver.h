@@ -92,12 +92,13 @@ struct note_driver_ops_s
 #ifdef CONFIG_SCHED_INSTRUMENTATION_DUMP
   CODE void (*string)(FAR struct note_driver_s *drv, uintptr_t ip,
                       FAR const char *buf);
-  CODE void (*event)(FAR struct note_driver_s *drv, uintptr_t ip,
-                     uint8_t event, FAR const void *buf, size_t len);
+  CODE void (*dump)(FAR struct note_driver_s *drv, uintptr_t ip,
+                    uint8_t event, FAR const void *buf, size_t len);
   CODE void (*vprintf)(FAR struct note_driver_s *drv, uintptr_t ip,
                        FAR const char *fmt, va_list va) printf_like(3, 0);
   CODE void (*vbprintf)(FAR struct note_driver_s *drv, uintptr_t ip,
-                        FAR const char *fmt, va_list va) printf_like(3, 0);
+                        uint8_t event, FAR const char *fmt,
+                        va_list va) printf_like(4, 0);
 #endif
 };
 
@@ -133,8 +134,7 @@ int note_initialize(void);
 
 #endif /* defined(__KERNEL__) || defined(CONFIG_BUILD_FLAT) */
 
-#if defined(CONFIG_DRIVERS_NOTE_TASKNAME_BUFSIZE) && \
-    CONFIG_DRIVERS_NOTE_TASKNAME_BUFSIZE > 0
+#if CONFIG_DRIVERS_NOTE_TASKNAME_BUFSIZE > 0
 
 /****************************************************************************
  * Name: note_get_taskname
@@ -144,17 +144,17 @@ int note_initialize(void);
  *
  * Input Parameters:
  *   PID - Task ID
+ *   name - Task name buffer
+ *          this buffer must be greater than CONFIG_TASK_NAME_SIZE + 1
  *
  * Returned Value:
- *   Retrun name if task name can be retrieved, otherwise NULL
+ *   Retrun OK if task name can be retrieved, otherwise -ESRCH
  *
  ****************************************************************************/
 
-FAR const char *note_get_taskname(pid_t pid);
+int note_get_taskname(pid_t pid, FAR char *name);
 
-#endif /* defined(CONFIG_DRIVERS_NOTE_TASKNAME_BUFSIZE) && \
-        * CONFIG_DRIVERS_NOTE_TASKNAME_BUFSIZE > 0
-        */
+#endif /* CONFIG_DRIVERS_NOTE_TASKNAME_BUFSIZE > 0 */
 
 /****************************************************************************
  * Name: note_driver_register

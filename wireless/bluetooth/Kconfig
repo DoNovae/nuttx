@@ -60,26 +60,6 @@ menuconfig WIRELESS_BLUETOOTH_HOST
 		BLE link-layer or to an external device over HCI UART).
 
 if WIRELESS_BLUETOOTH_HOST
-config DEVICE_APPEARANCE
-	int "Appearance sub-category value"
-	default 0
-	range 0 5188
-	---help---
-		This value comes from the "Appearance sub-category"
-		section (2.6.3) in the Bluetooth Assigned Numbers document.
-
-config DEVICE_NAME
-	string "Device name"
-	default "Apache NuttX"
-	---help---
-		The device name.
-
-config DEVICE_LOCAL_NAME
-	string "Device local name"
-	default "NuttX"
-	---help---
-		The device name used for advertising.
-
 endif # WIRELESS_BLUETOOTH_HOST
 
 config BLUETOOTH_MAX_CONN
@@ -192,25 +172,6 @@ config BLUETOOTH_TXCONN_PRIORITY
 config BLUETOOTH_TXCONN_NMSGS
 	int "Tx connection thread mqueue size"
 	default 16
-
-config BLUETOOTH_TXCMD_PINNED_TO_CORE
-	bool "Pin Tx command thread to specific core"
-	depends on SMP
-	default n
-	---help---
-		This option enables us to set the affinity of the Tx command thread
-		to make it run on a specific core.
-
-if BLUETOOTH_TXCMD_PINNED_TO_CORE
-
-config BLUETOOTH_TXCMD_CORE
-	int "Tx command thread CPU core"
-	default 1
-	range 1 SMP_NCPUS
-	---help---
-		Select the core to pin the Tx command thread.
-
-endif # BLUETOOTH_TXCMD_PINNED_TO_CORE
 
 endmenu # Kernel Thread Configuration
 

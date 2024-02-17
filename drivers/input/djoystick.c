@@ -127,7 +127,7 @@ static int     djoy_poll(FAR struct file *filep, FAR struct pollfd *fds,
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_djoy_fops =
+static const struct file_operations djoy_fops =
 {
   djoy_open,  /* open */
   djoy_close, /* close */
@@ -297,13 +297,14 @@ static int djoy_open(FAR struct file *filep)
   djoy_buttonset_t supported;
   irqstate_t flags;
 
+  DEBUGASSERT(filep && filep->f_inode);
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv = inode->i_private;
+  priv = (FAR struct djoy_upperhalf_s *)inode->i_private;
 
   /* Allocate a new open structure */
 
-  opriv = kmm_zalloc(sizeof(struct djoy_open_s));
+  opriv = (FAR struct djoy_open_s *)kmm_zalloc(sizeof(struct djoy_open_s));
   if (!opriv)
     {
       ierr("ERROR: Failed to allocate open structure\n");
@@ -351,11 +352,11 @@ static int djoy_close(FAR struct file *filep)
   FAR struct djoy_open_s *prev;
   irqstate_t flags;
 
-  DEBUGASSERT(filep->f_priv);
+  DEBUGASSERT(filep && filep->f_priv && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  priv  = (FAR struct djoy_upperhalf_s *)inode->i_private;
 
   flags = enter_critical_section();
 
@@ -414,10 +415,11 @@ static ssize_t djoy_read(FAR struct file *filep, FAR char *buffer,
   irqstate_t flags;
   int ret;
 
+  DEBUGASSERT(filep && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  priv  = (FAR struct djoy_upperhalf_s *)inode->i_private;
 
   /* Make sure that the buffer is sufficiently large to hold at least one
    * complete sample.
@@ -459,11 +461,11 @@ static int djoy_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   irqstate_t flags;
   int ret;
 
-  DEBUGASSERT(filep->f_priv);
+  DEBUGASSERT(filep && filep->f_priv && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  priv  = (FAR struct djoy_upperhalf_s *)inode->i_private;
 
   /* Get exclusive access to the driver structure */
 
@@ -584,7 +586,7 @@ static int djoy_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int ret = OK;
   int i;
 
-  DEBUGASSERT(filep->f_priv);
+  DEBUGASSERT(filep && filep->f_priv && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
@@ -624,8 +626,8 @@ static int djoy_poll(FAR struct file *filep, FAR struct pollfd *fds,
       if (i >= CONFIG_INPUT_DJOYSTICK_NPOLLWAITERS)
         {
           ierr("ERROR: Too man poll waiters\n");
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
     }
@@ -712,7 +714,7 @@ int djoy_register(FAR const char *devname,
 
   /* And register the djoystick driver */
 
-  ret = register_driver(devname, &g_djoy_fops, 0666, priv);
+  ret = register_driver(devname, &djoy_fops, 0666, priv);
   if (ret < 0)
     {
       ierr("ERROR: register_driver failed: %d\n", ret);

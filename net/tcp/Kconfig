@@ -14,7 +14,7 @@ config NET_TCP
 
 config NET_TCP_NO_STACK
 	bool "Disable TCP/IP Stack"
-	default NET_USRSOCK_TCP if NET_USRSOCK
+	default n
 	select NET_TCP
 	---help---
 		Build without TCP/IP stack even if TCP networking support enabled.
@@ -149,26 +149,6 @@ config NET_TCP_FAST_RETRANSMIT
 			missing segment, without waiting for a retransmission timer to
 			expire.
 
-config NET_TCP_CC_NEWRENO
-	bool "Enable the NewReno Congestion Control algorithm"
-	default n
-	select NET_TCP_FAST_RETRANSMIT
-	---help---
-		RFC5681:
-			The TCP Congestion Control defines four congestion control algorithms,
-			slow start, congestion avoidance, fast retransmit, and fast recovery.
-
-config NET_TCP_ISN_RFC6528
-	bool "Use Initial Sequence Number Algorithm from RFC 6528"
-	default n
-	depends on CRYPTO
-	---help---
-		Initial Sequence Number Generation Algorithm from RFC 6528:
-			ISN = M + F(localip, localport, remoteip, remoteport, secretkey)
-
-			M is the 4 microsecond timer, and F() is a pseudorandom
-			function (PRF) which is MD5 (suggested by RFC 6528).
-
 config NET_TCP_WINDOW_SCALE
 	bool "Enable TCP/IP Window Scale Option"
 	default n
@@ -276,6 +256,20 @@ config NET_TCP_WRBUFFER_DUMP
 		detail.
 
 endif # NET_TCP_WRITE_BUFFERS
+
+config NET_TCP_RECV_PACK
+	bool "Enable TCP/IP receive data in a continuous poll"
+	default y
+	---help---
+		This option will enable TCP/IP receive data into a continuous iob chain.
+		Fragmentation of network data will intensify iob consumption, if
+		the device receives a message storm of fragmented packets, the iob
+		cache will not be effectively used, this is not allowed on iot devices
+		since the resources of such devices are limited. Of course, this
+		also takes some disadvantages: data needs to be copied.
+		This option will brings some balance on resource-constrained devices,
+		enable this config to reduce the consumption of iob, the received iob
+		buffers will be merged into the contiguous iob chain.
 
 config NET_TCPBACKLOG
 	bool "TCP/IP backlog support"

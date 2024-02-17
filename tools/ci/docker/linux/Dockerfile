@@ -13,7 +13,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-FROM ubuntu:22.04 AS builder-base
+FROM ubuntu:20.04 AS builder-base
 # NOTE WE ARE NOT REMOVEING APT CACHE.
 # This should only be used for temp build images that artifacts will be copied from
 RUN apt-get update -qq && apt-get install -y -qq \
@@ -28,7 +28,6 @@ FROM builder-base AS nuttx-tools
 
 RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -qq \
   bison \
-  clang \
   cmake \
   flex \
   g++ \
@@ -36,11 +35,7 @@ RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -q
   git \
   gperf \
   libncurses5-dev \
-  make \
-  ninja-build \
-  nodejs \
-  npm \
-  unzip
+  make
 
 RUN mkdir /tools
 WORKDIR /tools
@@ -68,23 +63,6 @@ RUN mkdir -p $CARGO_HOME \
   && $CARGO_HOME/bin/rustup target add thumbv6m-none-eabi \
   && $CARGO_HOME/bin/rustup target add thumbv7m-none-eabi
 
-RUN mkdir /tools/gn -p \
-  && cd /tools/gn \
-  && git clone https://gn.googlesource.com/gn gn \
-  && cd gn && ./build/gen.py && cd out && ninja
-
-ENV ZAP_INSTALL_PATH=/tools/zap_release
-RUN mkdir $ZAP_INSTALL_PATH -p \
-  && cd $ZAP_INSTALL_PATH \
-  && curl -s -O -L https://github.com/project-chip/zap/releases/download/v2023.10.09-nightly/zap-linux-x64.zip \
-  && unzip zap-linux-x64.zip
-
-ENV ZAP_DEVELOPMENT_PATH=/tools/zap
-RUN cd /tools \
-  && curl -s -O -L https://github.com/project-chip/zap/archive/refs/tags/v2023.10.09-nightly.zip \
-  && unzip v2023.10.09-nightly.zip && mv zap-2023.10.09-nightly zap \
-  && cd zap && npm install cross-spawn folder-hash
-
 CMD [ "/bin/bash" ]
 
 ###############################################################################
@@ -101,13 +79,15 @@ WORKDIR /tools
 FROM nuttx-toolchain-base AS nuttx-toolchain-arm
 # Download the latest ARM clang toolchain prebuilt by ARM
 RUN mkdir clang-arm-none-eabi && \
-  curl -s -L  "https://github.com/ARM-software/LLVM-embedded-toolchain-for-Arm/releases/download/release-17.0.1/LLVMEmbeddedToolchainForArm-17.0.1-Linux-x86_64.tar.xz" \
-  | tar -C clang-arm-none-eabi --strip-components 1 -xJ
+  curl -s -L  "https://github.com/ARM-software/LLVM-embedded-toolchain-for-Arm/releases/download/release-14.0.0/LLVMEmbeddedToolchainForArm-14.0.0-linux.tar.gz" \
+  | tar -C clang-arm-none-eabi --strip-components 1 -xz
 
 # Download the latest ARM GCC toolchain prebuilt by ARM
 RUN mkdir gcc-arm-none-eabi && \
-  curl -s -L  "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.Rel1/binrel/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi.tar.xz" \
-  | tar -C gcc-arm-none-eabi --strip-components 1 -xJ
+  curl -s -L  "https://developer.arm.com/-/media/Files/downloads/gnu/11.3.rel1/binrel/arm-gnu-toolchain-11.3.rel1-x86_64-arm-none-eabi.tar.xz" \
+  | tar -C gcc-arm-none-eabi --strip-components 1 -xJ  \
+  && curl -s -L -O "https://raw.githubusercontent.com/apache/nuttx/master/tools/ci/patch/arm-none-eabi-workaround-for-newlib-version-break.patch" \
+  && patch -p0 < arm-none-eabi-workaround-for-newlib-version-break.patch
 
 ###############################################################################
 # Build image for tool required by ARM64 builds
@@ -115,7 +95,7 @@ RUN mkdir gcc-arm-none-eabi && \
 FROM nuttx-toolchain-base AS nuttx-toolchain-arm64
 # Download the latest ARM64 GCC toolchain prebuilt by ARM
 RUN mkdir gcc-aarch64-none-elf && \
-  curl -s -L  "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.Rel1/binrel/arm-gnu-toolchain-13.2.Rel1-x86_64-aarch64-none-elf.tar.xz" \
+  curl -s -L  "https://developer.arm.com/-/media/Files/downloads/gnu/11.2-2022.02/binrel/gcc-arm-11.2-2022.02-x86_64-aarch64-none-elf.tar.xz" \
   | tar -C gcc-aarch64-none-elf --strip-components 1 -xJ
 
 ###############################################################################
@@ -142,18 +122,17 @@ RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -q
   m4 \
   make \
   texinfo \
-  wget \
-  bzip2
+  wget
 
 # Download toolchain source code
 RUN mkdir -p /tools/renesas-tools/source/binutils && \
-  curl -s -L "https://llvm-gcc-renesas.com/downloads/d.php?f=rx/binutils/8.3.0.202305-gnurx/binutils-2.36.1.tar.gz" \
+  curl -s -L "https://gcc-renesas.com/downloads/d.php?f=rx/binutils/4.8.4.201803-gnurx/rx_binutils2.24_2018Q3.tar.gz" \
   | tar -C renesas-tools/source/binutils --strip-components=1 -xz
 RUN mkdir -p /tools/renesas-tools/source/gcc && \
-  curl -s -L "https://llvm-gcc-renesas.com/downloads/d.php?f=rx/gcc/8.3.0.202305-gnurx/gcc-8.3.0.tar.gz" \
+  curl -s -L "https://gcc-renesas.com/downloads/d.php?f=rx/gcc/4.8.4.201803-gnurx/rx_gcc_4.8.4_2018Q3.tar.gz" \
   | tar -C renesas-tools/source/gcc --strip-components=1 -xz
 RUN mkdir -p /tools/renesas-tools/source/newlib && \
-  curl -s -L "https://llvm-gcc-renesas.com/downloads/d.php?f=rx/newlib/8.3.0.202305-gnurx/newlib-4.1.0.tar.gz" \
+  curl -s -L "https://gcc-renesas.com/downloads/d.php?f=rx/newlib/4.8.4.201803-gnurx/rx_newlib2.2.0_2018Q3.tar.gz" \
   | tar -C renesas-tools/source/newlib --strip-components=1 -xz
 
 # Install binutils
@@ -190,10 +169,10 @@ RUN cd /tools/renesas-tools/build/gcc && \
 # Build image for tool required by RISCV builds
 ###############################################################################
 FROM nuttx-toolchain-base AS nuttx-toolchain-riscv
-# Download the latest RISCV GCC toolchain prebuilt by xPack
-RUN mkdir riscv-none-elf-gcc && \
-  curl -s -L "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v13.2.0-2/xpack-riscv-none-elf-gcc-13.2.0-2-linux-x64.tar.gz" \
-  | tar -C riscv-none-elf-gcc --strip-components 1 -xz
+# Download the latest RISCV GCC toolchain prebuilt by SiFive
+RUN mkdir riscv64-unknown-elf-gcc && \
+  curl -s -L "https://static.dev.sifive.com/dev-tools/freedom-tools/v2020.12/riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz" \
+  | tar -C riscv64-unknown-elf-gcc --strip-components 1 -xz
 
 ###############################################################################
 # Build image for tool required by SPARC builds
@@ -250,19 +229,8 @@ RUN mkdir wamrc && \
 # Final Docker image used for running CI system.  This includes all toolchains
 # supported by the CI system.
 ###############################################################################
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 LABEL maintainer="dev@nuttx.apache.org"
-
-RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -qq \
-  build-essential \
-  curl \
-  gcc \
-  libssl-dev
-
-RUN mkdir -p cmake && \
-    curl -s -L wget https://cmake.org/files/v3.26/cmake-3.26.0.tar.gz \
-    | tar -C cmake --strip-components=1 -xz && \
-    cd cmake && ./bootstrap && make && make install && rm -rf cmake
 
 RUN dpkg --add-architecture i386
 # This is used for the final images so make sure to not store apt cache
@@ -270,12 +238,15 @@ RUN dpkg --add-architecture i386
 RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -qq --no-install-recommends \
   -o APT::Immediate-Configure=0 \
   avr-libc \
+  build-essential \
   ccache \
   clang \
   clang-tidy \
-  g++-12-multilib \
+  cmake \
+  curl \
+  gcc \
   gcc-avr \
-  gcc-12-multilib \
+  gcc-multilib \
   genromfs \
   gettext \
   git \
@@ -296,7 +267,6 @@ RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -q
   linux-headers-generic \
   linux-libc-dev:i386 \
   ninja-build \
-  npm \
   qemu-system-arm \
   qemu-system-misc \
   python3 \
@@ -308,14 +278,6 @@ RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -q
   xxd \
   && rm -rf /var/lib/apt/lists/*
 
-# Set GCC-12 as Default compiler
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 20 && \
-  update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 20 && \
-  update-alternatives --install /usr/bin/cc cc /usr/bin/gcc 30 && \
-  update-alternatives --set cc /usr/bin/gcc && \
-  update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 30 && \
-  update-alternatives --set c++ /usr/bin/g++
-
 # Configure out base setup for adding python packages
 ENV PIP_DISABLE_PIP_VERSION_CHECK=true
 # This disables the cache with value 0. We do not want caching as it
@@ -326,9 +288,8 @@ ENV PIP_NO_CACHE_DIR=0
 # instead of requiring them to be compiled.
 RUN pip3 install setuptools
 RUN pip3 install wheel
-RUN pip3 install cmake-format
 # Install CodeChecker and use it to statically analyze the code.
-# RUN pip3 install CodeChecker
+RUN pip3 install CodeChecker
 # Install cvt2utf to check for non-UTF characters.
 RUN pip3 install cvt2utf
 # Install pytest
@@ -343,15 +304,6 @@ RUN pip3 install pytest==6.2.5
 RUN pip3 install pytest-json==0.4.0
 RUN pip3 install pytest-ordering==0.6
 RUN pip3 install pytest-repeat==0.9.1
-# Install lark stringcase jinja2 and coloredlogs for matter build
-RUN pip3 install lark
-RUN pip3 install stringcase
-RUN pip3 install jinja2
-RUN pip3 install coloredlogs
-
-# Upgrade nodejs to the latest version
-RUN npm install -g n && n stable && hash -r
-
 # Used to generate symbol table files
 
 RUN mkdir /tools
@@ -371,7 +323,7 @@ ENV PATH="/tools/rust/cargo/bin:$PATH"
 
 # ARM toolchain
 COPY --from=nuttx-toolchain-arm /tools/clang-arm-none-eabi/ clang-arm-none-eabi/
-# RUN cp /usr/bin/clang-extdef-mapping-10 clang-arm-none-eabi/bin/clang-extdef-mapping
+RUN cp /usr/bin/clang-extdef-mapping-10 clang-arm-none-eabi/bin/clang-extdef-mapping
 ENV PATH="/tools/clang-arm-none-eabi/bin:$PATH"
 
 COPY --from=nuttx-toolchain-arm /tools/gcc-arm-none-eabi/ gcc-arm-none-eabi/
@@ -390,8 +342,8 @@ COPY --from=nuttx-toolchain-renesas /tools/renesas-toolchain/rx-elf-gcc/ renesas
 ENV PATH="/tools/renesas-toolchain/rx-elf-gcc/bin:$PATH"
 
 # RISCV toolchain
-COPY --from=nuttx-toolchain-riscv /tools/riscv-none-elf-gcc/ riscv-none-elf-gcc/
-ENV PATH="/tools/riscv-none-elf-gcc/bin:$PATH"
+COPY --from=nuttx-toolchain-riscv /tools/riscv64-unknown-elf-gcc/ riscv64-unknown-elf-gcc/
+ENV PATH="/tools/riscv64-unknown-elf-gcc/bin:$PATH"
 
 # SPARC toolchain
 COPY --from=nuttx-toolchain-sparc /tools/sparc-gaisler-elf-gcc/ sparc-gaisler-elf-gcc/
@@ -417,17 +369,6 @@ COPY --from=nuttx-toolchain-wasm /tools/wasi-sdk/ wasi-sdk/
 ENV WASI_SDK_PATH="/tools/wasi-sdk"
 ENV PATH="/tools/wamr:$PATH"
 
-# gn tool
-RUN mkdir -p /tools/gn
-COPY --from=nuttx-tools /tools/gn/gn/out/gn /tools/gn
-ENV PATH="/tools/gn:$PATH"
-
-# ZAP tool and nodejs packet
-COPY --from=nuttx-tools /tools/zap/ /tools/zap/
-COPY --from=nuttx-tools /tools/zap_release/ /tools/zap_release/
-ENV ZAP_INSTALL_PATH=/tools/zap_release
-ENV ZAP_DEVELOPMENT_PATH=/tools/zap
-
 # Configure ccache
 RUN mkdir -p /tools/ccache/bin && \
   ln -sf `which ccache` /tools/ccache/bin/aarch64-none-elf-gcc && \
@@ -444,8 +385,8 @@ RUN mkdir -p /tools/ccache/bin && \
   ln -sf `which ccache` /tools/ccache/bin/g++ && \
   ln -sf `which ccache` /tools/ccache/bin/p32-gcc && \
   ln -sf `which ccache` /tools/ccache/bin/rx-elf-gcc && \
-  ln -sf `which ccache` /tools/ccache/bin/riscv-none-elf-gcc && \
-  ln -sf `which ccache` /tools/ccache/bin/riscv-none-elf-g++ && \
+  ln -sf `which ccache` /tools/ccache/bin/riscv64-unknown-elf-gcc && \
+  ln -sf `which ccache` /tools/ccache/bin/riscv64-unknown-elf-g++ && \
   ln -sf `which ccache` /tools/ccache/bin/sparc-gaisler-elf-gcc && \
   ln -sf `which ccache` /tools/ccache/bin/sparc-gaisler-elf-g++ && \
   ln -sf `which ccache` /tools/ccache/bin/xtensa-esp32-elf-gcc && \

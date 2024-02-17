@@ -1438,19 +1438,6 @@ static void stm32_epin_request(struct stm32_usbdev_s *priv,
           empmsk |= OTG_DIEPEMPMSK(privep->epphy);
           stm32_putreg(empmsk, STM32_OTG_DIEPEMPMSK);
 
-#ifdef CONFIG_DEBUG_FEATURES
-          /* Check if the configured TXFIFO size is sufficient for a given
-           * request. If not, raise an assertion here.
-           */
-
-          regval = stm32_getreg(STM32_OTG_DIEPTXF(privep->epphy));
-          regval &= OTG_DIEPTXF_INEPTXFD_MASK;
-          regval >>= OTG_DIEPTXF_INEPTXFD_SHIFT;
-          uerr("EP%" PRId8 " TXLEN=%" PRId32 " nwords=%d\n",
-               privep->epphy, regval, nwords);
-          DEBUGASSERT(regval >= nwords);
-#endif
-
           /* Terminate the transfer.  We will try again when the TxFIFO empty
            * interrupt is received.
            */
@@ -3782,7 +3769,6 @@ static int stm32_usbinterrupt(int irq, void *context, void *arg)
       if ((regval & OTG_GINT_SOF) != 0)
         {
           usbtrace(TRACE_INTDECODE(STM32_TRACEINTID_SOF), (uint16_t) regval);
-          usbdev_sof_irq(&priv->usbdev, stm32_getframe(&priv->usbdev));
         }
 #  endif
 
@@ -4435,7 +4421,7 @@ static struct usbdev_req_s *stm32_ep_allocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, ((struct stm32_ep_s *)ep)->epphy);
 
-  privreq = kmm_malloc(sizeof(struct stm32_req_s));
+  privreq = (struct stm32_req_s *)kmm_malloc(sizeof(struct stm32_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(STM32_TRACEERR_ALLOCFAIL), 0);

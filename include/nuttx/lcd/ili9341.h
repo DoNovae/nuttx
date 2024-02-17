@@ -31,6 +31,12 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* HBL 21/05/23 */
+#define ILI9341_AXP_I2C_FREQ 400000
+#define ILI9341_AXP_I2C_ADDR 0x34
+#define ILI9341_TOUCH_I2C_ADDR 0x2E
+#define ILI9341_I2C_NUM 1
+
 /* ILI9341 ID code */
 
 #define ILI9341_DEVICE_CODE                    0x9341

@@ -28,19 +28,18 @@
 #include <nuttx/config.h>
 
 #include <spawn.h>
-#include <sys/types.h>
-#include <sys/utsname.h>
 
+#include <sys/types.h>
+
+#include <nuttx/arch.h>
 #include <nuttx/sched.h>
 #include <nuttx/streams.h>
-#include <nuttx/memoryregion.h>
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define BINFMT_NALLOC     4
-#define COREDUMP_MAGIC    0x434f5245
+#define BINFMT_NALLOC 4
 
 /****************************************************************************
  * Public Types
@@ -48,8 +47,8 @@
 
 /* The type of one C++ constructor or destructor */
 
-typedef CODE void (*binfmt_ctor_t)(void);
-typedef CODE void (*binfmt_dtor_t)(void);
+typedef FAR void (*binfmt_ctor_t)(void);
+typedef FAR void (*binfmt_dtor_t)(void);
 
 /* This describes the file to be loaded.
  *
@@ -83,12 +82,11 @@ struct binary_s
 #ifdef CONFIG_ARCH_ADDRENV
   /* Address environment.
    *
-   * addrenv - This is the handle created by addrenv_allocate() that can be
+   * addrenv - This is the handle created by up_addrenv_create() that can be
    *   used to manage the tasks address space.
    */
 
-  FAR addrenv_t *addrenv;              /* Address environment */
-  FAR addrenv_t *oldenv;               /* Saved address environment */
+  addrenv_t addrenv;                   /* Address environment */
 #endif
 
   size_t mapsize;                      /* Size of the mapped address region (needed for munmap) */
@@ -99,11 +97,6 @@ struct binary_s
 
   uint8_t priority;                    /* Task execution priority */
   size_t stacksize;                    /* Size of the stack in bytes (unallocated) */
-#ifdef CONFIG_SCHED_USER_IDENTITY
-  uid_t uid;                           /* File owner user identity */
-  gid_t gid;                           /* File owner group user identity */
-  int mode;                            /* File mode added to */
-#endif
 
 #ifndef CONFIG_BUILD_KERNEL
   FAR void *stackaddr;                 /* Task stack address */
@@ -112,6 +105,15 @@ struct binary_s
   /* Unload module callback */
 
   CODE int (*unload)(FAR struct binary_s *bin);
+};
+
+/* This describes binfmt coredump filed */
+
+struct memory_region_s
+{
+  uintptr_t start;   /* Start address of this region */
+  uintptr_t end;     /* End address of this region */
+  uint32_t  flags;   /* Figure 5-3: Segment Flag Bits: PF_[X|W|R] */
 };
 
 /* This describes one binary format handler */
@@ -133,21 +135,10 @@ struct binfmt_s
 
   CODE int (*unload)(FAR struct binary_s *bin);
 
-  /* Coredump callback */
+  /* Unload module callback */
 
   CODE int (*coredump)(FAR struct memory_region_s *regions,
-                       FAR struct lib_outstream_s *stream,
-                       pid_t pid);
-};
-
-/* Coredump information for block header */
-
-struct coredump_info_s
-{
-  uint32_t       magic;
-  struct utsname name;
-  time_t         time;
-  size_t         size;
+                       FAR struct lib_outstream_s *stream);
 };
 
 /****************************************************************************
@@ -217,8 +208,7 @@ int unregister_binfmt(FAR struct binfmt_s *binfmt);
  ****************************************************************************/
 
 int core_dump(FAR struct memory_region_s *regions,
-              FAR struct lib_outstream_s *stream,
-              pid_t pid);
+              FAR struct lib_outstream_s *stream);
 
 /****************************************************************************
  * Name: load_module
@@ -273,10 +263,7 @@ int unload_module(FAR struct binary_s *bin);
 
 int exec_module(FAR struct binary_s *binp,
                 FAR const char *filename, FAR char * const *argv,
-                FAR char * const *envp,
-                FAR const posix_spawn_file_actions_t *actions,
-                FAR const posix_spawnattr_t *attr,
-                bool spawn);
+                FAR char * const *envp);
 
 /****************************************************************************
  * Name: exec
@@ -367,7 +354,6 @@ int exec(FAR const char *filename, FAR char * const *argv,
  *              exported by the caller and made available for linking the
  *              module into the system.
  *   nexports - The number of symbols in the exports table.
- *   actions  - The spawn file actions
  *   attr     - The spawn attributes.
  *
  * Returned Value:
@@ -379,8 +365,7 @@ int exec(FAR const char *filename, FAR char * const *argv,
 
 int exec_spawn(FAR const char *filename, FAR char * const *argv,
                FAR char * const *envp, FAR const struct symtab_s *exports,
-               int nexports, FAR const posix_spawn_file_actions_t *actions,
-               FAR const posix_spawnattr_t *attr);
+               int nexports, FAR const posix_spawnattr_t *attr);
 
 /****************************************************************************
  * Name: binfmt_exit

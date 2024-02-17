@@ -70,6 +70,7 @@
 /* Definitions for the UDP connection struct flag field */
 
 #define _UDP_FLAG_CONNECTMODE (1 << 0) /* Bit 0:  UDP connection-mode */
+#define _UDP_FLAG_PKTINFO     (1 << 1) /* Bit 1:  UDP PKTINFO */
 
 #define _UDP_ISCONNECTMODE(f) (((f) & _UDP_FLAG_CONNECTMODE) != 0)
 
@@ -115,6 +116,7 @@ struct udp_conn_s
   uint16_t rport;         /* Remote port number (network byte order) */
   uint8_t  flags;         /* See _UDP_FLAG_* definitions */
   uint8_t  domain;        /* IP domain: PF_INET or PF_INET6 */
+  uint8_t  ttl;           /* Default time-to-live */
   uint8_t  crefs;         /* Reference counts on this instance */
 
 #if CONFIG_NET_RECV_BUFSIZE > 0
@@ -127,10 +129,11 @@ struct udp_conn_s
 
   /* Read-ahead buffering.
    *
-   *   readahead - An IOB chain where the UDP/IP read-ahead data is retained.
+   *   readahead - A singly linked list of type struct iob_qentry_s
+   *               where the UDP/IP read-ahead data is retained.
    */
 
-  FAR struct iob_s *readahead;   /* Read-ahead buffering */
+  struct iob_queue_s readahead;   /* Read-ahead buffering */
 
 #ifdef CONFIG_NET_UDP_WRITE_BUFFERS
   /* Write buffering
@@ -147,19 +150,11 @@ struct udp_conn_s
   FAR struct devif_callback_s *sndcb;
 #endif
 
-#if defined(CONFIG_NET_IGMP) || defined(CONFIG_NET_MLD)
-  struct ip_mreqn mreq;
-#endif
-
   /* The following is a list of poll structures of threads waiting for
    * socket events.
    */
 
   struct udp_poll_s pollinfo[CONFIG_NET_UDP_NPOLLWAITERS];
-
-#ifdef CONFIG_NET_TIMESTAMP
-  int timestamp; /* Nonzero when SO_TIMESTAMP is enabled */
-#endif
 };
 
 /* This structure supports UDP write buffering.  It is simply a container
@@ -313,28 +308,6 @@ int udp_bind(FAR struct udp_conn_s *conn, FAR const struct sockaddr *addr);
 
 int udp_connect(FAR struct udp_conn_s *conn,
                 FAR const struct sockaddr *addr);
-
-#if defined(CONFIG_NET_IGMP)
-/****************************************************************************
- * Name: udp_leavegroup
- *
- * Description:
- *   This function leaves the multicast group to which the conn belongs.
- *
- * Input Parameters:
- *   conn - A reference to UDP connection structure.  A value of NULL will
- *          disconnect from any previously connected address.
- *
- * Assumptions:
- *   This function is called (indirectly) from user code.  Interrupts may
- *   be enabled.
- *
- ****************************************************************************/
-
-void udp_leavegroup(FAR struct udp_conn_s *conn);
-#else
-#define udp_leavegroup(c)
-#endif
 
 /****************************************************************************
  * Name: udp_close

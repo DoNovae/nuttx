@@ -183,16 +183,6 @@ config RTC_FREQUENCY
 		must be provided.  If RTC_HIRES is not defined, RTC_FREQUENCY is
 		assumed to be one Hz.
 
-config RTC_ADJTIME
-	bool "RTC Adjustment Support"
-	default N
-	depends on RTC_HIRES
-	---help---
-		Enable support for adjtime() to adjust RTC run rate. The following
-		interface must be provided by RTC driver:
-
-			int up_rtc_adjtime(long ppb);
-
 endif # !RTC_DATETIME
 
 config RTC_ALARM
@@ -324,10 +314,6 @@ config PCF85263_I2C_FREQUENCY
 
 endif # RTC_PCF85263
 
-config RTC_PL031
-	bool "PL031 RTC Support"
-	default n
-
 config RTC_MCP794XX
 	bool "MCP794XX RTC Driver"
 	default n
@@ -365,20 +351,20 @@ config RX8010SJ_I2C_FREQUENCY
 endif # RTC_RX8010SJ
 
 config RTC_RPMSG
-	bool "RPMSG RTC Driver"
+	bool "Rpmsg RTC Driver"
 	default n
 	depends on RPTUN
 	select ARCH_HAVE_RTC_SUBSECONDS
 
 config RTC_RPMSG_SERVER
-	bool "The RTC RPMSG Role"
+	bool "The RTC Rpmsg Role"
 	depends on RPTUN
 
 config RTC_RPMSG_SERVER_NAME
-	string "The name of RTC RPMSG Server"
+	string "The name of RTC Rpmsg Server"
 	depends on RTC_RPMSG
 	---help---
-		The proc name of RTC server. Client requests time from
+		The proc name of rtc server. Client requests time from
 		specified name of remote proc.
 
 endif # RTC
@@ -405,13 +391,6 @@ config WATCHDOG_MAGIC_V
 	default y
 	---help---
 		The watchdog can be stopped by writing 'V' to the watchdog's device node
-
-config WATCHDOG_PANIC_NOTIFIER
-	bool "Enable watchdog panic notifier"
-	default n
-	---help---
-		When system PANIC, wdog_notifier() will be callled to disable the watchdog,
-		this is an useful option for debug if you want to keep crash scene.
 
 menuconfig WATCHDOG_AUTOMONITOR
 	bool "Auto-monitor"
@@ -501,4 +480,4 @@ config CS2100CP_REGDEBUG
 	depends on DEBUG_FEATURES
 
 endif # TIMERS_CS2100CP
-endmenu # Timer Driver Support
+endmenu  # Timer Driver Support

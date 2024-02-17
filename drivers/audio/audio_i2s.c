@@ -151,8 +151,10 @@ static int audio_i2s_getcaps(FAR struct audio_lowerhalf_s *dev, int type,
          * must then call us back for specific info for each capability.
          */
 
-        if (caps->ac_subtype == AUDIO_TYPE_QUERY)
+        switch (caps->ac_subtype)
           {
+            case AUDIO_TYPE_QUERY:
+
               /* We don't decode any formats!  Only something above us in
                * the audio stream can perform decoding on our behalf.
                */
@@ -170,28 +172,43 @@ static int audio_i2s_getcaps(FAR struct audio_lowerhalf_s *dev, int type,
 
               caps->ac_format.hw = 1 << (AUDIO_FMT_PCM - 1);
               break;
-          }
 
-         caps->ac_controls.b[0] = AUDIO_SUBFMT_END;
-         break;
+            default:
+              caps->ac_controls.b[0] = AUDIO_SUBFMT_END;
+              break;
+          }
+        break;
 
         /* Provide capabilities of our OUTPUT unit */
 
       case AUDIO_TYPE_OUTPUT:
       case AUDIO_TYPE_INPUT:
 
-        if (caps->ac_subtype == AUDIO_TYPE_QUERY)
+        switch (caps->ac_subtype)
           {
+            case AUDIO_TYPE_QUERY:
+
             /* Report the Sample rates we support */
 
-              caps->ac_controls.hw[0] = AUDIO_SAMP_RATE_DEF_ALL;
+              caps->ac_controls.hw[0] =
+                AUDIO_SAMP_RATE_8K   | AUDIO_SAMP_RATE_11K  |
+                AUDIO_SAMP_RATE_16K  | AUDIO_SAMP_RATE_22K  |
+                AUDIO_SAMP_RATE_32K  | AUDIO_SAMP_RATE_44K  |
+                AUDIO_SAMP_RATE_48K  | AUDIO_SAMP_RATE_96K  |
+                AUDIO_SAMP_RATE_128K | AUDIO_SAMP_RATE_160K |
+                AUDIO_SAMP_RATE_172K | AUDIO_SAMP_RATE_192K;
+              break;
+
+            default:
+              I2S_IOCTL(i2s, AUDIOIOC_GETCAPS, (unsigned long)caps);
               break;
           }
+        break;
 
       default:
         I2S_IOCTL(i2s, AUDIOIOC_GETCAPS, (unsigned long)caps);
         break;
-    }
+   }
 
   return caps->ac_len;
 }
@@ -229,6 +246,12 @@ static int audio_i2s_configure(FAR struct audio_lowerhalf_s *dev,
                     (caps->ac_controls.b[3] << 16);
         nchannels = caps->ac_channels;
         bpsamp    = caps->ac_controls.b[2];
+
+        audinfo("  AUDIO_TYPE_OUTPUT|AUDIO_TYPE_INPUT:\n");
+        audinfo("    Number of channels: %u\n", caps->ac_channels);
+        audinfo("    Sample rate:        %u\n", caps->ac_controls.hw[0]);
+        audinfo("    Sample width:       %u\n", caps->ac_controls.b[2]);
+        audinfo("    Playback:       %d\n", audio_i2s->playback);
 
         if (audio_i2s->playback)
           {
@@ -270,6 +293,8 @@ static int audio_i2s_start(FAR struct audio_lowerhalf_s *dev)
   FAR struct audio_i2s_s *audio_i2s = (struct audio_i2s_s *)dev;
   FAR struct i2s_dev_s *i2s = audio_i2s->i2s;
 
+  audinfo("Entry\n");
+
   return I2S_IOCTL(i2s, AUDIOIOC_START, audio_i2s->playback);
 }
 
@@ -283,6 +308,8 @@ static int audio_i2s_stop(FAR struct audio_lowerhalf_s *dev)
 {
   FAR struct audio_i2s_s *audio_i2s = (struct audio_i2s_s *)dev;
   FAR struct i2s_dev_s *i2s = audio_i2s->i2s;
+
+  audinfo("Entry\n");
 
   return I2S_IOCTL(i2s, AUDIOIOC_STOP, audio_i2s->playback);
 }
@@ -321,6 +348,7 @@ static int audio_i2s_allocbuffer(FAR struct audio_lowerhalf_s *dev,
 {
   FAR struct audio_i2s_s *audio_i2s = (struct audio_i2s_s *)dev;
   FAR struct i2s_dev_s *i2s = audio_i2s->i2s;
+  audinfo("Entry\n");
 
   return I2S_IOCTL(i2s, AUDIOIOC_ALLOCBUFFER, (unsigned long)bufdesc);
 }
@@ -330,6 +358,7 @@ static int audio_i2s_freebuffer(FAR struct audio_lowerhalf_s *dev,
 {
   FAR struct audio_i2s_s *audio_i2s = (struct audio_i2s_s *)dev;
   FAR struct i2s_dev_s *i2s = audio_i2s->i2s;
+  audinfo("Entry\n");
 
   return I2S_IOCTL(i2s, AUDIOIOC_FREEBUFFER, (unsigned long)bufdesc);
 }
@@ -339,6 +368,7 @@ static int audio_i2s_enqueuebuffer(FAR struct audio_lowerhalf_s *dev,
 {
   FAR struct audio_i2s_s *audio_i2s = (struct audio_i2s_s *)dev;
   FAR struct i2s_dev_s *i2s = audio_i2s->i2s;
+  audinfo("Entry\n");
 
   if (audio_i2s->playback)
     {
@@ -388,6 +418,7 @@ static void audio_i2s_callback(struct i2s_dev_s *dev,
 {
   FAR struct audio_i2s_s *audio_i2s = arg;
   bool final = false;
+  audinfo("Entry\n");
 
   if ((apb->flags & AUDIO_APB_FINAL) != 0)
     {

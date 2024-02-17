@@ -278,13 +278,12 @@ int inode_stat(FAR struct inode *inode, FAR struct stat *buf, int resolve)
     }
   else
 #endif
-#if defined(CONFIG_FS_SHMFS)
+#if defined(CONFIG_FS_SHM)
   /* Check for shared memory */
 
   if (INODE_IS_SHM(inode))
     {
       buf->st_mode = S_IFSHM;
-      buf->st_size = inode->i_size;
     }
   else
 #endif
@@ -361,15 +360,7 @@ int inode_stat(FAR struct inode *inode, FAR struct stat *buf, int resolve)
     }
   else
 #endif
-#if defined(CONFIG_PIPES)
-  /* Check for pipes */
 
-  if (INODE_IS_PIPE(inode))
-    {
-      buf->st_mode = S_IRWXO | S_IRWXG | S_IRWXU | S_IFIFO;
-    }
-  else
-#endif
   /* Handle "normal inodes */
 
   if (inode->u.i_ops != NULL)
@@ -425,18 +416,7 @@ int inode_stat(FAR struct inode *inode, FAR struct stat *buf, int resolve)
         {
           /* What is it if it also has child inodes? */
 
-#ifdef CONFIG_PSEUDOFS_FILE
-          buf->st_size = inode->i_size;
-
-          if (inode_is_pseudofile(inode))
-            {
-              buf->st_mode |= S_IFREG;
-            }
-          else
-#endif
-            {
-              buf->st_mode |= S_IFCHR;
-            }
+          buf->st_mode |= S_IFCHR;
         }
     }
   else

@@ -18,7 +18,8 @@
  *
  ****************************************************************************/
 
-/* ESP32-S2 ROM address table (except symbols from libgcc and libc)
+/**
+ * ESP32-S2 ROM address table (except symbols from libgcc and libc)
  * Generated for ROM with MD5sum: 0a2c7ec5109c17884606d23b47045796
  *
  * These are all weak symbols that could be overwritten in ESP-IDF.
@@ -75,7 +76,7 @@ PROVIDE ( Cache_Lock_ICache_Items = 0x40018950 );
 PROVIDE ( Cache_Mask_All = 0x40018458 );
 PROVIDE ( cache_memory_baseaddrs = 0x3ffaf020 );
 PROVIDE ( Cache_MMU_Init = 0x40018dd8 );
-PROVIDE ( cache_resume_dcache = 0x40018d3c );
+PROVIDE ( Cache_Resume_DCache = 0x40018d3c );
 PROVIDE ( Cache_Resume_DCache_Autoload = 0x4001850c );
 PROVIDE ( cache_resume_icache = 0x40018cdc );
 PROVIDE ( Cache_Resume_ICache_Autoload = 0x400184c4 );
@@ -84,7 +85,7 @@ PROVIDE ( Cache_Set_Default_Mode = 0x4001810c );
 PROVIDE ( cache_set_icache_mode = 0x4001803c );
 PROVIDE ( Cache_Start_DCache_Preload = 0x400185c4 );
 PROVIDE ( Cache_Start_ICache_Preload = 0x40018530 );
-PROVIDE ( cache_suspend_dcache = 0x40018d04 );
+PROVIDE ( Cache_Suspend_DCache = 0x40018d04 );
 PROVIDE ( Cache_Suspend_DCache_Autoload = 0x400184e0 );
 PROVIDE ( cache_suspend_icache = 0x40018ca4 );
 PROVIDE ( Cache_Suspend_ICache_Autoload = 0x40018498 );
@@ -215,7 +216,6 @@ PROVIDE ( dummy_len_plus = 0x3ffffd54 );
 PROVIDE ( Enable_QMode = 0x40016690 );
 PROVIDE ( esp_crc8 = 0x40011a78 );
 PROVIDE ( esp_rom_config_pad_power_select = 0x40016e58 );
-PROVIDE ( esp_rom_delay_us = ets_delay_us );
 PROVIDE ( esp_rom_opiflash_cache_mode_config = 0x40016754 );
 PROVIDE ( esp_rom_opiflash_exec_cmd = 0x40017e30 );
 PROVIDE ( esp_rom_opiflash_exit_continuous_read_mode = 0x40017ee8 );
@@ -348,7 +348,7 @@ PROVIDE ( ets_write_char_uart = 0x4000f998 );
 PROVIDE ( exc_cause_table = 0x3ffacbe8 );
 PROVIDE ( FilePacketSendDeflatedReqMsgProc = 0x40011ed8 );
 PROVIDE ( FilePacketSendReqMsgProc = 0x40011bd8 );
-PROVIDE ( g_rom_flashchip = 0x3ffffd38 );
+PROVIDE ( flashchip = 0x3ffffd38 );
 PROVIDE ( FlashDwnLdDeflatedStartMsgProc = 0x40011e80 );
 PROVIDE ( FlashDwnLdParamCfgMsgProc = 0x40011cc0 );
 PROVIDE ( FlashDwnLdStartMsgProc = 0x40011b74 );
@@ -618,9 +618,7 @@ PROVIDE ( SendMsg = 0x40012d0c );
 PROVIDE ( send_packet = 0x40012cc8 );
 PROVIDE ( set_rtc_memory_crc = 0x40010010 );
 PROVIDE ( SetSpiDrvs = 0x40015c18 );
-PROVIDE ( __sfp_recursive_mutex = 0x3ffffd88 );
 PROVIDE ( sig_matrix = 0x3ffffd57 );
-PROVIDE ( __sinit_recursive_mutex = 0x3ffffd84 );
 PROVIDE ( software_reset = 0x40010068 );
 PROVIDE ( software_reset_cpu = 0x40010080 );
 PROVIDE ( SPI_block_erase = 0x4001623c );

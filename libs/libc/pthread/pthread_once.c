@@ -25,10 +25,9 @@
 #include <nuttx/config.h>
 
 #include <assert.h>
-#include <errno.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <nuttx/mutex.h>
+#include <sched.h>
 #include <debug.h>
 
 /****************************************************************************
@@ -66,25 +65,28 @@ int pthread_once(FAR pthread_once_t *once_control,
 {
   /* Sanity checks */
 
-  if (once_control == NULL || init_routine == NULL)
+  DEBUGASSERT(once_control != NULL);
+  DEBUGASSERT(init_routine != NULL);
+
+  /* Prohibit pre-emption while we test and set the once_control. */
+
+  sched_lock();
+
+  if (!*once_control)
     {
-      return EINVAL;
+      *once_control = true;
+
+      /* Call the init_routine with pre-emption enabled. */
+
+      sched_unlock();
+      init_routine();
+      return OK;
     }
 
-  if (!once_control->done)
-    {
-      pthread_mutex_lock(&once_control->mutex);
+  /* The init_routine has already been called.
+   * Restore pre-emption and return.
+   */
 
-      if (!once_control->done)
-        {
-          /* Call the init_routine with pre-emption enabled. */
-
-          init_routine();
-          once_control->done = true;
-        }
-
-      pthread_mutex_unlock(&once_control->mutex);
-    }
-
+  sched_unlock();
   return OK;
 }

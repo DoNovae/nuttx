@@ -25,7 +25,7 @@
  */
 
 SYSCALL_LOOKUP1(_exit,                     1)
-SYSCALL_LOOKUP(_assert,                    4)
+SYSCALL_LOOKUP(_assert,                    3)
 SYSCALL_LOOKUP(getpid,                     0)
 SYSCALL_LOOKUP(gettid,                     0)
 SYSCALL_LOOKUP(prctl,                      2)
@@ -67,31 +67,27 @@ SYSCALL_LOOKUP(sethostname,                2)
   SYSCALL_LOOKUP(getuid,                   0)
   SYSCALL_LOOKUP(setgid,                   1)
   SYSCALL_LOOKUP(getgid,                   0)
-  SYSCALL_LOOKUP(seteuid,                  1)
-  SYSCALL_LOOKUP(geteuid,                  0)
-  SYSCALL_LOOKUP(setegid,                  1)
-  SYSCALL_LOOKUP(getegid,                  0)
 #endif
 
 /* Semaphores */
 
-SYSCALL_LOOKUP(nxsem_destroy,              1)
-SYSCALL_LOOKUP(nxsem_post,                 1)
-SYSCALL_LOOKUP(nxsem_clockwait,            3)
-SYSCALL_LOOKUP(nxsem_timedwait,            2)
-SYSCALL_LOOKUP(nxsem_trywait,              1)
-SYSCALL_LOOKUP(nxsem_wait,                 1)
+SYSCALL_LOOKUP(sem_destroy,                1)
+SYSCALL_LOOKUP(sem_post,                   1)
+SYSCALL_LOOKUP(sem_clockwait,              3)
+SYSCALL_LOOKUP(sem_timedwait,              2)
+SYSCALL_LOOKUP(sem_trywait,                1)
+SYSCALL_LOOKUP(sem_wait,                   1)
 
 #ifdef CONFIG_PRIORITY_INHERITANCE
-  SYSCALL_LOOKUP(nxsem_set_protocol,       2)
+  SYSCALL_LOOKUP(sem_setprotocol,          2)
 #endif
 
 /* Named semaphores */
 
 #ifdef CONFIG_FS_NAMED_SEMAPHORES
-  SYSCALL_LOOKUP(nxsem_open,               4)
-  SYSCALL_LOOKUP(nxsem_close,              1)
-  SYSCALL_LOOKUP(nxsem_unlink,             1)
+  SYSCALL_LOOKUP(sem_open,                 4)
+  SYSCALL_LOOKUP(sem_close,                1)
+  SYSCALL_LOOKUP(sem_unlink,               1)
 #endif
 
 #ifndef CONFIG_BUILD_KERNEL
@@ -103,10 +99,21 @@ SYSCALL_LOOKUP(nxsem_wait,                 1)
   SYSCALL_LOOKUP(pgalloc,                  2)
 #endif
 
+SYSCALL_LOOKUP(task_setcancelstate,        2)
+
+#ifdef CONFIG_CANCELLATION_POINTS
+  SYSCALL_LOOKUP(task_setcanceltype,       2)
+  SYSCALL_LOOKUP(task_testcancel,          0)
+#endif
+
+#if CONFIG_TLS_TASK_NELEM > 0
+  SYSCALL_LOOKUP(task_tls_alloc,           1)
+#endif
+
 /* The following can be individually enabled */
 
-#ifdef CONFIG_ARCH_HAVE_FORK
-  SYSCALL_LOOKUP(up_fork,                  0)
+#if defined(CONFIG_SCHED_WAITPID) && defined(CONFIG_ARCH_HAVE_VFORK)
+  SYSCALL_LOOKUP(vfork,                    0)
 #endif
 
 #ifdef CONFIG_SCHED_WAITPID
@@ -161,6 +168,7 @@ SYSCALL_LOOKUP(clock_nanosleep,            4)
  */
 
 SYSCALL_LOOKUP(clock,                      0)
+SYSCALL_LOOKUP(clock_getres,               2)
 SYSCALL_LOOKUP(clock_gettime,              2)
 SYSCALL_LOOKUP(clock_settime,              2)
 #ifdef CONFIG_CLOCK_TIMEKEEPING
@@ -264,6 +272,10 @@ SYSCALL_LOOKUP(munmap,                     2)
   SYSCALL_LOOKUP(nx_mkfifo,                3)
 #endif
 
+#ifdef CONFIG_FILE_STREAM
+  SYSCALL_LOOKUP(fs_fdopen,                4)
+#endif
+
 #ifndef CONFIG_DISABLE_MOUNTPOINT
   SYSCALL_LOOKUP(mount,                    5)
   SYSCALL_LOOKUP(mkdir,                    2)
@@ -289,7 +301,6 @@ SYSCALL_LOOKUP(munmap,                     2)
 /* The following are defined if pthreads are enabled */
 
 #ifndef CONFIG_DISABLE_PTHREAD
-  SYSCALL_LOOKUP(pthread_barrier_wait,     1)
   SYSCALL_LOOKUP(pthread_cancel,           1)
   SYSCALL_LOOKUP(pthread_cond_broadcast,   1)
   SYSCALL_LOOKUP(pthread_cond_signal,      1)
@@ -381,6 +392,13 @@ SYSCALL_LOOKUP(nanosleep,                  2)
 SYSCALL_LOOKUP(epoll_create1,              1)
 SYSCALL_LOOKUP(epoll_ctl,                  4)
 SYSCALL_LOOKUP(epoll_wait,                 4)
+
+/* Identity of Group/User */
+
+SYSCALL_LOOKUP(getegid,                    1)
+SYSCALL_LOOKUP(geteuid,                    1)
+SYSCALL_LOOKUP(setegid,                    1)
+SYSCALL_LOOKUP(seteuid,                    1)
 
 /* POSIX timers */
 

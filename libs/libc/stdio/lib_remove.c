@@ -26,7 +26,6 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
-#include <stdio.h>
 
 /****************************************************************************
  * Public Functions
@@ -51,18 +50,25 @@
 
 int remove(FAR const char *path)
 {
-  /* First try to unlink since this is
-   * more frequently the necessary action.
-   */
+  struct stat buf;
+  int ret;
 
-  if (unlink(path) != 0     && /* If it is indeed a directory...  */
-      (get_errno() != EPERM || /* ...try to remove it.  */
-       rmdir(path) != 0))
+  /* Check the kind of object pointed by path */
+
+  ret = stat(path, &buf);
+  if (ret != 0)
     {
-      /* Cannot remove the object for whatever reason. */
-
-      return -1;
+      return ret;
     }
 
-  return 0;
+  /* Act according to the kind of object */
+
+  if (S_ISDIR(buf.st_mode))
+    {
+      return rmdir(path);
+    }
+  else
+    {
+      return unlink(path);
+    }
 }

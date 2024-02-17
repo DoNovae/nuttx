@@ -125,7 +125,7 @@ static void host_stat_convert(struct stat *hostbuf, struct nuttx_stat_s *buf)
  * Name: host_open
  ****************************************************************************/
 
-int host_open(const char *pathname, int flags, int mode)
+int host_open(const char *pathname, int flags, nuttx_mode_t mode)
 {
   int mapflags = 0;
 
@@ -255,8 +255,7 @@ nuttx_ssize_t host_write(int fd, const void *buf, nuttx_size_t count)
  * Name: host_lseek
  ****************************************************************************/
 
-nuttx_off_t host_lseek(int fd, nuttx_off_t pos, nuttx_off_t offset,
-                       int whence)
+nuttx_off_t host_lseek(int fd, nuttx_off_t offset, int whence)
 {
   /* Just call the lseek routine */
 
@@ -545,7 +544,7 @@ int host_unlink(const char *pathname)
  * Name: host_mkdir
  ****************************************************************************/
 
-int host_mkdir(const char *pathname, int mode)
+int host_mkdir(const char *pathname, nuttx_mode_t mode)
 {
   /* Just call the host's mkdir routine */
 

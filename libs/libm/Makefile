@@ -1,5 +1,5 @@
 ############################################################################
-# libs/libm/Makefile
+# libs/libc/Makefile
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -22,12 +22,6 @@ include $(TOPDIR)/Make.defs
 
 ifeq ($(CONFIG_LIBM),y)
 include libm/Make.defs
-else ifeq ($(CONFIG_LIBM_NEWLIB),y)
-include newlib/Make.defs
-else ifeq ($(CONFIG_LIBM_LIBMCS),y)
-include libmcs/Make.defs
-else ifeq ($(CONFIG_LIBM_OPENLIBM),y)
-include openlibm/Make.defs
 endif
 
 BINDIR ?= bin
@@ -93,7 +87,7 @@ clean:
 
 # Deep clean -- removes all traces of the configuration
 
-distclean:: clean
+distclean: clean
 	$(Q) $(MAKE) -C bin  distclean
 	$(Q) $(MAKE) -C kbin distclean
 	$(call DELFILE, bin$(DELIM)Make.dep)

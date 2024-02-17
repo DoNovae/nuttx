@@ -373,10 +373,8 @@ static int parse_sack(FAR struct tcp_conn_s *conn, FAR struct tcp_hdr_s *tcp,
 
           for (i = 0; i < nsack; i++)
             {
-              /* Use the pointer to avoid the error of 4 byte alignment. */
-
-              segs[i].left = tcp_getsequence((uint8_t *)&sacks[i]);
-              segs[i].right = tcp_getsequence((uint8_t *)&sacks[i] + 4);
+              segs[i].left = tcp_getsequence((uint8_t *)&sacks[i].left);
+              segs[i].right = tcp_getsequence((uint8_t *)&sacks[i].right);
             }
 
           tcp_reorder_ofosegs(nsack, segs);
@@ -586,9 +584,6 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
             }
           else if (ackno == TCP_WBSEQNO(wrb))
             {
-#ifdef CONFIG_NET_TCP_CC_NEWRENO
-              if (conn->dupacks >= TCP_FAST_RETRANSMISSION_THRESH)
-#else
               /* Reset the duplicate ack counter */
 
               if ((flags & TCP_NEWDATA) != 0)
@@ -599,7 +594,6 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
               /* Duplicate ACK? Retransmit data if need */
 
               if (++TCP_WBNACK(wrb) == TCP_FAST_RETRANSMISSION_THRESH)
-#endif
                 {
 #ifdef CONFIG_NET_TCP_SELECTIVE_ACK
                   if ((conn->flags & TCP_SACK) &&
@@ -620,12 +614,11 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
                       /* Do fast retransmit */
 
                       rexmitno = ackno;
-#ifndef CONFIG_NET_TCP_CC_NEWRENO
+#endif
+
                       /* Reset counter */
 
                       TCP_WBNACK(wrb) = 0;
-#endif
-#endif
                     }
                 }
             }
@@ -697,7 +690,6 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
       FAR sq_entry_t *entry;
       FAR sq_entry_t *next;
       size_t sndlen;
-      int ret;
 
       /* According to RFC 6298 (5.4), retransmit the earliest segment
        * that has not been acknowledged by the TCP receiver.
@@ -745,25 +737,12 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
 
           tcp_setsequence(conn->sndseq, TCP_WBSEQNO(wrb));
 
-          ret = devif_iob_send(dev, TCP_WBIOB(wrb), sndlen,
-                               0, tcpip_hdrsize(conn));
-          if (ret <= 0)
+          devif_iob_send(dev, TCP_WBIOB(wrb), sndlen,
+                         0, tcpip_hdrsize(conn));
+          if (dev->d_sndlen == 0)
             {
               return flags;
             }
-
-#ifdef CONFIG_NET_TCP_CC_NEWRENO
-          /* After Fast retransmitted, set ssthresh to the maximum of
-           * the unacked and the 2*SMSS, and enter to Fast Recovery.
-           * ssthresh = max (FlightSize / 2, 2*SMSS) referring to rfc5681
-           * cwnd=ssthresh + 3*SMSS  referring to rfc5681
-           */
-
-          if (conn->flags & TCP_INFT)
-            {
-              tcp_cc_update(conn, NULL);
-            }
-#endif
 
           /* Reset the retransmission timer. */
 
@@ -823,19 +802,6 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
               right = ofosegs[i].right;
             }
         }
-
-#ifdef CONFIG_NET_TCP_CC_NEWRENO
-          /* After Fast retransmitted, set ssthresh to the maximum of
-           * the unacked and the 2*SMSS, and enter to Fast Recovery.
-           * ssthresh = max (FlightSize / 2, 2*SMSS) referring to rfc5681
-           * cwnd=ssthresh + 3*SMSS  referring to rfc5681
-           */
-
-          if (conn->flags & TCP_INFT)
-            {
-              tcp_cc_update(conn, NULL);
-            }
-#endif
     }
   else
 #endif
@@ -999,16 +965,10 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
        */
 
       seq = TCP_WBSEQNO(wrb) + TCP_WBSENT(wrb);
-
-#ifdef CONFIG_NET_TCP_CC_NEWRENO
-      snd_wnd_edge = conn->snd_wl2 + MIN(conn->snd_wnd, conn->cwnd);
-#else
       snd_wnd_edge = conn->snd_wl2 + conn->snd_wnd;
-#endif
       if (TCP_SEQ_LT(seq, snd_wnd_edge))
         {
           uint32_t remaining_snd_wnd;
-          int ret;
 
           sndlen = TCP_WBPKTLEN(wrb) - TCP_WBSENT(wrb);
           if (sndlen > conn->mss)
@@ -1020,22 +980,6 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
           if (sndlen > remaining_snd_wnd)
             {
               sndlen = remaining_snd_wnd;
-            }
-
-          /* Normally CONFIG_IOB_THROTTLE should ensure that we have enough
-           * iob space available for copying the data to a packet buffer.
-           * If it doesn't, a deadlock could happen where the iobs are used
-           * by queued TX data and cannot be released because a full-sized
-           * packet gets refused by devif_iob_send(). Detect this situation
-           * and send tiny TCP packets until we manage to free up some space.
-           * We do not want to exhaust all of the remaining iobs by sending
-           * the maximum size packet that would fit.
-           */
-
-          if (sndlen > iob_navail(false) * CONFIG_IOB_BUFSIZE)
-            {
-              nwarn("Running low on iobs, limiting packet size\n");
-              sndlen = CONFIG_IOB_BUFSIZE;
             }
 
           ninfo("SEND: wrb=%p seq=%" PRIu32 " pktlen=%u sent=%u sndlen=%zu "
@@ -1068,9 +1012,9 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
            * won't actually happen until the polling cycle completes).
            */
 
-          ret = devif_iob_send(dev, TCP_WBIOB(wrb), sndlen,
-                               TCP_WBSENT(wrb), tcpip_hdrsize(conn));
-          if (ret <= 0)
+          devif_iob_send(dev, TCP_WBIOB(wrb), sndlen,
+                         TCP_WBSENT(wrb), tcpip_hdrsize(conn));
+          if (dev->d_sndlen == 0)
             {
               return flags;
             }
@@ -1134,10 +1078,6 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
 
           flags &= ~TCP_POLL;
         }
-    }
-  else
-    {
-      tcp_set_zero_probe(conn, flags);
     }
 
   /* Continue waiting */
@@ -1291,7 +1231,7 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
       goto errout;
     }
 
-  conn = psock->s_conn;
+  conn = (FAR struct tcp_conn_s *)psock->s_conn;
 
   if (!_SS_ISCONNECTED(conn->sconn.s_flags))
     {
@@ -1304,7 +1244,9 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
 
 #if defined(CONFIG_NET_ARP_SEND) || defined(CONFIG_NET_ICMPv6_NEIGHBOR)
 #ifdef CONFIG_NET_ARP_SEND
+#ifdef CONFIG_NET_ICMPv6_NEIGHBOR
   if (psock->s_domain == PF_INET)
+#endif
     {
       /* Make sure that the IP address mapping is in the ARP table */
 
@@ -1313,11 +1255,13 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
 #endif /* CONFIG_NET_ARP_SEND */
 
 #ifdef CONFIG_NET_ICMPv6_NEIGHBOR
-  if (psock->s_domain == PF_INET6)
+#ifdef CONFIG_NET_ARP_SEND
+  else
+#endif
     {
       /* Make sure that the IP address mapping is in the Neighbor Table */
 
-      ret = icmpv6_neighbor(NULL, conn->u.ipv6.raddr);
+      ret = icmpv6_neighbor(conn->u.ipv6.raddr);
     }
 #endif /* CONFIG_NET_ICMPv6_NEIGHBOR */
 
@@ -1675,7 +1619,7 @@ int psock_tcp_cansend(FAR struct tcp_conn_s *conn)
 
   if (!_SS_ISCONNECTED(conn->sconn.s_flags))
     {
-      nwarn("WARNING: Not connected\n");
+      nerr("ERROR: Not connected\n");
       return -ENOTCONN;
     }
 
@@ -1689,11 +1633,7 @@ int psock_tcp_cansend(FAR struct tcp_conn_s *conn)
    * but we don't know how many more.
    */
 
-  if (tcp_wrbuffer_test() < 0 || iob_navail(true) <= 0
-#if CONFIG_NET_SEND_BUFSIZE > 0
-      || tcp_wrbuffer_inqueue_size(conn) >= conn->snd_bufs
-#endif
-     )
+  if (tcp_wrbuffer_test() < 0 || iob_navail(true) <= 0)
     {
       return -EWOULDBLOCK;
     }

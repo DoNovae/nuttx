@@ -329,7 +329,7 @@ static void   sam_dumpep(struct sam_usbdev_s *priv, uint8_t epno);
 #else
 static inline uint32_t sam_getreg(uintptr_t regaddr);
 static inline void sam_putreg(uint32_t regval, uintptr_t regaddr);
-#  define sam_dumpep(priv,epno)
+# define sam_dumpep(priv,epno)
 #endif
 
 static void   sam_csr_setbits(uint8_t epno, uint32_t setbits);
@@ -3047,7 +3047,7 @@ static struct usbdev_req_s *sam_ep_allocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = kmm_malloc(sizeof(struct sam_req_s));
+  privreq = (struct sam_req_s *)kmm_malloc(sizeof(struct sam_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(SAM_TRACEERR_ALLOCFAIL), 0);

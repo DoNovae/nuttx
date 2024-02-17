@@ -24,7 +24,7 @@ ifneq ($(CONFIG_NET_ICMPv6_NO_STACK),y)
 # ICMPv6 source files
 
 NET_CSRCS += icmpv6_input.c icmpv6_solicit.c icmpv6_advertise.c
-NET_CSRCS += icmpv6_linkipaddr.c icmpv6_reply.c icmpv6_initialize.c
+NET_CSRCS += icmpv6_linkipaddr.c icmpv6_reply.c
 
 ifeq ($(CONFIG_NET_ICMPv6_SOCKET),y)
 SOCK_CSRCS += icmpv6_sockif.c icmpv6_conn.c icmpv6_sendmsg.c
@@ -47,10 +47,6 @@ endif
 
 ifeq ($(CONFIG_NET_ICMPv6_ROUTER),y)
 NET_CSRCS += icmpv6_radvertise.c
-endif
-
-ifneq ($(CONFIG_NET_ICMPv6_PMTU_ENTRIES), 0)
-NET_CSRCS += icmpv6_pmtu.c
 endif
 
 # Include ICMPv6 build support

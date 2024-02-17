@@ -46,13 +46,6 @@ config DISABLE_ENVIRON
 
 endif # DISABLE_OS_API
 
-config DISABLE_IDLE_LOOP
-	bool
-	default n
-	---help---
-		This option allows nx_start to return instead of
-		entering the idle loop.
-
 menu "Clocks and Timers"
 
 config ARCH_HAVE_TICKLESS
@@ -191,47 +184,6 @@ config SYSTEM_TIME64
 		and/or if a very long "uptime" is required, then this option can be
 		selected to support a 64-bit wide timer.
 
-config ARCH_HAVE_ADJTIME
-	bool
-	default n
-
-config CLOCK_ADJTIME
-	bool "Support adjtime function"
-	default n
-	depends on ARCH_HAVE_ADJTIME || RTC_ADJTIME
-	---help---
-		Enables usage of adjtime() interface used to correct the system time
-		clock. This requires specific architecture support.
-
-		Adjustment can affect system timer period and/or high-resolution RTC.
-		These are implemented by interfaces up_adjtime() and up_rtc_adjtime().
-
-		This is not a POSIX interface but derives from 4.3BSD, System V.
-		It is also supported for Linux compatibility.
-
-if CLOCK_ADJTIME
-
-config CLOCK_ADJTIME_SLEWLIMIT_PPM
-	int "Adjtime slew limit"
-	default 20000
-	range 1 1000000
-	---help---
-		Set limit of adjtime() clock slewing as parts per million.
-
-		In real time systems we do not want the time to adjust too quickly.
-		For example CLOCK_ADJTIME_SLEWLIMIT=1000 will slow or speed the timer
-		tick period by at most 0.1 percent of the nominal value.
-
-config CLOCK_ADJTIME_PERIOD_MS
-	int "Adjtime period"
-	default 970
-	range 1 3600000
-	---help---
-		Define system clock adjustment period in milliseconds.
-		The adjustment commanded by adjtime() call is applied over this time period.
-
-endif
-
 config ARCH_HAVE_TIMEKEEPING
 	bool
 	default n
@@ -277,16 +229,6 @@ config PREALLOC_TIMERS
 		pool of preallocated timer structures to minimize dynamic allocations.  Set to
 		zero for all dynamic allocations.
 
-config PERF_OVERFLOW_CORRECTION
-	bool "Compensate perf count overflow"
-	depends on SYSTEM_TIME64 && (ALARM_ARCH || TIMER_ARCH || ARCH_PERF_EVENTS)
-	default n
-	---help---
-		If this option is enabled, then the perf event will be enabled
-		by default.
-		When enabled, it will always return an increasing count value to
-		avoid overflow on 32-bit platforms.
-
 endmenu # Clocks and Timers
 
 menu "Tasks and Scheduling"
@@ -301,24 +243,6 @@ config SPINLOCK
 		most likely be fatal.  Note, however, that this does not depend on
 		CONFIG_ARCH_HAVE_MULTICPU.  This permits the use of spinlocks in
 		other novel architectures.
-
-if SPINLOCK
-
-config TICKET_SPINLOCK
-	bool "Use ticket Spinlocks"
-	default n
-	---help---
-		Use ticket spinlock algorithm.
-
-config RW_SPINLOCK
-	bool "Support read-write Spinlocks"
-	default y
-	---help---
-		Spinlocks are spilit into read and write lock.
-		Reader can take read lock simultaneously and only one writer
-		can take write lock.
-
-endif # SPINLOCK
 
 config IRQCHAIN
 	bool "Enable multi handler sharing a IRQ"
@@ -382,19 +306,6 @@ config SMP_NCPUS
 		for CONFIG_SMP_NCPUS.  This is not normally a valid setting for an
 		SMP configuration.  However, running the SMP logic in a single CPU
 		configuration is useful during certain testing.
-
-config SMP_DEFAULT_CPUSET
-	hex "Default CPU bit set"
-	default 0xffffffff
-	---help---
-		Set the Default CPU bits. The way to use the unset CPU is to call the
-		sched_setaffinity function to bind a task to the CPU. bit0 means CPU0.
-
-config SMP_CALL
-	bool "Support SMP function call"
-	default n
-	---help---
-		Enable to support SMP function call.
 
 endif # SMP
 
@@ -527,86 +438,6 @@ config INIT_MOUNT_DATA
 
 endif # INIT_MOUNT
 endif # INIT_FILE
-
-menuconfig ETC_ROMFS
-	bool "Auto-mount etc baked-in ROMFS image"
-	default n
-	depends on !DISABLE_MOUNTPOINT && FS_ROMFS
-	---help---
-		Mount a ROMFS filesystem at /etc and provide a system init
-		script at /etc/init.d/rc.sysinit and a startup script
-		at /etc/init.d/rcS.  The default system init script will mount
-		a FAT FS RAMDISK at /tmp but the logic is easily extensible.
-
-if ETC_ROMFS
-
-config ETC_CROMFS
-	bool "Support CROMFS (compressed) start-up script"
-	default n
-	depends on FS_CROMFS
-	---help---
-		Mount a CROMFS filesystem at /etc and provide a compressed system
-		init script at /etc/init.d/rc.sysinit and a startup script
-		at /etc/init.d/rcS.
-
-config ETC_ROMFSMOUNTPT
-	string "Mountpoint of the etc romfs image"
-	default "/etc"
-
-config ETC_ROMFSDEVNO
-	int "ROMFS block device minor number"
-	default 0
-	---help---
-		This is the minor number of the ROMFS block device.  The default is
-		'0' corresponding to /dev/ram0.
-
-config ETC_ROMFSSECTSIZE
-	int "ROMFS sector size"
-	default 64
-	---help---
-		This is the sector size to use with the ROMFS volume.  Since the
-		default volume is very small, this defaults to 64 but should be
-		increased if the ROMFS volume were to be become large.  Any value
-		selected must be a power of 2.
-
-config ETC_FATDEVNO
-	int "FAT block device minor number"
-	default 1
-	depends on FS_FAT
-	---help---
-		When the default rcS file used when ETC_ROMFS is selected, it
-		will mount a FAT FS under /tmp. This is the minor number of the FAT
-		FS block device.  The default is '1' corresponding to /dev/ram1.
-
-config ETC_FATSECTSIZE
-	int "FAT sector size"
-	default 512
-	depends on FS_FAT
-	---help---
-		When the default rcS file used when ETC_ROMFS is selected, it
-		will mount a FAT FS under /tmp. This is the sector size use with the
-		FAT FS. Default is 512.
-
-config ETC_FATNSECTORS
-	int "FAT number of sectors"
-	default 1024
-	depends on FS_FAT
-	---help---
-		When the default rcS file used when ETC_ROMFS is selected, it
-		will mount a FAT FS under /tmp. This is the number of sectors to use
-		with the FAT FS.  Default is 1024.  The amount of memory used by the
-		FAT FS will be ETC_FATSECTSIZE * ETC_FATNSECTORS bytes.
-
-config ETC_FATMOUNTPT
-	string "FAT mount point"
-	default "/tmp"
-	depends on FS_FAT
-	---help---
-		When the default rcS file used when ETC_ROMFS is selected, it
-		will mount a FAT FS under /tmp. This is the location where the FAT
-		FS will be mounted.  Default is "/tmp".
-
-endif # ETC_ROMFS
 
 config RR_INTERVAL
 	int "Round robin timeslice (MSEC)"
@@ -863,15 +694,22 @@ config PTHREAD_MUTEX_DEFAULT_PRIO_INHERIT
 
 endchoice # Default pthread mutex protocol
 
+config PTHREAD_CLEANUP
+	bool "pthread cleanup stack"
+	default n
+	---help---
+		Select to enable support for pthread exit cleanup stacks.  This
+		enables the interfaces pthread_cleanup_push() and
+		pthread_cleanup_pop().
+
 config PTHREAD_CLEANUP_STACKSIZE
 	int "pthread cleanup stack size"
-	default 0
-	range 0 255
+	default 1
+	range 1 32
+	depends on PTHREAD_CLEANUP
 	---help---
 		The maximum number of cleanup actions that may be pushed by
-		pthread_cleanup_push().
-		if 0 disable the interfaces pthread_cleanup_push() and pthread_cleanup_pop().
-		This setting will increase the size of EVERY
+		pthread_clean_push().  This setting will increase the size of EVERY
 		pthread task control block by about n * CONFIG_PTHREAD_CLEANUP_STACKSIZE
 		where n is the size of a pointer, 2 * sizeof(uintptr_t), this would be
 		8 for a CPU with 32-bit addressing and 4 for a CPU with 16-bit
@@ -974,23 +812,10 @@ config SCHED_CRITMONITOR_MAXTIME_WDOG
 
 endif # SCHED_CRITMONITOR
 
-config SCHED_CRITMONITOR_MAXTIME_PANIC
-	bool "Monitor timeout panic"
-	depends on \
-		SCHED_CRITMONITOR_MAXTIME_THREAD > 0 || \
-		SCHED_CRITMONITOR_MAXTIME_WDOG > 0 || \
-		SCHED_CRITMONITOR_MAXTIME_WQUEUE > 0 || \
-		SCHED_CRITMONITOR_MAXTIME_PREEMPTION > 0 || \
-		SCHED_CRITMONITOR_MAXTIME_CSECTION > 0 || \
-		SCHED_CRITMONITOR_MAXTIME_IRQ > 0
+config SCHED_CPULOAD
+	bool "Enable CPU load monitoring"
 	default n
-	---help---
-		If this option is enabled, a panic will be triggered when
-		IRQ/WQUEUE/PREEMPTION execution time exceeds SCHED_CRITMONITOR_MAXTIME_xxx
-
-choice
-	prompt "Select CPU load clock source"
-	default SCHED_CPULOAD_NONE
+	select SCHED_CPULOAD_EXTCLK if SCHED_TICKLESS
 	---help---
 		If this option is selected, the timer interrupt handler will monitor
 		if the system is IDLE or busy at the time of that the timer interrupt
@@ -1006,35 +831,16 @@ choice
 		possible unless you provide an alternative clock to drive the
 		sampling and select SCHED_CPULOAD_EXTCLK.
 
-config SCHED_CPULOAD_NONE
-	bool "None CPU load clock source"
-	---help---
-		If this option is enabled, the system will not support CPU load
-		measurement.
-
-config SCHED_CPULOAD_SYSCLK
-	bool "Use system clock"
-	depends on !SCHED_TICKLESS
-	---help---
-		If this option is enabled, the system clock is used for cpu load
-		measurement by default.
-
-		There is a serious issue for the accuracy of measurements if the
-		system clock is used, however.  NuttX threads are often started at
-		the time of the system timer expiration.  Others may be stopped at
-		the time of the system timer expiration (if round-robin time-slicing
-		is enabled).  Such thread behavior occurs synchronously with the
-		system timer and, hence, is not randomly sampled.  As a consequence,
-		the CPU load attributed to these threads that run synchronously with
-		they system timer may be grossly in error.
-		The CPU load measurements are determined by sampling the active
-		tasks periodically at the occurrence to a timer expiration.
-		If tickless is enabled, SYSCLK should not be used. Its error will be
-		very large, and using it for analysis will lead to wrong conclusions.
+if SCHED_CPULOAD
 
 config SCHED_CPULOAD_EXTCLK
 	bool "Use external clock"
+	default n
 	---help---
+		The CPU load measurements are determined by sampling the active
+		tasks periodically at the occurrence to a timer expiration.  By
+		default, the system clock is used to do that sampling.
+
 		There is a serious issue for the accuracy of measurements if the
 		system clock is used, however.  NuttX threads are often started at
 		the time of the system timer expiration.  Others may be stopped at
@@ -1052,17 +858,6 @@ config SCHED_CPULOAD_EXTCLK
 		logic; that platform-specific logic must call the system function
 		nxsched_process_cpuload_ticks() at each timer expiration with interrupts
 		disabled.
-
-config SCHED_CPULOAD_CRITMONITOR
-	bool "Use critical monitor"
-	depends on SCHED_CRITMONITOR
-	---help---
-		Use the perfcounter in the core of the chip as a counter, no need to
-		use an external timer. Need to depend on SCHED_CRITMONITOR.
-		When the task is suspended, call nxsched_critmon_cpuload_ticks to count
-		the recent running time of the task
-
-endchoice
 
 if SCHED_CPULOAD_EXTCLK
 
@@ -1142,12 +937,13 @@ endif # SCHED_CPULOAD_EXTCLK
 
 config SCHED_CPULOAD_TIMECONSTANT
 	int "CPU load time constant"
-	depends on !SCHED_CPULOAD_NONE
 	default 2
 	---help---
 		The accumulated CPU count is divided by two when the accumulated
 		tick count exceeds this time constant.  This time constant is in
 		units of seconds.
+
+endif # SCHED_CPULOAD
 
 menuconfig SCHED_INSTRUMENTATION
 	bool "System performance monitor hooks"
@@ -1176,6 +972,14 @@ config SCHED_INSTRUMENTATION_CPUSET
 	depends on SMP && SCHED_INSTRUMENTATION_FILTER
 	---help---
 		Monitor only CPUs in the bitset.  Bit 0=CPU0, Bit1=CPU1, etc.
+
+config SCHED_INSTRUMENTATION_PERFCOUNT
+	bool "Use perf count for instrumentation"
+	default n
+	---help---
+		Enabling this option will use perfcount as the clock source for tv_nsec
+		to achieve higher precision time.
+		This requires calling up_perf_init at system startup.
 
 config SCHED_INSTRUMENTATION_FILTER
 	bool "Instrumentation filter"
@@ -1284,35 +1088,8 @@ config SCHED_INSTRUMENTATION_DUMP
 			void sched_note_printf(FAR const char *fmt, ...) printf_like(1, 2);
 			void sched_note_bprintf(uint32_t module, uint8_t event, FAR const char *fmt, ...);
 
-config SCHED_INSTRUMENTATION_FUNCTION
-	bool "Enable function auto-tracing"
-	default n
-	---help---
-		After enabling this option, you can automatically trace the function instrumentation without adding tracepoint manually.
-		This is similar to the Function Trace effect of the linux kernel
-		Add CFLAGS += -finstrument-functions to the makefile to track the required modules.
-		The following compilation option can exclude files that do not want to be tracked in this module
-		CFLAGS += -finstrument-functions-exclude-file-list=xxx
-		The following compilation option can exclude functions that do not want to be tracked in this module
-		CFLAGS += -finstrument-functions-exclude-function-list=xxx
-		For a more detailed description of compilation options,
-		refer to the "Program Instrumentation Options" chapter in the gcc documentation
-
 endif # SCHED_INSTRUMENTATION
 endmenu # Performance Monitoring
-
-menu "System Auto Instrumentation"
-
-config SCHED_STACK_RECORD
-	int "Maximum stack backtrace to record"
-	default 0
-	---help---
-		Specifies the maximum number of stack backtrace to record in the
-		TCB.  Useful if scheduler instrumentation is selected.  Set to zero
-		to disable.Through instrumentation, record the backtrace at
-		the deepest point in the stack.
-
-endmenu
 
 menu "Files and I/O"
 
@@ -1927,14 +1704,3 @@ config SCHED_BACKTRACE
 		using the information automatically generated by the
 		compiler or architecture specific approach when ARCH_HAVE_BACKTRACE
 		is selected
-
-config GROUP_KILL_CHILDREN_TIMEOUT_MS
-	int "Group kill children timeout"
-	default -1
-	depends on !DISABLE_PTHREAD && SIG_SIGKILL_ACTION
-	---help---
-		Kill children a SIGQUIT signal before cancel them,
-		< 0 means wait until all the child thread exit
-		> 0 means wait timeout
-		= 0 means don't do kill signal
-

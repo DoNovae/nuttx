@@ -50,8 +50,6 @@
 #  include <arch/armv7-a/irq.h>
 #elif defined(CONFIG_ARCH_ARMV7R)
 #  include <arch/armv7-r/irq.h>
-#elif defined(CONFIG_ARCH_ARMV8R)
-#  include <arch/armv8-r/irq.h>
 #elif defined(CONFIG_ARCH_ARMV7M)
 #  include <arch/armv7-m/irq.h>
 #elif defined(CONFIG_ARCH_ARMV8M)
@@ -116,7 +114,7 @@ EXTERN volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
  ****************************************************************************/
 
 #ifdef CONFIG_SMP
-int up_cpu_index(void) noinstrument_function;
+int up_cpu_index(void);
 #else
 #  define up_cpu_index() (0)
 #endif
@@ -134,7 +132,6 @@ int up_cpu_index(void) noinstrument_function;
  *
  ****************************************************************************/
 
-noinstrument_function
 static inline bool up_interrupt_context(void)
 {
 #ifdef CONFIG_SMP

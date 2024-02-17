@@ -101,12 +101,11 @@ static inline void sendto_ipselect(FAR struct net_driver_s *dev,
                                    FAR struct sendto_s *pstate)
 {
   FAR struct udp_conn_s *conn = pstate->st_conn;
+  DEBUGASSERT(conn);
 
   /* Which domain the socket support */
 
-  if (conn->domain == PF_INET ||
-      (conn->domain == PF_INET6 &&
-       ip6_is_ipv4addr((FAR struct in6_addr *)conn->u.ipv6.raddr)))
+  if (conn->domain == PF_INET)
     {
       /* Select the IPv4 domain */
 
@@ -195,12 +194,11 @@ static uint16_t sendto_eventhandler(FAR struct net_driver_s *dev,
         {
           /* Copy the user data into d_appdata and send it */
 
-          int ret = devif_send(dev, pstate->st_buffer, pstate->st_buflen,
-                               udpip_hdrsize(pstate->st_conn));
-          if (ret <= 0)
+          devif_send(dev, pstate->st_buffer,
+                     pstate->st_buflen, udpip_hdrsize(pstate->st_conn));
+          if (dev->d_sndlen == 0)
             {
-              pstate->st_sndlen = ret;
-              goto end_wait;
+              return flags;
             }
 
 #ifdef NEED_IPDOMAIN_SUPPORT
@@ -215,8 +213,6 @@ static uint16_t sendto_eventhandler(FAR struct net_driver_s *dev,
 
           pstate->st_sndlen = pstate->st_buflen;
         }
-
-end_wait:
 
       /* Don't allow any further call backs. */
 
@@ -267,7 +263,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
 {
   FAR struct udp_conn_s *conn;
   struct sendto_s state;
-  int ret = OK;
+  int ret;
 
   /* Verify that the sockfd corresponds to valid, allocated socket */
 
@@ -314,7 +310,9 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
    * the ARP table.
    */
 
+#ifdef CONFIG_NET_ICMPv6_NEIGHBOR
   if (psock->s_domain == PF_INET)
+#endif
     {
       in_addr_t destipaddr;
 
@@ -351,7 +349,9 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
    * the neighbor table.
    */
 
-  if (psock->s_domain == PF_INET6)
+#ifdef CONFIG_NET_ARP_SEND
+  else
+#endif
     {
       FAR const uint16_t *destipaddr;
 
@@ -379,7 +379,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
 
       /* Make sure that the IP address mapping is in the Neighbor Table */
 
-      ret = icmpv6_neighbor(NULL, destipaddr);
+      ret = icmpv6_neighbor(destipaddr);
     }
 #endif /* CONFIG_NET_ICMPv6_NEIGHBOR */
 

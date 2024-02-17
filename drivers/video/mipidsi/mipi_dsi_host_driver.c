@@ -67,7 +67,7 @@ static int     dsi_host_ioctl(FAR struct file *filep, int cmd,
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_dsi_host_fops =
+static const struct file_operations dsi_host_fops =
 {
   NULL,             /* open */
   NULL,             /* close */
@@ -115,6 +115,7 @@ static int dsi_host_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Get our private data structure */
 
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   inode = filep->f_inode;
 
   priv = inode->i_private;
@@ -193,7 +194,7 @@ int mipi_dsi_host_driver_register(FAR struct mipi_dsi_host *host)
 #endif
 
       snprintf(name, sizeof(name), MIPI_DSI_HOSTNAME_FMT, host->bus);
-      ret = register_driver(name, &g_dsi_host_fops, 0666, priv);
+      ret = register_driver(name, &dsi_host_fops, 0666, priv);
       if (ret < 0)
         {
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS

@@ -49,32 +49,30 @@ extern "C"
  ****************************************************************************/
 
 /****************************************************************************
- * Name: register_partition_with_inode
+ * Name: find_blockdriver
  *
  * Description:
- *   Register a block partition driver inode the pseudo file system.
+ *   Return the inode of the block driver specified by 'pathname'
  *
  * Input Parameters:
- *   partition   - The path to the partition inode
- *   parent      - the parent inode
- *   firstsector - The offset in sectors to the partition
- *   nsectors    - The number of sectors in the partition
+ *   pathname   - The full path to the block driver to be located
+ *   mountflags - If MS_RDONLY is not set, then driver must support write
+ *                operations (see include/sys/mount.h)
+ *   ppinode    - Address of the location to return the inode reference
  *
  * Returned Value:
- *   Zero on success (with the inode point in 'inode'); A negated errno
- *   value is returned on a failure (all error values returned by
- *   inode_reserve):
+ *   Returns zero on success or a negated errno on failure:
  *
- *   EINVAL - 'path' is invalid for this operation
- *   EEXIST - An inode already exists at 'path'
- *   ENOMEM - Failed to allocate in-memory resources for the operation
+ *   ENOENT  - No block driver of this name is registered
+ *   ENOTBLK - The inode associated with the pathname is not a block driver
+ *   EACCESS - The MS_RDONLY option was not set but this driver does not
+ *             support write access
  *
  ****************************************************************************/
 
 #ifndef CONFIG_DISABLE_MOUNTPOINT
-int register_partition_with_inode(FAR const char *partition,
-                                  mode_t mode, FAR struct inode *parent,
-                                  off_t firstsector, off_t nsectors);
+int find_blockdriver(FAR const char *pathname, int mountflags,
+                     FAR struct inode **ppinode);
 #endif
 
 /****************************************************************************
@@ -98,35 +96,6 @@ int register_partition_with_inode(FAR const char *partition,
 
 #ifndef CONFIG_DISABLE_MOUNTPOINT
 int block_proxy(FAR struct file *filep, FAR const char *blkdev, int oflags);
-#endif
-
-/****************************************************************************
- * Name: register_partition_with_mtd
- *
- * Description:
- *   Register a mtd partition driver inode the pseudo file system.
- *
- * Input Parameters:
- *   partition  - The path to the partition inode
- *   parent     - The parent mtd instance
- *   firstblock - The offset in block to the partition
- *   nblocks    - The number of block in the partition
- *
- * Returned Value:
- *   Zero on success (with the inode point in 'inode'); A negated errno
- *   value is returned on a failure (all error values returned by
- *   inode_reserve):
- *
- *   EINVAL - 'path' is invalid for this operation
- *   EEXIST - An inode already exists at 'path'
- *   ENOMEM - Failed to allocate in-memory resources for the operation
- *
- ****************************************************************************/
-
-#ifdef CONFIG_MTD
-int register_partition_with_mtd(FAR const char *partition,
-                                mode_t mode, FAR struct mtd_dev_s *parent,
-                                off_t firstblock, off_t nblocks);
 #endif
 
 /****************************************************************************

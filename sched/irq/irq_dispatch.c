@@ -45,6 +45,29 @@
 #  define NUSER_IRQS NR_IRQS
 #endif
 
+/* INCR_COUNT - Increment the count of interrupts taken on this IRQ number */
+
+#ifndef CONFIG_SCHED_IRQMONITOR
+#  define INCR_COUNT(ndx)
+#elif defined(CONFIG_HAVE_LONG_LONG)
+#  define INCR_COUNT(ndx) \
+     do \
+       { \
+         g_irqvector[ndx].count++; \
+       } \
+     while (0)
+#else
+#  define INCR_COUNT(ndx) \
+     do \
+       { \
+         if (++g_irqvector[ndx].lscount == 0) \
+           { \
+             g_irqvector[ndx].mscount++; \
+           } \
+       } \
+     while (0)
+#endif
+
 /* CALL_VECTOR - Call the interrupt service routine attached to this
  * interrupt request
  */
@@ -57,24 +80,26 @@
 #  define CALL_VECTOR(ndx, vector, irq, context, arg) \
      do \
        { \
-         clock_t start; \
-         clock_t elapsed; \
-         start = perf_gettime(); \
+         struct timespec delta; \
+         uint32_t start; \
+         uint32_t elapsed; \
+         start = up_perf_gettime(); \
          vector(irq, context, arg); \
-         elapsed = perf_gettime() - start; \
+         elapsed = up_perf_gettime() - start; \
+         up_perf_convert(elapsed, &delta); \
          if (ndx < NUSER_IRQS) \
            { \
-             g_irqvector[ndx].count++; \
-             if (elapsed > g_irqvector[ndx].time) \
+             INCR_COUNT(ndx); \
+             if (delta.tv_nsec > g_irqvector[ndx].time) \
                { \
-                 g_irqvector[ndx].time = elapsed; \
+                 g_irqvector[ndx].time = delta.tv_nsec; \
                } \
            } \
          if (CONFIG_SCHED_CRITMONITOR_MAXTIME_IRQ > 0 && \
              elapsed > CONFIG_SCHED_CRITMONITOR_MAXTIME_IRQ) \
            { \
-             CRITMONITOR_PANIC("IRQ %d(%p), execute time too long %ju\n", \
-                               irq, vector, (uintmax_t)elapsed); \
+             serr("IRQ %d(%p), execute time too long %"PRIu32"\n", \
+                  irq, vector, elapsed); \
            } \
        } \
      while (0)
@@ -159,4 +184,10 @@ void irq_dispatch(int irq, FAR void *context)
       kmm_checkcorruption();
     }
 #endif
+
+  /* Record the new "running" task.  g_running_tasks[] is only used by
+   * assertion logic for reporting crashes.
+   */
+
+  g_running_tasks[this_cpu()] = this_task();
 }

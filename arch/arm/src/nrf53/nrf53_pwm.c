@@ -38,7 +38,6 @@
 #include "nrf53_pwm.h"
 
 #include "hardware/nrf53_pwm.h"
-#include "hardware/nrf53_utils.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -66,9 +65,6 @@ struct nrf53_pwm_s
   uint32_t                ch1_pin;   /* Channel 2 pin */
   uint32_t                ch2_pin;   /* Channel 3 pin */
   uint32_t                ch3_pin;   /* Channel 4 pin */
-#ifndef CONFIG_PWM_MULTICHAN
-  uint8_t                 channel;   /* Assigned channel */
-#endif
 
   /* Sequence 0 */
 
@@ -146,9 +142,6 @@ struct nrf53_pwm_s g_nrf53_pwm0 =
 #ifdef CONFIG_NRF53_PWM0_CH3
   .ch3_pin = NRF53_PWM0_CH3_PIN,
 #endif
-#ifndef CONFIG_PWM_MULTICHAN
-  .channel = CONFIG_NRF53_PWM0_CHANNEL
-#endif
 };
 #endif
 
@@ -171,9 +164,6 @@ struct nrf53_pwm_s g_nrf53_pwm1 =
 #ifdef CONFIG_NRF53_PWM1_CH3
   .ch3_pin = NRF53_PWM1_CH3_PIN,
 #endif
-#ifndef CONFIG_PWM_MULTICHAN
-  .channel = CONFIG_NRF53_PWM1_CHANNEL
-#endif
 };
 #endif
 
@@ -195,9 +185,6 @@ struct nrf53_pwm_s g_nrf53_pwm2 =
 #endif
 #ifdef CONFIG_NRF53_PWM2_CH3
   .ch3_pin = NRF53_PWM2_CH3_PIN,
-#endif
-#ifndef CONFIG_PWM_MULTICHAN
-  .channel = CONFIG_NRF53_PWM2_CHANNEL
 #endif
 };
 #endif
@@ -262,7 +249,6 @@ static int nrf53_pwm_configure(struct nrf53_pwm_s *priv)
   /* Configure sequence 0 */
 
   regval = (uint32_t)priv->seq0;
-  DEBUGASSERT(nrf53_easydma_valid(regval));
   nrf53_pwm_putreg(priv, NRF53_PWM_SEQ0PTR_OFFSET, regval);
 
   regval = PWM_SEQ0_LEN;
@@ -582,7 +568,9 @@ static int nrf53_pwm_start(struct pwm_lowerhalf_s *dev,
         }
 
 #else
-      ret = nrf53_pwm_duty(priv, priv->channel, info->duty);
+      ret = nrf53_pwm_duty(dev,
+                           (info->channels[0].channel - 1),
+                           info->duty);
 #endif /* CONFIG_PWM_MULTICHAN */
 
   /* Start sequence 0 */

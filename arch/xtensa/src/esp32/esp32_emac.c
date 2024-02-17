@@ -470,29 +470,6 @@ static int emac_read_mac(uint8_t *mac)
       return -EINVAL;
     }
 
-#ifdef CONFIG_ESP_MAC_ADDR_UNIVERSE_ETH
-  mac[5] += 3;
-#else
-  mac[5] += 1;
-  uint8_t tmp = mac[0];
-  for (i = 0; i < 64; i++)
-    {
-      mac[0] = tmp | 0x02;
-      mac[0] ^= i << 2;
-
-      if (mac[0] != tmp)
-        {
-          break;
-        }
-    }
-
-  if (i >= 64)
-    {
-      wlerr("Failed to generate ethernet MAC\n");
-      return -1;
-    }
-#endif
-
   return 0;
 }
 
@@ -606,7 +583,8 @@ static int emac_config(void)
       return -ETIMEDOUT;
     }
 
-  /* Enable transmission options:
+  /**
+   * Enable transmission options:
    *
    *   - 100M
    *   - Full duplex
@@ -619,7 +597,8 @@ static int emac_config(void)
 
   emac_set_reg(EMAC_FFR_OFFSET, EMAC_PMF_E);
 
-  /* Enable flow control options:
+  /**
+   * Enable flow control options:
    *
    *   - PT-28 Time slot
    *   - RX flow control
@@ -632,7 +611,8 @@ static int emac_config(void)
            (EMAC_PAUSE_TIME << EMAC_CFPT_S);
   emac_set_reg(EMAC_FCR_OFFSET, regval);
 
-  /* Enable DMA options:
+  /**
+   * Enable DMA options:
    *
    *   - Drop error frame
    *   - Send frame when filled into FiFO
@@ -642,7 +622,8 @@ static int emac_config(void)
   regval = EMAC_FSF_E | EMAC_FTF_E | EMAC_OSF_E;
   emac_set_reg(EMAC_DMA_OMR_OFFSET, regval);
 
-  /* Enable DMA bus options:
+  /**
+   * Enable DMA bus options:
    *
    *   - Mixed burst mode
    *   - Address align beast

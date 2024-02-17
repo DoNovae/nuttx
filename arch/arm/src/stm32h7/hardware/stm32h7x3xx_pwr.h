@@ -129,9 +129,8 @@
 
 #define STM32_PWR_CR3_BYPASS                (1 << 0)  /* Bit 0: Power management unit bypass */
 #define STM32_PWR_CR3_LDOEN                 (1 << 1)  /* Bit 1: Low drop-out regulator enable */
-#define STM32_PWR_CR3_SCUEN                 (1 << 2)  /* Bit 2: Supply configuration update enable */
+#define STM32_PWR_CR3_LDOESCUEN             (1 << 2)  /* Bit 2: Supply configuration update enable */
 #ifdef CONFIG_STM32H7_HAVE_SMPS
-#define STM32_PWR_CR3_SDEN                  (1 << 2)  /* Bit 2: SMPS step-down converter enable */
 #define STM32_PWR_CR3_SMPSEXTHP             (1 << 3)  /* Bit 3: SMPS step-down converter external power delivery selection */
 #define STM32_PWR_CR3_SMPSLEVEL_SHIFT       (4)       /* BitS 4-5: SMPS step-down converter voltage output level selection */
 #  define STM32_PWR_CR3_SMPSLEVEL_MASK      (3 << STM32_PWR_CR3_SMPSLEVEL_SHIFT)
@@ -223,11 +222,11 @@
 #define STM32_PWR_WKUPPUPD5_SHIFT   (24)      /* Bits 24-25: Wakeup pin pull config for WKUP5 */
 #define STM32_PWR_WKUPPUPD6_SHIFT   (26)      /* Bits 26-27: Wakeup pin pull config for WKUP6 */
 
-#  define STM32_PWR_WKUPPUPD_NONE   (0)       /* No pull-up */
-#  define STM32_PWR_WKUPPUPD_PULLUP (1)       /* Pull-up enabled */
-#  define STM32_PWR_WKUPPUPD_PULLDN (2)       /* Pull-down enabled */
-                                              /* 3 is reserved */
-#  define STM32_PWR_WKUPPUPD_MASK   (3)
-                                              /* Bits 28-31: Reserved */
+# define STM32_PWR_WKUPPUPD_NONE    (0)      /* No pull-up */
+# define STM32_PWR_WKUPPUPD_PULLUP  (1)      /* Pull-up enabled */
+# define STM32_PWR_WKUPPUPD_PULLDN  (2)      /* Pull-down enabled */
+                                             /* 3 is reserved */
+# define STM32_PWR_WKUPPUPD_MASK    (3)
+                                             /* Bits 28-31: Reserved */
 
 #endif /* __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32H7X3XX_PWR_H */

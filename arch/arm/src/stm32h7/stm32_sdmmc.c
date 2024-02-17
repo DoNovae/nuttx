@@ -138,8 +138,8 @@
 #  define SRAM4_END     (SRAM4_START + STM32H7_SRAM4_SIZE)
 #endif
 
-#if !defined(CONFIG_SCHED_WORKQUEUE) || !defined(CONFIG_SCHED_HPWORK)
-#  error "Callback support requires CONFIG_SCHED_WORKQUEUE and CONFIG_SCHED_HPWORK"
+#ifndef CONFIG_SCHED_WORKQUEUE
+#  error "Callback support requires CONFIG_SCHED_WORKQUEUE"
 #endif
 
 #undef HAVE_SDMMC_SDIO_MODE
@@ -2797,7 +2797,7 @@ static void stm32_waitenable(struct sdio_dev_s *dev,
 #if defined(CONFIG_MMCSD_SDIOWAIT_WRCOMPLETE)
   if ((eventset & SDIOWAIT_WRCOMPLETE) != 0)
     {
-      /* Read pin to see if ready (true) skip timeout and the pin IRQ */
+      /* Read pin to see if ready (true) skip timeout */
 
       if (stm32_gpioread(priv->d0_gpio))
         {
@@ -2894,15 +2894,13 @@ static sdio_eventset_t stm32_eventwait(struct sdio_dev_s *dev)
   flags = enter_critical_section();
 
 #if defined(CONFIG_MMCSD_SDIOWAIT_WRCOMPLETE)
-  /* A call to stm32_waitenable that finds the card ready or
-   * a card ejected while in SDIOWAIT_WRCOMPLETE can lead to a
+  /* A card ejected while in SDIOWAIT_WRCOMPLETE can lead to a
    * condition where there is no waitevents set and no wkupevent
-   * This simply means we should not wait.
    */
 
   if (priv->waitevents == 0 && priv->wkupevent == 0)
     {
-      wkupevent = 0;
+      wkupevent = SDIOWAIT_ERROR;
       goto errout_with_waitints;
     }
 

@@ -134,15 +134,15 @@ static void note_sysview_send_taskinfo(FAR struct tcb_s *tcb)
 {
   SEGGER_SYSVIEW_TASKINFO info;
 
-  info.TaskID    = tcb->pid;
+  info.TaskID     = tcb->pid;
 #if CONFIG_TASK_NAME_SIZE > 0
-  info.sName     = tcb->name;
+  info.sName      = tcb->name;
 #else
-  info.sName     = "<noname>";
+  info.sName      = "<noname>";
 #endif
-  info.Prio      = tcb->sched_priority;
-  info.StackBase = (uintptr_t)tcb->stack_base_ptr;
-  info.StackSize = tcb->adj_stack_size;
+  info.Prio       = tcb->sched_priority;
+  info.StackBase  = (uintptr_t)tcb->stack_base_ptr;
+  info.StackSize  = tcb->adj_stack_size;
 
   SEGGER_SYSVIEW_SendTaskInfo(&info);
 }
@@ -348,9 +348,9 @@ unsigned int note_sysview_get_interrupt_id(void)
  *
  ****************************************************************************/
 
-unsigned long note_sysview_get_timestamp(void)
+unsigned int note_sysview_get_timestamp(void)
 {
-  return perf_gettime();
+  return up_perf_gettime();
 }
 
 /****************************************************************************
@@ -369,8 +369,7 @@ unsigned long note_sysview_get_timestamp(void)
 
 int note_sysview_initialize(void)
 {
-  unsigned long freq = perf_getfreq();
-  int ret;
+  uint32_t freq = up_perf_getfreq();
 
   static const SEGGER_SYSVIEW_OS_API g_sysview_trace_api =
     {
@@ -392,9 +391,9 @@ int note_sysview_initialize(void)
 #endif
 
   SEGGER_SYSVIEW_Start();
-  ret = note_driver_register(&g_note_sysview_driver.driver);
+  note_driver_register(&g_note_sysview_driver.driver);
   syslog(LOG_NOTICE, "SEGGER RTT Control Block Address: %#" PRIxPTR "\n",
                       (uintptr_t)&_SEGGER_RTT +
                       CONFIG_SEGGER_RTT_UNCACHED_OFF);
-  return ret;
+  return 0;
 }

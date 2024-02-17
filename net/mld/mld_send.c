@@ -89,7 +89,6 @@ void mld_send(FAR struct net_driver_s *dev, FAR struct mld_group_s *group,
 {
   FAR struct ipv6_router_alert_s *ra;
   FAR const uint16_t *destipaddr;
-  FAR const uint16_t *srcipaddr;
   unsigned int mldsize;
 
   /* Only a general query message can have a NULL group */
@@ -169,7 +168,7 @@ void mld_send(FAR struct net_driver_s *dev, FAR struct mld_group_s *group,
 
   /* Update device buffer length */
 
-  iob_update_pktlen(dev->d_iob, dev->d_len, false);
+  iob_update_pktlen(dev->d_iob, dev->d_len);
 
   /* Select the IPv6 destination address.
    * This varies with the type of message being sent:
@@ -207,22 +206,11 @@ void mld_send(FAR struct net_driver_s *dev, FAR struct mld_group_s *group,
     }
 
   mldinfo("destipaddr: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
-          NTOHS(destipaddr[0]), NTOHS(destipaddr[1]), NTOHS(destipaddr[2]),
-          NTOHS(destipaddr[3]), NTOHS(destipaddr[4]), NTOHS(destipaddr[5]),
-          NTOHS(destipaddr[6]), NTOHS(destipaddr[7]));
-
-  srcipaddr = netdev_ipv6_lladdr(dev);
-  if (srcipaddr == NULL)
-    {
-      /* Unspecified address is used when link-local address is not
-       * available, as described in RFC 3590, Section 4, Page 2.
-       */
-
-      srcipaddr = g_ipv6_unspecaddr;
-    }
+          destipaddr[0], destipaddr[1], destipaddr[2], destipaddr[3],
+          destipaddr[4], destipaddr[5], destipaddr[6], destipaddr[7]);
 
   ipv6_build_header(IPv6BUF, dev->d_sndlen, NEXT_HOPBYBOT_EH,
-                    srcipaddr, destipaddr, MLD_TTL, 0);
+                    dev->d_ipv6addr, destipaddr, MLD_TTL, 0);
 
   /* Add the router alert IP header option.
    *

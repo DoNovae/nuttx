@@ -79,16 +79,6 @@
 #  endif
 #endif
 
-/* Get a list of syslog channels */
-
-#define SYSLOGIOC_GETCHANNELS _SYSLOGIOC(0x0001)
-
-/* Set syslog channel filter */
-
-#define SYSLOGIOC_SETFILTER _SYSLOGIOC(0x0002)
-
-#define SYSLOG_CHANNEL_NAME_LEN 32
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -110,18 +100,11 @@ typedef CODE void (*syslog_close_t)(FAR struct syslog_channel_s *channel);
 
 struct syslog_channel_ops_s
 {
-  syslog_putc_t  sc_putc;         /* Normal buffered output */
-  syslog_putc_t  sc_force;        /* Low-level output for interrupt handlers */
-  syslog_flush_t sc_flush;        /* Flush buffered output (on crash) */
-  syslog_write_t sc_write;        /* Write multiple bytes */
-  syslog_write_t sc_write_force;  /* Write multiple bytes for interrupt handlers */
-  syslog_close_t sc_close;        /* Channel close callback */
-};
-
-struct syslog_channel_info_s
-{
-  char sc_name[SYSLOG_CHANNEL_NAME_LEN];
-  bool sc_disable;
+  syslog_putc_t  sc_putc;   /* Normal buffered output */
+  syslog_putc_t  sc_force;  /* Low-level output for interrupt handlers */
+  syslog_flush_t sc_flush;  /* Flush buffered output (on crash) */
+  syslog_write_t sc_write;  /* Write multiple bytes */
+  syslog_close_t sc_close;  /* Channel close callback */
 };
 
 /* This structure provides the interface to a SYSLOG channel */
@@ -133,16 +116,6 @@ struct syslog_channel_s
   FAR const struct syslog_channel_ops_s *sc_ops;
 
   /* Implementation specific logic may follow */
-
-#ifdef CONFIG_SYSLOG_IOCTL
-  /* Syslog channel name */
-
-  char sc_name[SYSLOG_CHANNEL_NAME_LEN];
-
-  /* Syslog channel enable status, true is disable */
-
-  bool sc_disable;
-#endif
 };
 
 /****************************************************************************
@@ -359,6 +332,25 @@ ssize_t syslog_write(FAR const char *buffer, size_t buflen);
  ****************************************************************************/
 
 int syslog_flush(void);
+
+/****************************************************************************
+ * Name: syslog_force
+ *
+ * Description:
+ *   This is the low-level system logging interface.  This version forces
+ *   the output and is only used in emergency situations (e.g., in assertion
+ *   handling).
+ *
+ * Input Parameters:
+ *   ch - The character to add to the SYSLOG (must be positive).
+ *
+ * Returned Value:
+ *   On success, the character is echoed back to the caller. A negated errno
+ *   value is returned on any failure.
+ *
+ ****************************************************************************/
+
+int syslog_force(int ch);
 
 /****************************************************************************
  * Name: nx_vsyslog

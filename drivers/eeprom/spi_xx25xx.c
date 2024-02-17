@@ -268,7 +268,7 @@ static const struct ee25xx_geom_s g_ee25xx_devices[] =
 
 /* Driver operations */
 
-static const struct file_operations g_ee25xx_fops =
+static const struct file_operations ee25xx_fops =
 {
   ee25xx_open,  /* open */
   ee25xx_close, /* close */
@@ -467,8 +467,8 @@ static int ee25xx_open(FAR struct file *filep)
   FAR struct ee25xx_dev_s *eedev;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee25xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -504,8 +504,8 @@ static int ee25xx_close(FAR struct file *filep)
   FAR struct ee25xx_dev_s *eedev;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee25xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -544,8 +544,8 @@ static off_t ee25xx_seek(FAR struct file *filep, off_t offset, int whence)
   int                     ret;
   FAR struct inode        *inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee25xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -616,8 +616,8 @@ static ssize_t ee25xx_read(FAR struct file *filep, FAR char *buffer,
   FAR struct inode        *inode = filep->f_inode;
   int ret;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee25xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -668,8 +668,8 @@ static ssize_t ee25xx_write(FAR struct file *filep, FAR const char *buffer,
   FAR struct inode        *inode = filep->f_inode;
   int                     ret    = -EACCES;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee25xx_dev_s *)inode->i_private;
 
   if (eedev->readonly)
     {
@@ -765,8 +765,8 @@ static int ee25xx_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct inode        *inode = filep->f_inode;
   int                     ret    = 0;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee25xx_dev_s *)inode->i_private;
   UNUSED(eedev);
 
   switch (cmd)
@@ -828,5 +828,5 @@ int ee25xx_initialize(FAR struct spi_dev_s *dev, FAR char *devname,
         "%u per page, addrlen %u, readonly %d\n",
        devname, eedev->size, eedev->pgsize, eedev->addrlen, eedev->readonly);
 
-  return register_driver(devname, &g_ee25xx_fops, 0666, eedev);
+  return register_driver(devname, &ee25xx_fops, 0666, eedev);
 }

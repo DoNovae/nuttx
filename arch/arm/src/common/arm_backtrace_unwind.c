@@ -23,9 +23,9 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-
 #include <nuttx/arch.h>
-#include <nuttx/elf.h>
+
+#include <arch/elf.h>
 
 #include "sched/sched.h"
 #include "arm_internal.h"
@@ -338,31 +338,6 @@ static int unwind_exec_pop_subset_r0_to_r3(struct unwind_ctrl_s *ctrl,
   return 0;
 }
 
-static unsigned long unwind_decode_uleb128(struct unwind_ctrl_s *ctrl)
-{
-  unsigned long bytes = 0;
-  unsigned long insn;
-  unsigned long result = 0;
-
-  /* unwind_get_byte() will advance `ctrl` one instruction at a time, so
-   * loop until we get an instruction byte where bit 7 is not set.
-   *
-   * Note: This decodes a maximum of 4 bytes to output 28 bits data where
-   * max is 0xfffffff: that will cover a vsp increment of 1073742336, hence
-   * it is sufficient for unwinding the stack.
-   */
-
-  do
-    {
-      insn = unwind_get_byte(ctrl);
-      result |= (insn & 0x7f) << (bytes * 7);
-      bytes++;
-    }
-  while (!!(insn & 0x80) && (bytes != sizeof(result)));
-
-  return result;
-}
-
 /****************************************************************************
  * Name: unwind_pop_register
  *
@@ -428,65 +403,9 @@ static int unwind_exec_content(struct unwind_ctrl_s *ctrl)
     }
   else if (content == 0xb2)
     {
-      unsigned long uleb128 = unwind_decode_uleb128(ctrl);
+      unsigned long uleb128 = unwind_get_byte(ctrl);
 
       ctrl->vrs[SP] += 0x204 + (uleb128 << 2);
-    }
-  else if (content == 0xb3 || content == 0xc8 || content == 0xc9)
-    {
-      unsigned long reg_from;
-      unsigned long reg_to;
-      unsigned long mask;
-      unsigned long *vsp = (unsigned long *)ctrl->vrs[SP];
-      int i;
-
-      mask = unwind_get_byte(ctrl);
-      if (mask == 0)
-        {
-          return -1;
-        }
-
-      reg_from = (mask & 0xf0) >> 4;
-      reg_to = reg_from + (mask & 0x0f);
-
-      if (content == 0xc8)
-        {
-          reg_from += 16;
-          reg_to += 16;
-        }
-
-      for (i = reg_from; i <= reg_to; i++)
-        {
-          vsp += 2;
-        }
-
-      if (content == 0xb3)
-        {
-          vsp++;
-        }
-
-      ctrl->vrs[SP] = (unsigned long)vsp;
-    }
-  else if ((content & 0xf8) == 0xb8 || (content & 0xf8) == 0xd0)
-    {
-      unsigned long reg_to;
-      unsigned long mask = content & 0x07;
-      unsigned long *vsp = (unsigned long *)ctrl->vrs[SP];
-      int i;
-
-      reg_to = 8 + mask;
-
-      for (i = 8; i <= reg_to; i++)
-        {
-          vsp += 2;
-        }
-
-      if ((content & 0xf8) == 0xb8)
-        {
-          vsp++;
-        }
-
-      ctrl->vrs[SP] = (unsigned long)vsp;
     }
   else
     {
@@ -512,7 +431,6 @@ int unwind_frame(struct unwind_frame_s *frame)
   ctrl.vrs[LR] = frame->lr;
   ctrl.vrs[PC] = 0;
   ctrl.stack_top = frame->stack_top;
-  ctrl.lr_addr = NULL;
 
   if (frame->pc == prel31_to_addr(&entry->fnoffset))
     {
@@ -620,7 +538,6 @@ nosanitize_address
 static int backtrace_unwind(struct unwind_frame_s *frame,
                             void **buffer, int size, int *skip)
 {
-  const struct __EIT_entry *entry;
   int cnt = 0;
 
   if (frame->pc && cnt < size && (*skip)-- <= 0)
@@ -633,16 +550,9 @@ static int backtrace_unwind(struct unwind_frame_s *frame,
       buffer[cnt++] = (void *)((frame->lr & ~1) - 2);
     }
 
-again:
   while (cnt < size)
     {
-      if (unwind_frame(frame) < 0 || frame->pc < 0x10)
-        {
-          break;
-        }
-
-      entry = unwind_find_entry(frame->pc);
-      if (entry == NULL || entry->content == 1)
+      if (unwind_frame(frame) < 0 || frame->pc == 0)
         {
           break;
         }
@@ -655,16 +565,6 @@ again:
             {
               buffer[cnt++] = (void *)frame->pc;
             }
-        }
-    }
-
-  if (cnt < size && cnt == 2 && frame->pc != frame->lr)
-    {
-      entry = unwind_find_entry(frame->lr);
-      if (entry != NULL && entry->content != 1)
-        {
-          frame->pc = frame->lr;
-          goto again;
         }
     }
 
@@ -737,7 +637,7 @@ int up_backtrace(struct tcb_s *tcb,
               frame.fp = CURRENT_REGS[REG_FP];
               frame.sp = CURRENT_REGS[REG_SP];
               frame.pc = CURRENT_REGS[REG_PC];
-              frame.lr = CURRENT_REGS[REG_LR];
+              frame.lr = 0;
               frame.stack_top = (unsigned long)rtcb->stack_base_ptr +
                                                rtcb->adj_stack_size;
               ret += backtrace_unwind(&frame, &buffer[ret],

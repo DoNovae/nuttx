@@ -33,7 +33,6 @@
 #include <errno.h>
 
 #include <nuttx/fs/fs.h>
-#include <nuttx/lib/lib.h>
 
 #include "inode/inode.h"
 
@@ -119,7 +118,7 @@ next_subdir:
 
           if (subdir != NULL)
             {
-              lib_free(subdir);
+              kmm_free(subdir);
               subdir = NULL;
             }
 
@@ -129,10 +128,9 @@ next_subdir:
            */
 
           subdirname = basename((FAR char *)oldpath);
-          ret = asprintf(&subdir, "%s/%s", newpath, subdirname);
-          if (ret < 0)
+          asprintf(&subdir, "%s/%s", newpath, subdirname);
+          if (subdir == NULL)
             {
-              subdir = NULL;
               ret = -ENOMEM;
               goto errout;
             }
@@ -246,7 +244,7 @@ errout:
   RELEASE_SEARCH(&newdesc);
   if (subdir != NULL)
     {
-      lib_free(subdir);
+      kmm_free(subdir);
     }
 
   return ret;
@@ -348,6 +346,14 @@ next_subdir:
             {
               FAR char *subdirname;
 
+              /* Free memory may be allocated in previous loop */
+
+              if (subdir != NULL)
+                {
+                   kmm_free(subdir);
+                   subdir = NULL;
+                }
+
               /* Yes.. In this case, the target of the rename must be a
                * subdirectory of newinode, not the newinode itself.  For
                * example: mv b a/ must move b to a/b.
@@ -363,22 +369,10 @@ next_subdir:
                 }
               else
                 {
-                  /* Save subdir to free memory may be allocated in
-                   * previous loop.
-                   */
-
-                  FAR void *tmp = subdir;
-
-                  ret = asprintf(&subdir, "%s/%s", newrelpath,
-                                 subdirname);
-                  if (tmp != NULL)
+                  asprintf(&subdir, "%s/%s", newrelpath,
+                           subdirname);
+                  if (subdir == NULL)
                     {
-                      lib_free(tmp);
-                    }
-
-                  if (ret < 0)
-                    {
-                      subdir = NULL;
                       ret = -ENOMEM;
                       goto errout_with_newinode;
                     }
@@ -435,7 +429,7 @@ errout_with_newsearch:
   RELEASE_SEARCH(&newdesc);
   if (subdir != NULL)
     {
-      lib_free(subdir);
+      kmm_free(subdir);
     }
 
   return ret;

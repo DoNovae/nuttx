@@ -45,7 +45,7 @@ config INPUT_UINPUT
 		Enable support virtual input device driver
 
 config UINPUT_RPMSG
-	bool "Enable uinput RPMSG"
+	bool "Enable uinput rpmsg"
 	depends on INPUT_UINPUT
 	depends on RPTUN
 	default n
@@ -415,22 +415,6 @@ config STMPE811_SWAPXY
 	---help---
 		Reverse the meaning of X and Y to handle different LCD orientations.
 
-config STMPE811_OFFSETX
-	int "X offset"
-	default 0
-	depends on !STMPE811_TSC_DISABLE
-	---help---
-		Horizontal offset between the left edge of the touchscreen and
-		the left edge of the display area.
-
-config STMPE811_OFFSETY
-	int "Y offset"
-	default 0
-	depends on !STMPE811_TSC_DISABLE
-	---help---
-		Vertical offset between the top edge of the touchscreen and
-		the top edge of the display area.
-
 config STMPE811_THRESHX
 	int "X threshold"
 	default 12
@@ -490,6 +474,13 @@ config STMPE811_REGDEBUG
 
 endif # INPUT_STMPE811
 
+config INPUT_M5TOUGH_CHSC6540
+	bool "Enable M5TOUGH CHSC6540 touch screen"
+	default n
+	select INPUT_TOUCHSCREEN
+	---help---
+		Enable M5TOUGH CHSC6540 touch screen
+		
 config INPUT_CYPRESS_MBR3108
 	bool "Enable Cypress MBR3108 CapSense driver"
 	default n
@@ -543,13 +534,6 @@ config INPUT_BUTTONS
 	default n
 	---help---
 		Enable standard button upper half driver.
-
-config INPUT_BUTTONS_DEBOUNCE_DELAY
-	int "Button Debounce Delay (millisecond)"
-	default 0
-	depends on INPUT_BUTTONS
-	---help---
-		Button Debounce Delay in ms
 
 if INPUT_BUTTONS
 

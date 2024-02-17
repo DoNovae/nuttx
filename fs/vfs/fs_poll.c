@@ -264,8 +264,7 @@ void poll_notify(FAR struct pollfd **afds, int nfds, pollevent_t eventset)
               fds->revents &= ~POLLOUT;
             }
 
-          if ((fds->revents != 0 || (fds->events & POLLALWAYS) != 0) &&
-              fds->cb != NULL)
+          if (fds->revents != 0 && fds->cb != NULL)
             {
               finfo("Report events: %08" PRIx32 "\n", fds->revents);
               fds->cb(fds);
@@ -308,28 +307,21 @@ int file_poll(FAR struct file *filep, FAR struct pollfd *fds, bool setup)
        */
 
       if ((INODE_IS_DRIVER(inode) || INODE_IS_MQUEUE(inode) ||
-          INODE_IS_SOCKET(inode) || INODE_IS_PIPE(inode)) &&
+          INODE_IS_SOCKET(inode)) &&
           inode->u.i_ops != NULL && inode->u.i_ops->poll != NULL)
         {
           /* Yes, it does... Setup the poll */
 
-          ret = inode->u.i_ops->poll(filep, fds, setup);
+          ret = (int)inode->u.i_ops->poll(filep, fds, setup);
         }
-#ifndef CONFIG_DISABLE_MOUNTPOINT
-      else if (INODE_IS_MOUNTPT(inode) && inode->u.i_mops != NULL &&
-               inode->u.i_mops->poll != NULL)
-        {
-          ret = inode->u.i_mops->poll(filep, fds, setup);
-        }
-#endif
 
       /* Regular files (and block devices) are always readable and
        * writable. Open Group: "Regular files shall always poll TRUE for
        * reading and writing."
        */
 
-      else if (INODE_IS_MOUNTPT(inode) || INODE_IS_BLOCK(inode) ||
-               INODE_IS_MTD(inode))
+      if (INODE_IS_MOUNTPT(inode) || INODE_IS_BLOCK(inode) ||
+          INODE_IS_MTD(inode))
         {
           if (setup)
             {
@@ -401,7 +393,7 @@ int poll(FAR struct pollfd *fds, nfds_t nfds, int timeout)
     {
       /* Out of memory */
 
-      ret = -ENOMEM;
+      ret = ENOMEM;
       goto out_with_cancelpt;
     }
 

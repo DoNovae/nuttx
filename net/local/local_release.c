@@ -66,11 +66,22 @@ int local_release(FAR struct local_conn_s *conn)
 
   DEBUGASSERT(conn->lc_state != LOCAL_STATE_ACCEPT);
 
+  /* If the socket is connected (SOCK_STREAM client), then disconnect it */
+
+  if (conn->lc_state == LOCAL_STATE_CONNECTED ||
+      conn->lc_state == LOCAL_STATE_CONNECTING ||
+      conn->lc_state == LOCAL_STATE_DISCONNECTED)
+    {
+      DEBUGASSERT(conn->lc_proto == SOCK_STREAM);
+
+      /* Just free the connection structure */
+    }
+
   /* Is the socket is listening socket (SOCK_STREAM server) */
 
-  if (conn->lc_state == LOCAL_STATE_LISTENING)
+  else if (conn->lc_state == LOCAL_STATE_LISTENING)
     {
-      FAR struct local_conn_s *accept;
+      FAR struct local_conn_s *client;
       FAR dq_entry_t *waiter;
 
       DEBUGASSERT(conn->lc_proto == SOCK_STREAM);
@@ -79,11 +90,13 @@ int local_release(FAR struct local_conn_s *conn)
 
       for (waiter = dq_peek(&conn->u.server.lc_waiters);
            waiter;
-           waiter = dq_next(&accept->u.accept.lc_waiter))
+           waiter = dq_next(&client->u.client.lc_waiter))
         {
-          accept = container_of(waiter, struct local_conn_s,
-                                u.accept.lc_waiter);
-          local_subref(accept);
+          client = container_of(waiter, struct local_conn_s,
+                                u.client.lc_waiter);
+          client->u.client.lc_result = -ENOTCONN;
+          nxsem_post(&client->lc_waitsem);
+          local_event_pollnotify(client, POLLOUT);
         }
 
       conn->u.server.lc_pending = 0;

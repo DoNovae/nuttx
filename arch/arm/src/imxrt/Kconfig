@@ -74,11 +74,6 @@ config ARCH_CHIP_MIMXRT1064CVL5A
 	select ARCH_FAMILY_MIMXRT106xCVL5A
 	select IMXRT_HAVE_LCD
 
-config ARCH_CHIP_MIMXRT1176DVMAA
-	bool "MIMXRT1176DVMAA"
-	select ARCH_FAMILY_IMXRT117x
-	select IMXRT_HAVE_LCD
-
 endchoice # i.MX RT Chip Selection
 
 # i.MX RT Families
@@ -143,29 +138,7 @@ config ARCH_FAMILY_MIMXRT106xCVL5A
 	default n
 	select ARCH_FAMILY_IMXRT106x
 	---help---
-		i.MX RT1060 Crossover Processors for Industrial Products
-
-config ARCH_FAMILY_IMXRT117x
-	bool
-	default n
-	select ARCH_HAVE_FPU
-	select ARCH_HAVE_DPFPU # REVISIT
-	select ARMV7M_HAVE_ICACHE
-	select ARMV7M_HAVE_DCACHE
-	select ARMV7M_HAVE_ITCM
-	select ARMV7M_HAVE_DTCM
-	select IMXRT_HIGHSPEED_GPIO
-	select IMXRT_HAVE_FLEXSPI2
-	select IMXRT_ADC_VER2
-	select IMXRT_CLOCKCONFIG_VER2
-	select IMXRT_IOMUX_VER2
-	select IMXRT_HAVE_LPUART9
-	select IMXRT_HAVE_LPUART10
-	select IMXRT_HAVE_LPUART11
-	select IMXRT_HAVE_LPUART12
-	select IMXRT_FLEXCAN_ECC
-	select IMXRT_FLEXCAN1_FD
-	select IMXRT_FLEXCAN2_FD
+		i.MX RT1056 Crossover Processors for Industrial Products
 
 config ARCH_FAMILY_IMXRT106x
 	bool
@@ -177,8 +150,6 @@ config ARCH_FAMILY_IMXRT106x
 	select ARMV7M_HAVE_ITCM
 	select ARMV7M_HAVE_DTCM
 	select IMXRT_HIGHSPEED_GPIO
-	select IMXRT_HAVE_FLEXSPI2
-	select IMXRT_HAVE_FLEXIO3
 
 config IMXRT_HAVE_OTA_PARTITION
 	bool
@@ -212,7 +183,7 @@ config IMXRT_APP_FORMAT_MCUBOOT
 	select IMXRT_HAVE_OTA_PARTITION
 	depends on EXPERIMENTAL
 	---help---
-		The MCUboot support of loading the firmware images.
+		The MCUboot support of loading the firmware images.		
 
 comment "MCUboot support depends on CONFIG_EXPERIMENTAL"
 	depends on !EXPERIMENTAL
@@ -235,38 +206,10 @@ config IMXRT_HAVE_LPUART
 	bool
 	default n
 
-config IMXRT_HAVE_LPUART9
-	bool
-	default n
-
-config IMXRT_HAVE_LPUART10
-	bool
-	default n
-
-config IMXRT_HAVE_LPUART11
-	bool
-	default n
-
-config IMXRT_HAVE_LPUART12
-	bool
-	default n
-
 config IMXRT_FLEXCAN
 	bool
 	default n
 	select ARCH_HAVE_NETDEV_STATISTICS
-
-config IMXRT_FLEXCAN_ECC
-	bool
-	default n
-
-config IMXRT_FLEXCAN1_FD
-	bool
-	default n
-
-config IMXRT_FLEXCAN2_FD
-	bool
-	default n
 
 config IMXRT_FLEXPWM
 	bool
@@ -282,14 +225,6 @@ config IMXRT_LPSPI
 	default n
 
 config IMXRT_FLEXSPI
-	bool
-	default n
-
-config IMXRT_HAVE_FLEXIO3
-	bool
-	default n
-
-config IMXRT_HAVE_FLEXSPI2
 	bool
 	default n
 
@@ -310,18 +245,6 @@ config IMXRT_HAVE_LCD
 	default n
 
 config IMXRT_SEMC_INIT_DONE
-	bool
-	default n
-
-config IMXRT_ADC_VER2
-	bool
-	default n
-
-config IMXRT_CLOCKCONFIG_VER2
-	bool
-	default n
-
-config IMXRT_IOMUX_VER2
 	bool
 	default n
 
@@ -365,7 +288,7 @@ config IMXRT_FLEXIO1
 	default n
 	select IMXRT_FLEXIO
 
-if (IMXRT_FLEXIO1 && !IMXRT_CLOCKCONFIG_VER2)
+if IMXRT_FLEXIO1
 
 choice
 	prompt "FLEXIO1 Clock Source"
@@ -380,7 +303,7 @@ config FLEXIO1_CLK_PLL4
 config FLEXIO1_CLK_PLL3_PFD2
 	bool "PLL3_PFD2"
 
-if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x || ARCH_FAMILY_IMXRT117x
+if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x
 
 config FLEXIO1_CLK_PLL5
 	bool "PLL5"
@@ -415,14 +338,14 @@ config FLEXIO1_PODF_DIVIDER
 
 endif # IMXRT_FLEXIO1
 
-if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x || ARCH_FAMILY_IMXRT117x
+if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x
 
 config IMXRT_FLEXIO2
 	bool "FLEXIO2"
 	default n
 	select IMXRT_FLEXIO
 
-if (IMXRT_FLEXIO2 || IMXRT_FLEXIO3) && !IMXRT_CLOCKCONFIG_VER2
+if IMXRT_FLEXIO2 || IMXRT_FLEXIO3
 
 choice
 	prompt "FLEXIO2 Clock Source"
@@ -470,13 +393,12 @@ config FLEXIO2_PODF_DIVIDER
 
 endif # IMXRT_FLEXIO2 || IMXRT_FLEXIO3
 
-if ARCH_FAMILY_IMXRT106x || ARCH_FAMILY_IMXRT117x
+if ARCH_FAMILY_IMXRT106x
 
 config IMXRT_FLEXIO3
 	bool "FLEXIO3"
 	default n
 	select IMXRT_FLEXIO
-	depends on IMXRT_HAVE_FLEXIO3
 	---help---
 		FLEXIO3 uses the FLEXIO2 clock settings.
 
@@ -542,38 +464,6 @@ config IMXRT_LPUART8
 	select LPUART8_SERIALDRIVER
 	select ARCH_HAVE_SERIAL_TERMIOS
 	select IMXRT_HAVE_LPUART
-
-config IMXRT_LPUART9
-	bool "LPUART9"
-	default n
-	select LPUART9_SERIALDRIVER
-	select ARCH_HAVE_SERIAL_TERMIOS
-	select IMXRT_HAVE_LPUART
-	depends on IMXRT_HAVE_LPUART9
-
-config IMXRT_LPUART10
-	bool "LPUART10"
-	default n
-	select LPUART10_SERIALDRIVER
-	select ARCH_HAVE_SERIAL_TERMIOS
-	select IMXRT_HAVE_LPUART
-	depends on IMXRT_HAVE_LPUART10
-
-config IMXRT_LPUART11
-	bool "LPUART11"
-	default n
-	select LPUART11_SERIALDRIVER
-	select ARCH_HAVE_SERIAL_TERMIOS
-	select IMXRT_HAVE_LPUART
-	depends on IMXRT_HAVE_LPUART11
-
-config IMXRT_LPUART12
-	bool "LPUART12"
-	default n
-	select LPUART12_SERIALDRIVER
-	select ARCH_HAVE_SERIAL_TERMIOS
-	select IMXRT_HAVE_LPUART
-	depends on IMXRT_HAVE_LPUART12
 
 endmenu # LPUART Peripherals
 
@@ -646,33 +536,11 @@ menu "FLEXCAN1 Configuration"
 
 config FLEXCAN1_BITRATE
 	int "CAN bitrate"
-	depends on !(NET_CAN_CANFD && IMXRT_FLEXCAN1_FD)
 	default 1000000
 
 config FLEXCAN1_SAMPLEP
 	int "CAN sample point"
-	depends on !(NET_CAN_CANFD && IMXRT_FLEXCAN1_FD)
 	default 80
-
-config FLEXCAN1_ARBI_BITRATE
-	int "CAN FD Arbitration phase bitrate"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN1_FD
-	default 1000000
-
-config FLEXCAN1_ARBI_SAMPLEP
-	int "CAN FD Arbitration phase sample point"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN1_FD
-	default 80
-
-config FLEXCAN1_DATA_BITRATE
-	int "CAN FD Data phase bitrate"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN1_FD
-	default 4000000
-
-config FLEXCAN1_DATA_SAMPLEP
-	int "CAN FD Data phase sample point"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN1_FD
-	default 90
 
 endmenu # IMXRT_FLEXCAN1
 
@@ -681,33 +549,11 @@ menu "FLEXCAN2 Configuration"
 
 config FLEXCAN2_BITRATE
 	int "CAN bitrate"
-	depends on !(NET_CAN_CANFD && IMXRT_FLEXCAN2_FD)
 	default 1000000
 
 config FLEXCAN2_SAMPLEP
 	int "CAN sample point"
-	depends on !(NET_CAN_CANFD && IMXRT_FLEXCAN2_FD)
 	default 80
-
-config FLEXCAN2_ARBI_BITRATE
-	int "CAN FD Arbitration phase bitrate"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN2_FD
-	default 1000000
-
-config FLEXCAN2_ARBI_SAMPLEP
-	int "CAN FD Arbitration phase sample point"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN2_FD
-	default 80
-
-config FLEXCAN2_DATA_BITRATE
-	int "CAN FD Data phase bitrate"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN2_FD
-	default 4000000
-
-config FLEXCAN2_DATA_SAMPLEP
-	int "CAN FD Data phase sample point"
-	depends on NET_CAN_CANFD && IMXRT_FLEXCAN2_FD
-	default 90
 
 endmenu # IMXRT_FLEXCAN2
 
@@ -758,7 +604,7 @@ config IMXRT_FLEXPWM2
 	default n
 	select IMXRT_FLEXPWM
 
-if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x || ARCH_FAMILY_IMXRT117x
+if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x
 
 config IMXRT_FLEXPWM3
 	bool "FLEXPWM3"
@@ -770,7 +616,7 @@ config IMXRT_FLEXPWM4
 	default n
 	select IMXRT_FLEXPWM
 
-endif # ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x || ARCH_FAMILY_IMXRT117x
+endif # ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x
 
 endmenu # FLEXPWM Peripherals
 
@@ -1779,50 +1625,6 @@ config LPI2C4_FILTSDA
 	default 0
 
 endif # IMXRT_LPI2C4
-
-menuconfig IMXRT_LPI2C5
-	bool "LPI2C5"
-	default n
-	select IMXRT_LPI2C
-	depends on ARCH_FAMILY_IMXRT117x
-
-if IMXRT_LPI2C5
-
-config LPI2C5_BUSYIDLE
-	int "Bus idle timeout period in clock cycles"
-	default 0
-
-config LPI2C5_FILTSCL
-	int "I2C master digital glitch filters for SCL input in clock cycles"
-	default 0
-
-config LPI2C5_FILTSDA
-	int "I2C master digital glitch filters for SDA input in clock cycles"
-	default 0
-
-endif # IMXRT_LPI2C5
-
-menuconfig IMXRT_LPI2C6
-	bool "LPI2C6"
-	default n
-	select IMXRT_LPI2C
-	depends on ARCH_FAMILY_IMXRT117x
-
-if IMXRT_LPI2C6
-
-config LPI2C6_BUSYIDLE
-	int "Bus idle timeout period in clock cycles"
-	default 0
-
-config LPI2C6_FILTSCL
-	int "I2C master digital glitch filters for SCL input in clock cycles"
-	default 0
-
-config LPI2C6_FILTSDA
-	int "I2C master digital glitch filters for SDA input in clock cycles"
-	default 0
-
-endif # IMXRT_LPI2C6
 endmenu # LPI2C Peripherals
 
 menu "LPSPI Peripherals"
@@ -1847,20 +1649,6 @@ menuconfig IMXRT_LPSPI4
 	default n
 	select IMXRT_LPSPI
 
-if ARCH_FAMILY_IMXRT117x
-
-menuconfig IMXRT_LPSPI5
-	bool "LPSPI5"
-	default n
-	select IMXRT_LPSPI
-
-menuconfig IMXRT_LPSPI6
-	bool "LPSPI6"
-	default n
-	select IMXRT_LPSPI
-
-endif
-
 endmenu # LPSPI Peripherals
 
 menu "FLEXSPI Peripherals"
@@ -1869,12 +1657,6 @@ menuconfig IMXRT_FLEXSPI1
 	bool "FLEXSPI1"
 	default n
 	select IMXRT_FLEXSPI
-
-menuconfig IMXRT_FLEXSPI2
-	bool "FLEXSPI2"
-	default n
-	select IMXRT_FLEXSPI
-	depends on IMXRT_HAVE_FLEXSPI2
 
 endmenu # FLEXSPI Peripherals
 
@@ -2115,7 +1897,7 @@ endif # DEBUG_SENSORS
 
 endif # IMXRT_ENC2
 
-if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x || ARCH_FAMILY_IMXRT117x
+if ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x
 
 menuconfig IMXRT_ENC3
 	bool "ENC3"
@@ -2275,7 +2057,7 @@ endif # DEBUG_SENSORS
 
 endif # IMXRT_ENC4
 
-endif # ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x || ARCH_FAMILY_IMXRT117x
+endif # ARCH_FAMILY_IMXRT105x || ARCH_FAMILY_IMXRT106x
 
 endmenu # ENC Peripherals
 
@@ -2367,11 +2149,6 @@ config IMXRT_GPIO9_16_31_IRQ
 	default n
 	depends on IMXRT_HIGHSPEED_GPIO
 
-config IMXRT_GPIO13_IRQ
-	bool "GPIO13 Pins 0-31 interrupts"
-	default n
-	depends on ARCH_FAMILY_IMXRT117x
-
 endif # IMXRT_GPIO_IRQ
 
 menu "Ethernet Configuration"
@@ -2414,10 +2191,11 @@ config IMXRT_ENET_NTXBUFFERS
 
 config IMXRT_ENET_ENHANCEDBD
 	bool # not optional
-	default !ARMV7M_DCACHE_WRITETHROUGH
+	default n if ARMV7M_DCACHE_WRITETHROUGH
+	default y if !ARMV7M_DCACHE_WRITETHROUGH
 
 config IMXRT_ENET_NETHIFS
-	int # Not optional
+	int  # Not optional
 	default 1
 
 config IMXRT_ENET_PHYINIT
@@ -2444,12 +2222,6 @@ config IMXRT_PHY_POLLING
 endmenu # IMXRT_ENET
 
 menu "Memory Configuration"
-
-config IMXRT_INIT_FLEXRAM
-	bool "Calls out to the board code to set GPR16-18"
-	---help---
-		Some configuration will need to map flexRAM
-		this must be done prior to data/bss etc init.
 
 config IMXRT_DTCM
 	int "FLEXRAM DTCM Size in K"
@@ -2504,8 +2276,8 @@ choice
 	prompt "i.MX RT Boot Configuration"
 	default IMXRT_BOOT_NOR if IMXRT_SEMC_NOR
 	default IMXRT_BOOT_SDRAM if IMXRT_SEMC_SDRAM && !IMXRT_SEMC_NOR
-	default IMXRT_BOOT_SRAM if IMXRT_SEMC_SRAM && !IMXRT_SEMC_SDRAM && !IMXRT_SEMC_NOR
-	default IMXRT_BOOT_OCRAM if !IMXRT_SEMC_SRAM && !IMXRT_SEMC_SDRAM && !IMXRT_SEMC_NOR
+	default IMXRT_BOOT_SRAM if IMXRT_SEMC_SRAM && !IMXRT_SEMC_SDRAM  && !IMXRT_SEMC_NOR
+	default IMXRT_BOOT_OCRAM if !IMXRT_SEMC_SRAM && !IMXRT_SEMC_SDRAM  && !IMXRT_SEMC_NOR
 	---help---
 		The startup code needs to know if the code is running from internal
 		OCRAM, external SDRAM, external NOR, or external SDRAM in order to
@@ -2614,11 +2386,6 @@ config IMXRT_SRAM_HEAPOFFSET
 		a framebuffer.
 
 endmenu  # i.MX RT Heap Configuration
-
-config IMXRT_FLEXRAM_PARTITION
-	bool "Set FlexRAM Paritioning"
-	depends on ARCH_FAMILY_IMXRT117x
-
 endmenu # Memory Configuration
 
 menu "LPI2C Configuration"
@@ -2888,7 +2655,7 @@ menu "RTC Configuration"
 config IMXRT_RTC_MAGIC_REG
 	int "RTC SNVS GPR"
 	default 0
-	range 0 3
+	range  0 3
 	---help---
 		The BKP register used to store/check the Magic value to determine if
 		RTC is already setup
@@ -3148,24 +2915,24 @@ config IMXRT_PROGMEM_FLEXSPI_INSTANCE
 		FlexSPI instance number. Base address 0x60000000 is used for instance 0
 		and 0x70000000 for instance 1. Other values are not supported.
 
-endif # IMXRT_PROGMEM
+endif   #IMXRT_PROGMEM
 
 if IMXRT_HAVE_OTA_PARTITION
 
 comment "Application Image OTA Update support"
 
 config IMXRT_PROGMEM_OTA_PARTITION
-	bool "MTD driver"
-	default n
+ 	bool "MTD driver"
+ 	default n
 	select BCH
-	select MTD
-	select MTD_BYTE_WRITE
-	select MTD_PARTITION
-	select MTD_PROGMEM
-	select IMXRT_PROGMEM
-	---help---
-		Initialize an MTD driver for the Flash, which will
-		add an entry at /dev for application access from userspace.
+ 	select MTD
+ 	select MTD_BYTE_WRITE
+ 	select MTD_PARTITION
+ 	select MTD_PROGMEM
+ 	select IMXRT_PROGMEM
+ 	---help---
+ 		Initialize an MTD driver for the Flash, which will
+ 		add an entry at /dev for application access from userspace.
 
 if IMXRT_PROGMEM_OTA_PARTITION
 config IMXRT_MCUBOOT_HEADER_SIZE
@@ -3205,8 +2972,8 @@ config IMXRT_OTA_SCRATCH_SIZE
 	hex "MCUboot scratch partition size (in bytes)"
 	default "0x40000"
 
-endif # IMXRT_PROGMEM_OTA_PARTITION
-endif # IMXRT_HAVE_OTA_PARTITION
+endif   #IMXRT_PROGMEM_OTA_PARTITION
+endif   #IMXRT_HAVE_OTA_PARTITION
 
 endmenu # Progmem configuration
 

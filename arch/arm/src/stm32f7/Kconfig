@@ -1080,19 +1080,19 @@ choice
 		   herein and can be changed.
 
 config STM32F7_FLASH_OVERRIDE_DEFAULT
-	bool "Default"
+			bool "Default"
 
 config STM32F7_FLASH_OVERRIDE_C
-	bool "C 256KiB"
+			bool "C 256KiB"
 
 config STM32F7_FLASH_OVERRIDE_E
-	bool "E 512KiB"
+			bool "E 512KiB"
 
 config STM32F7_FLASH_OVERRIDE_G
-	bool "G 1024KiB"
+			bool "G 1024KiB"
 
 config STM32F7_FLASH_OVERRIDE_I
-	bool "I 2048KiB"
+			bool "I 2048KiB"
 
 endchoice # "Override Flash Size Designator"
 
@@ -1748,27 +1748,6 @@ config STM32F7_WWDG
 	select WATCHDOG
 
 endmenu
-
-config STM32F7_USE_LEGACY_PINMAP
-	bool "Use the legacy pinmap with GPIO_SPEED_xxx included."
-	default y
-	---help---
-		In the past, pinmap files included GPIO_SPEED_xxxMhz. These speed
-		settings should have come from the board.h as it describes the wiring
-		of the SoC to the board. The speed is really slew rate control and
-		therefore is related to the layout and can only be properly set
-		in board.h.
-
-		STM32F7_USE_LEGACY_PINMAP is provided, to allow lazy migration to
-		using pinmaps without speeds. The work required to do this can be aided
-		by running tools/stm32_pinmap_tool.py. The tools will take a board.h
-		file and a legacy pinmap and output the required changes that one needs
-		to make to a board.h file.
-
-		Eventually, STM32F7_USE_LEGACY_PINMAP will be deprecated and the legacy
-		pinmaps removed from NuttX. Any new boards added should set
-		STM32F7_USE_LEGACY_PINMAP=n and fully define the pins in board.h
-
 
 config STM32F7_SYSCFG_IOCOMPENSATION
 	bool "SYSCFG I/O Compensation"
@@ -2589,7 +2568,7 @@ menu "RTC Configuration"
 config STM32F7_RTC_MAGIC_REG
 	int "BKP register"
 	default 0
-	range 0 31
+	range  0 31
 	---help---
 		The BKP register used to store/check the Magic value to determine if
 		RTC is already setup
@@ -2677,7 +2656,7 @@ config STM32F7_CUSTOM_CLOCKCONFIG
 
 config STM32F7_DTCMEXCLUDE
 	bool "Exclude DTCM SRAM from the heap"
-	default LIBC_ARCH_ELF
+	default y if LIBC_ARCH_ELF
 	depends on ARMV7M_HAVE_DTCM
 	---help---
 		Exclude DTCM SRAM from the HEAP because it appears to be impossible
@@ -6217,7 +6196,7 @@ config STM32F7_ADC1_DMA
 config STM32F7_ADC1_SCAN
 	bool "ADC1 scan mode"
 	depends on STM32F7_ADC1
-	default STM32F7_ADC1_DMA
+	default y if STM32F7_ADC1_DMA
 	default n
 
 config STM32F7_ADC1_DMA_CFG
@@ -6250,7 +6229,8 @@ config STM32F7_ADC2_DMA
 config STM32F7_ADC2_SCAN
 	bool "ADC2 scan mode"
 	depends on STM32F7_ADC2
-	default STM32F7_ADC2_DMA
+	default y if STM32F7_ADC2_DMA
+	default n
 
 config STM32F7_ADC2_DMA_CFG
 	int "ADC2 DMA configuration"
@@ -6282,7 +6262,8 @@ config STM32F7_ADC3_DMA
 config STM32F7_ADC3_SCAN
 	bool "ADC3 scan mode"
 	depends on STM32F7_ADC3
-	default STM32F7_ADC3_DMA
+	default y if STM32F7_ADC3_DMA
+	default n
 
 config STM32F7_ADC3_DMA_CFG
 	int "ADC3 DMA configuration"
@@ -6541,7 +6522,7 @@ config STM32F7_ETH_PTP
 
 config STM32F7_RMII
 	bool
-	default !STM32F7_MII
+	default y if !STM32F7_MII
 
 choice
 	prompt "RMII clock configuration"

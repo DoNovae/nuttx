@@ -223,10 +223,6 @@ void __start(void)
     }
 #endif
 
-#ifdef CONFIG_ARMV7M_STACKCHECK
-  arm_stack_check_init();
-#endif
-
   /* Configure the UART so that we can get debug output as soon as possible */
 
   stm32_clockconfig();
@@ -249,7 +245,7 @@ void __start(void)
   up_enable_dcache();
   showprogress('C');
 
-#ifdef CONFIG_ARCH_PERF_EVENTS
+#ifdef CONFIG_SCHED_IRQMONITOR
   up_perf_init((void *)STM32_SYSCLK_FREQUENCY);
 #endif
 

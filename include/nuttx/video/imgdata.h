@@ -45,7 +45,6 @@
 #define IMGDATA_PIX_FMT_SUBIMG_RGB565    (5)
 #define IMGDATA_PIX_FMT_YUYV             (6)
 #define IMGDATA_PIX_FMT_YUV420P          (7)
-#define IMGDATA_PIX_FMT_NV12             (8)
 
 /* Method access helper macros */
 
@@ -53,14 +52,14 @@
   ((d)->ops->init ? (d)->ops->init(d) : -ENOTTY)
 #define IMGDATA_UNINIT(d) \
   ((d)->ops->uninit ? (d)->ops->uninit(d) : -ENOTTY)
-#define IMGDATA_SET_BUF(d, n, f, a, s) \
-  ((d)->ops->set_buf ? (d)->ops->set_buf(d, n, f, a, s) : NULL)
+#define IMGDATA_SET_BUF(d, a, s) \
+  ((d)->ops->set_buf ? (d)->ops->set_buf(d, a, s) : NULL)
 #define IMGDATA_VALIDATE_FRAME_SETTING(d, n, f, i) \
   ((d)->ops->validate_frame_setting ? \
    (d)->ops->validate_frame_setting(d, n, f, i) : -ENOTTY)
-#define IMGDATA_START_CAPTURE(d, n, f, i, c, a) \
+#define IMGDATA_START_CAPTURE(d, n, f, i, c) \
   ((d)->ops->start_capture ? \
-   (d)->ops->start_capture(d, n, f, i, c, a) : -ENOTTY)
+   (d)->ops->start_capture(d, n, f, i, c) : -ENOTTY)
 #define IMGDATA_STOP_CAPTURE(d) \
   ((d)->ops->stop_capture ? (d)->ops->stop_capture(d) : -ENOTTY)
 
@@ -84,8 +83,7 @@ typedef struct imgdata_interval_s
 } imgdata_interval_t;
 
 typedef int (*imgdata_capture_t)(uint8_t result, uint32_t size,
-                                 FAR const struct timeval *ts,
-                                 FAR void *arg);
+                                 FAR const struct timeval *ts);
 
 /* Structure for Data Control I/F */
 
@@ -96,8 +94,6 @@ struct imgdata_ops_s
   CODE int (*uninit)(FAR struct imgdata_s *data);
 
   CODE int (*set_buf)(FAR struct imgdata_s *data,
-                      uint8_t nr_datafmts,
-                      FAR imgdata_format_t *datafmts,
                       uint8_t *addr, uint32_t size);
 
   CODE int (*validate_frame_setting)(FAR struct imgdata_s *data,
@@ -108,8 +104,7 @@ struct imgdata_ops_s
                             uint8_t nr_datafmts,
                             FAR imgdata_format_t *datafmts,
                             FAR imgdata_interval_t *interval,
-                            FAR imgdata_capture_t callback,
-                            FAR void *arg);
+                            FAR imgdata_capture_t callback);
   CODE int (*stop_capture)(FAR struct imgdata_s *data);
 };
 

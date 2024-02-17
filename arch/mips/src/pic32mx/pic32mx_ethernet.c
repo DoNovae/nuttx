@@ -43,7 +43,6 @@
 #include <nuttx/wqueue.h>
 #include <nuttx/net/mii.h>
 #include <nuttx/net/netconfig.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
@@ -336,8 +335,8 @@ static void pic32mx_checkreg(uint32_t addr, uint32_t val, bool iswrite);
 static uint32_t pic32mx_getreg(uint32_t addr);
 static void pic32mx_putreg(uint32_t val, uint32_t addr);
 #else
-#  define pic32mx_getreg(addr)     getreg32(addr)
-#  define pic32mx_putreg(val,addr) putreg32(val,addr)
+# define pic32mx_getreg(addr)     getreg32(addr)
+# define pic32mx_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Buffer and descriptor management */
@@ -348,8 +347,8 @@ static void pic32mx_dumptxdesc(struct pic32mx_txdesc_s *txdesc,
 static void pic32mx_dumprxdesc(struct pic32mx_rxdesc_s *rxdesc,
                                const char *msg);
 #else
-#  define pic32mx_dumptxdesc(txdesc,msg)
-#  define pic32mx_dumprxdesc(rxdesc,msg)
+# define pic32mx_dumptxdesc(txdesc,msg)
+# define pic32mx_dumprxdesc(rxdesc,msg)
 #endif
 
 static inline void pic32mx_bufferinit(struct pic32mx_driver_s *priv);
@@ -1905,9 +1904,11 @@ static int pic32mx_ifup(struct net_driver_s *dev)
   uint32_t regval;
   int ret;
 
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 
   /* Reset the Ethernet controller (again) */
 

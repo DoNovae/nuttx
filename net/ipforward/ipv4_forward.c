@@ -337,24 +337,13 @@ errout:
  ****************************************************************************/
 
 #ifdef CONFIG_NET_IPFORWARD_BROADCAST
-static int ipv4_forward_callback(FAR struct net_driver_s *fwddev,
-                                 FAR void *arg)
+int ipv4_forward_callback(FAR struct net_driver_s *fwddev, FAR void *arg)
 {
   FAR struct net_driver_s *dev = (FAR struct net_driver_s *)arg;
   FAR struct ipv4_hdr_s *ipv4;
-  FAR struct iob_s *iob;
   int ret;
 
-  DEBUGASSERT(fwddev != NULL);
-
-  /* Only IFF_UP device and non-loopback device need forward packet */
-
-  if (!IFF_IS_UP(fwddev->d_flags) || fwddev->d_lltype == NET_LL_LOOPBACK)
-    {
-      return OK;
-    }
-
-  DEBUGASSERT(dev != NULL && dev->d_buf != NULL);
+  DEBUGASSERT(fwddev != NULL && dev != NULL && dev->d_buf != NULL);
 
   /* Check if we are forwarding on the same device that we received the
    * packet from.
@@ -362,24 +351,6 @@ static int ipv4_forward_callback(FAR struct net_driver_s *fwddev,
 
   if (fwddev != dev)
     {
-      /* Backup the forward IP packet */
-
-      iob = iob_tryalloc(true);
-      if (iob == NULL)
-        {
-          nerr("ERROR: iob alloc failed when forward broadcast\n");
-          return -ENOMEM;
-        }
-
-      iob_reserve(iob, CONFIG_NET_LL_GUARDSIZE);
-      ret = iob_clone_partial(dev->d_iob, dev->d_iob->io_pktlen, 0,
-                              iob, 0, true, false);
-      if (ret < 0)
-        {
-          iob_free_chain(iob);
-          return ret;
-        }
-
       /* Recover the pointer to the IPv4 header in the receiving device's
        * d_buf.
        */
@@ -391,14 +362,9 @@ static int ipv4_forward_callback(FAR struct net_driver_s *fwddev,
       ret = ipv4_dev_forward(dev, fwddev, ipv4);
       if (ret < 0)
         {
-          iob_free_chain(iob);
           nwarn("WARNING: ipv4_dev_forward failed: %d\n", ret);
           return ret;
         }
-
-      /* Restore device iob with backup iob */
-
-      netdev_iob_replace(dev, iob);
     }
 
   return OK;

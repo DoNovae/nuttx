@@ -134,16 +134,17 @@ static int file_shm_open(FAR struct file *shm, FAR const char *name,
         }
 
       INODE_SET_SHM(inode);
-      inode->u.i_ops = &g_shmfs_operations;
+      inode->u.i_ops = &shmfs_operations;
       inode->i_private = NULL;
       inode->i_crefs = 1;
     }
 
   /* Associate the inode with a file structure */
 
-  memset(shm, 0, sizeof(*shm));
-  shm->f_oflags = oflags | O_CLOEXEC | O_NOFOLLOW;
+  shm->f_oflags = oflags;
+  shm->f_pos = 0;
   shm->f_inode = inode;
+  shm->f_priv = NULL;
 
 errout_with_sem:
   inode_unlock();

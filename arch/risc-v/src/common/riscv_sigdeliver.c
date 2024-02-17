@@ -64,8 +64,6 @@ void riscv_sigdeliver(void)
    */
 
   int16_t saved_irqcount;
-
-  enter_critical_section();
 #endif
 
   board_autoled_on(LED_SIGNAL);
@@ -74,15 +72,14 @@ void riscv_sigdeliver(void)
         rtcb, rtcb->xcp.sigdeliver, rtcb->sigpendactionq.head);
   DEBUGASSERT(rtcb->xcp.sigdeliver != NULL);
 
-retry:
 #ifdef CONFIG_SMP
   /* In the SMP case, up_schedule_sigaction(0) will have incremented
    * 'irqcount' in order to force us into a critical section.  Save the
    * pre-incremented irqcount.
    */
 
-  saved_irqcount = rtcb->irqcount;
-  DEBUGASSERT(saved_irqcount >= 1);
+  saved_irqcount = rtcb->irqcount - 1;
+  DEBUGASSERT(saved_irqcount >= 0);
 
   /* Now we need call leave_critical_section() repeatedly to get the irqcount
    * to zero, freeing all global spinlocks that enforce the critical section.
@@ -131,12 +128,6 @@ retry:
   up_irq_save();
 #endif
 
-  if (!sq_empty(&rtcb->sigpendactionq) &&
-      (rtcb->flags & TCB_FLAG_SIGNAL_ACTION) == 0)
-    {
-      goto retry;
-    }
-
   /* Modify the saved return state with the actual saved values in the
    * TCB.  This depends on the fact that nested signal handling is
    * not supported.  Therefore, these values will persist throughout the
@@ -154,14 +145,5 @@ retry:
    */
 
   board_autoled_off(LED_SIGNAL);
-#ifdef CONFIG_SMP
-  /* We need to keep the IRQ lock until task switching */
-
-  rtcb->irqcount++;
-  leave_critical_section(regs[REG_INT_CTX]);
-  rtcb->irqcount--;
-#endif
-
-  rtcb->xcp.regs = regs;
-  riscv_fullcontextrestore(rtcb);
+  riscv_fullcontextrestore(regs);
 }

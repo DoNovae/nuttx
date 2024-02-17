@@ -117,7 +117,7 @@ enum net_lltype_e
 
 /* This defines a bitmap big enough for one bit for each socket option */
 
-typedef uint32_t sockopt_t;
+typedef uint16_t sockopt_t;
 
 /* This defines the storage size of a timeout value.  This effects only
  * range of supported timeout values.  With an LSB in seciseconds, the
@@ -228,9 +228,6 @@ struct socket_conn_s
 
   uint8_t       s_tos;       /* IPv4 Type of Service */
 #define s_tclass s_tos       /* IPv6 traffic class defination */
-#if defined(CONFIG_NET_IPv4) || defined(CONFIG_NET_IPv6)
-  uint8_t       ttl;         /* Default time-to-live */
-#endif
 
   /* Connection-specific content may follow */
 };
@@ -301,7 +298,7 @@ void net_initialize(void);
  *   Calculate the ioctl argument buffer length.
  *
  * Input Parameters:
- *   domain   The socket domain
+ *
  *   cmd      The ioctl command
  *
  * Returned Value:
@@ -309,7 +306,7 @@ void net_initialize(void);
  *
  ****************************************************************************/
 
-ssize_t net_ioctl_arglen(uint8_t domain, int cmd);
+ssize_t net_ioctl_arglen(int cmd);
 
 /****************************************************************************
  * Critical section management.

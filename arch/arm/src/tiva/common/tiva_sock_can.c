@@ -1263,7 +1263,6 @@ static int tivacan_alloc_fifo(struct net_driver_s *dev, int depth)
   if (free_fifo_idx < 0)
     {
       canwarn("Max number of filters allocated.\n");
-      nxmutex_unlock(&canmod->fifo_lock);
       return -ENOMEM;
     }
 
@@ -1775,12 +1774,12 @@ static int tivacan_setup(struct net_driver_s *dev)
     case 0:
       tivacan_bittiming_set(dev, CONFIG_TIVA_CAN0_BAUD * 1000);
       break;
-#endif /* CONFIG_TIVA_CAN0 */
+# endif /* CONFIG_TIVA_CAN0 */
 #ifdef CONFIG_TIVA_CAN1
     case 1:
       tivacan_bittiming_set(dev, CONFIG_TIVA_CAN1_BAUD * 1000);
       break;
-#endif /* CONFIG_TIVA_CAN1 */
+# endif /* CONFIG_TIVA_CAN1 */
   }
 
   nxmutex_lock(&canmod->thd_iface_lock);

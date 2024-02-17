@@ -84,6 +84,7 @@ static uint16_t icmp_poll_eventhandler(FAR struct net_driver_s *dev,
        */
 
       psock = info->psock;
+      DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
       conn  = psock->s_conn;
       if (dev != conn->dev)
         {
@@ -180,7 +181,6 @@ int icmp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
   /* Initialize the poll info container */
 
   info->psock = psock;
-  info->dev   = conn->dev;
   info->fds   = fds;
   info->cb    = cb;
 
@@ -190,7 +190,7 @@ int icmp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
    */
 
   cb->flags = NETDEV_DOWN;
-  cb->priv  = info;
+  cb->priv  = (FAR void *)info;
   cb->event = icmp_poll_eventhandler;
 
   if ((fds->events & POLLIN) != 0)
@@ -202,7 +202,7 @@ int icmp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
    * for use during poll teardown as well.
    */
 
-  fds->priv = info;
+  fds->priv = (FAR void *)info;
 
   /* Check for read data availability now */
 
@@ -272,7 +272,7 @@ int icmp_pollteardown(FAR struct socket *psock, FAR struct pollfd *fds)
     {
       /* Release the callback */
 
-      icmp_callback_free(info->dev, conn, info->cb);
+      icmp_callback_free(conn->dev, conn, info->cb);
 
       /* Release the poll/select data slot */
 

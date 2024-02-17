@@ -67,7 +67,7 @@ int utimensat(int dirfd, FAR const char *path,
   char fullpath[PATH_MAX];
   int ret;
 
-  ret = lib_getfullpath(dirfd, path, fullpath, sizeof(fullpath));
+  ret = lib_getfullpath(dirfd, path, fullpath);
   if (ret < 0)
     {
       set_errno(-ret);

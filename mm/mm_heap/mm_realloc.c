@@ -81,7 +81,13 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
       return mm_malloc(heap, size);
     }
 
-  DEBUGASSERT(mm_heapmember(heap, oldmem));
+  /* If size is zero, then realloc is equivalent to free */
+
+  if (size < 1)
+    {
+      mm_free(heap, oldmem);
+      return NULL;
+    }
 
 #if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
   newmem = mempool_multiple_realloc(heap->mm_mpool, oldmem, size);
@@ -95,7 +101,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
       newmem = mm_malloc(heap, size);
       if (newmem != NULL)
         {
-          memcpy(newmem, oldmem, MIN(size, mm_malloc_size(heap, oldmem)));
+          memcpy(newmem, oldmem, size);
           mm_free(heap, oldmem);
         }
 
@@ -108,12 +114,12 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
    * least MM_MIN_CHUNK.
    */
 
-  if (size < MM_MIN_CHUNK - MM_ALLOCNODE_OVERHEAD)
+  if (size < MM_MIN_CHUNK - OVERHEAD_MM_ALLOCNODE)
     {
-      size = MM_MIN_CHUNK - MM_ALLOCNODE_OVERHEAD;
+      size = MM_MIN_CHUNK - OVERHEAD_MM_ALLOCNODE;
     }
 
-  newsize = MM_ALIGN_UP(size + MM_ALLOCNODE_OVERHEAD);
+  newsize = MM_ALIGN_UP(size + OVERHEAD_MM_ALLOCNODE);
   if (newsize < size)
     {
       /* There must have been an integer overflow */
@@ -125,16 +131,17 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
   /* Map the memory chunk into an allocated node structure */
 
   oldnode = (FAR struct mm_allocnode_s *)
-    ((FAR char *)oldmem - MM_SIZEOF_ALLOCNODE);
+    ((FAR char *)oldmem - SIZEOF_MM_ALLOCNODE);
 
   /* We need to hold the MM mutex while we muck with the nodelist. */
 
   DEBUGVERIFY(mm_lock(heap));
-  DEBUGASSERT(MM_NODE_IS_ALLOC(oldnode));
+  DEBUGASSERT(oldnode->size & MM_ALLOC_BIT);
+  DEBUGASSERT(mm_heapmember(heap, oldmem));
 
   /* Check if this is a request to reduce the size of the allocation. */
 
-  oldsize = MM_SIZEOF_NODE(oldnode);
+  oldsize = SIZEOF_MM_NODE(oldnode);
   if (newsize <= oldsize)
     {
       /* Handle the special case where we are not going to change the size
@@ -144,8 +151,8 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
       if (newsize < oldsize)
         {
           mm_shrinkchunk(heap, oldnode, newsize);
-          kasan_poison((FAR char *)oldnode + MM_SIZEOF_NODE(oldnode) +
-                       sizeof(mmsize_t), oldsize - MM_SIZEOF_NODE(oldnode));
+          kasan_poison((FAR char *)oldnode + SIZEOF_MM_NODE(oldnode) +
+                       sizeof(mmsize_t), oldsize - SIZEOF_MM_NODE(oldnode));
         }
 
       /* Then return the original address */
@@ -162,18 +169,18 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
    */
 
   next = (FAR struct mm_freenode_s *)((FAR char *)oldnode + oldsize);
-  if (MM_NODE_IS_FREE(next))
+  if ((next->size & MM_ALLOC_BIT) == 0)
     {
-      DEBUGASSERT(MM_PREVNODE_IS_ALLOC(next));
-      nextsize = MM_SIZEOF_NODE(next);
+      DEBUGASSERT((next->size & MM_PREVFREE_BIT) == 0);
+      nextsize = SIZEOF_MM_NODE(next);
     }
 
-  if (MM_PREVNODE_IS_FREE(oldnode))
+  if ((oldnode->size & MM_PREVFREE_BIT) != 0)
     {
       prev = (FAR struct mm_freenode_s *)
         ((FAR char *)oldnode - oldnode->preceding);
-      DEBUGASSERT(MM_NODE_IS_FREE(prev));
-      prevsize = MM_SIZEOF_NODE(prev);
+      DEBUGASSERT((prev->size & MM_ALLOC_BIT) == 0);
+      prevsize = SIZEOF_MM_NODE(prev);
     }
 
   /* Now, check if we can extend the current allocation or not */
@@ -296,7 +303,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
                               (newnode->size & MM_MASK_BIT);
             }
 
-          newmem = (FAR void *)((FAR char *)newnode + MM_SIZEOF_ALLOCNODE);
+          newmem = (FAR void *)((FAR char *)newnode + SIZEOF_MM_ALLOCNODE);
 
           /* Now we want to return newnode */
 
@@ -365,16 +372,8 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
             }
         }
 
-      /* Update heap statistics */
-
-      heap->mm_curused += newsize - oldsize;
-      if (heap->mm_curused > heap->mm_maxused)
-        {
-          heap->mm_maxused = heap->mm_curused;
-        }
-
       mm_unlock(heap);
-      MM_ADD_BACKTRACE(heap, (FAR char *)newmem - MM_SIZEOF_ALLOCNODE);
+      MM_ADD_BACKTRACE(heap, (FAR char *)newmem - SIZEOF_MM_ALLOCNODE);
 
       kasan_unpoison(newmem, mm_malloc_size(heap, newmem));
       if (newmem != oldmem)
@@ -383,7 +382,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
            * should be safe for this.
            */
 
-          memcpy(newmem, oldmem, oldsize - MM_ALLOCNODE_OVERHEAD);
+          memcpy(newmem, oldmem, oldsize - OVERHEAD_MM_ALLOCNODE);
         }
 
       return newmem;
@@ -403,7 +402,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
       newmem = mm_malloc(heap, size);
       if (newmem)
         {
-          memcpy(newmem, oldmem, oldsize - MM_ALLOCNODE_OVERHEAD);
+          memcpy(newmem, oldmem, oldsize - OVERHEAD_MM_ALLOCNODE);
           mm_free(heap, oldmem);
         }
 

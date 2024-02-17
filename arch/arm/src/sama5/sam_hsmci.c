@@ -458,7 +458,7 @@ struct sam_dev_s
 static bool sam_checkreg(struct sam_dev_s *priv, bool wr,
               uint32_t value, uint32_t address);
 #else
-#  define   sam_checkreg(priv,wr,value,address) (false)
+# define    sam_checkreg(priv,wr,value,address) (false)
 #endif
 
 static inline uint32_t sam_getreg(struct sam_dev_s *priv,
@@ -2303,6 +2303,7 @@ static int sam_sendsetup(struct sdio_dev_s *dev,
    * in order to avoid a TX data underrun.
    */
 
+  sched_lock();
   flags = enter_critical_section();
 
   nwords = (buflen + 3) >> 2;
@@ -2319,6 +2320,7 @@ static int sam_sendsetup(struct sdio_dev_s *dev,
 
           lcderr("ERROR: sr %08" PRIx32 "\n", sr);
           leave_critical_section(flags);
+          sched_unlock();
           return -EIO;
         }
       else if ((sr & HSMCI_INT_TXRDY) != 0)
@@ -2331,6 +2333,7 @@ static int sam_sendsetup(struct sdio_dev_s *dev,
     }
 
   leave_critical_section(flags);
+  sched_unlock();
   return OK;
 }
 

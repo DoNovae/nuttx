@@ -129,10 +129,6 @@ __start:
 .option pop
 
 #ifdef CONFIG_MPFS_BOOTLOADER
-  /* Clear PMP */
-
-  csrw pmpcfg0, zero
-  csrw pmpcfg2, zero
 
   /* Set all but the boot hart into wfi */
 
@@ -166,19 +162,14 @@ __start:
   csrw mip, zero
 
   /* Jump to application */
-  tail mpfs_jump_to_app
+  j mpfs_jump_to_app
 
 .continue_boot:
 
-  /* L2 needs to be zeroed before ECC (error correction) is enabled later. */
+  /* Clear PMP */
 
-  la  a4, __l2lim_start
-  la  a5, __l2lim_end
-
-.clear_l2lim:
-  sd   x0, 0(a4)
-  add  a4, a4, 8
-  blt  a4, a5, .clear_l2lim
+  csrw pmpcfg0, zero
+  csrw pmpcfg2, zero
 #endif
 
   /* Set stack pointer to the idle thread stack */
@@ -187,7 +178,7 @@ __start:
 
   /* Jump to __mpfs_start with mhartid in a0 */
 
-  tail __mpfs_start
+  jal  __mpfs_start
 
   /* We shouldn't return from __mpfs_start
    * in case of return, loop forever. nop's added so can be seen in debugger

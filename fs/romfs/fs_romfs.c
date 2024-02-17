@@ -44,7 +44,7 @@
 #include "fs_romfs.h"
 
 /****************************************************************************
- * Private Types
+ * Private Type
  ****************************************************************************/
 
 /* This structure represents one entry node in the romfs file system */
@@ -113,7 +113,7 @@ static int     romfs_stat(FAR struct inode *mountpt, FAR const char *relpath,
  * with any compiler.
  */
 
-const struct mountpt_operations g_romfs_operations =
+const struct mountpt_operations romfs_operations =
 {
   romfs_open,      /* open */
   romfs_close,     /* close */
@@ -123,7 +123,6 @@ const struct mountpt_operations g_romfs_operations =
   romfs_ioctl,     /* ioctl */
   romfs_mmap,      /* mmap */
   NULL,            /* truncate */
-  NULL,            /* poll */
 
   NULL,            /* sync */
   romfs_dup,       /* dup */
@@ -161,20 +160,20 @@ static int romfs_open(FAR struct file *filep, FAR const char *relpath,
   struct romfs_nodeinfo_s     nodeinfo;
   FAR struct romfs_mountpt_s *rm;
   FAR struct romfs_file_s    *rf;
-  size_t                      len;
+  size_t                      size;
   int                         ret;
 
   finfo("Open '%s'\n", relpath);
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv == NULL);
+  DEBUGASSERT(filep->f_priv == NULL && filep->f_inode != NULL);
 
   /* Get mountpoint private data from the inode reference from the file
    * structure
    */
 
-  rm = filep->f_inode->i_private;
+  rm = (FAR struct romfs_mountpt_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(rm != NULL);
 
@@ -249,8 +248,8 @@ static int romfs_open(FAR struct file *filep, FAR const char *relpath,
    * file.
    */
 
-  len = strlen(relpath);
-  rf = kmm_zalloc(sizeof(struct romfs_file_s) + len);
+  size = strlen(relpath);
+  rf = kmm_zalloc(sizeof(struct romfs_file_s) + size);
   if (!rf)
     {
       ferr("ERROR: Failed to allocate private data\n");
@@ -264,7 +263,7 @@ static int romfs_open(FAR struct file *filep, FAR const char *relpath,
 
   rf->rf_size = nodeinfo.rn_size;
   rf->rf_type = (uint8_t)(nodeinfo.rn_next & RFNEXT_ALLMODEMASK);
-  strlcpy(rf->rf_path, relpath, len + 1);
+  strlcpy(rf->rf_path, relpath, size + 1);
 
   /* Get the start of the file data */
 
@@ -311,7 +310,7 @@ static int romfs_close(FAR struct file *filep)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -375,7 +374,7 @@ static ssize_t romfs_read(FAR struct file *filep, FAR char *buffer,
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -509,7 +508,7 @@ static off_t romfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -589,7 +588,7 @@ static int romfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -600,11 +599,12 @@ static int romfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   if (cmd == FIOC_FILEPATH)
     {
       FAR char *ptr = (FAR char *)((uintptr_t)arg);
-      inode_getpath(filep->f_inode, ptr, PATH_MAX);
-      strlcat(ptr, rf->rf_path, PATH_MAX);
+      inode_getpath(filep->f_inode, ptr);
+      strcat(ptr, rf->rf_path);
       return OK;
     }
 
+  ferr("ERROR: Invalid cmd: %d\n", cmd);
   return -ENOTTY;
 }
 
@@ -615,7 +615,7 @@ static int romfs_mmap(FAR struct file *filep, FAR struct mm_map_entry_s *map)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -645,7 +645,6 @@ static int romfs_dup(FAR const struct file *oldp, FAR struct file *newp)
   FAR struct romfs_mountpt_s *rm;
   FAR struct romfs_file_s *oldrf;
   FAR struct romfs_file_s *newrf;
-  size_t len;
   int ret;
 
   finfo("Dup %p->%p\n", oldp, newp);
@@ -686,8 +685,7 @@ static int romfs_dup(FAR const struct file *oldp, FAR struct file *newp)
    * dup'ed file.
    */
 
-  len   = strlen(oldrf->rf_path);
-  newrf = kmm_malloc(sizeof(struct romfs_file_s) + len);
+  newrf = kmm_malloc(sizeof(struct romfs_file_s));
   if (!newrf)
     {
       ferr("ERROR: Failed to allocate private data\n");
@@ -699,8 +697,6 @@ static int romfs_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   newrf->rf_startoffset = oldrf->rf_startoffset;
   newrf->rf_size        = oldrf->rf_size;
-  newrf->rf_type        = oldrf->rf_type;
-  strlcpy(newrf->rf_path, oldrf->rf_path, len + 1);
 
   /* Configure buffering to support access to this file */
 
@@ -742,7 +738,7 @@ static int romfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Get mountpoint private data from the inode reference from the file
    * structure
@@ -1264,6 +1260,7 @@ static int romfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   /* Fill in the statfs info */
 
+  memset(buf, 0, sizeof(struct statfs));
   buf->f_type    = ROMFS_MAGIC;
 
   /* We will claim that the optimal transfer size is the size of one sector */

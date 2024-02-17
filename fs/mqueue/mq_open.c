@@ -46,7 +46,7 @@
 
 static int nxmq_file_close(FAR struct file *filep);
 static int nxmq_file_poll(FAR struct file *filep,
-                          FAR struct pollfd *fds, bool setup);
+                          struct pollfd *fds, bool setup);
 
 /****************************************************************************
  * Private Data
@@ -88,7 +88,7 @@ static int nxmq_file_close(FAR struct file *filep)
 }
 
 static int nxmq_file_poll(FAR struct file *filep,
-                          FAR struct pollfd *fds, bool setup)
+                          struct pollfd *fds, bool setup)
 {
   FAR struct inode *inode = filep->f_inode;
   FAR struct mqueue_inode_s *msgq = inode->i_private;
@@ -105,7 +105,7 @@ static int nxmq_file_poll(FAR struct file *filep,
         {
           /* Find an available slot */
 
-          if (msgq->fds[i] == NULL)
+          if (!msgq->fds[i])
             {
               /* Bind the poll structure and this slot */
 
@@ -129,12 +129,12 @@ static int nxmq_file_poll(FAR struct file *filep,
           eventset |= POLLOUT;
         }
 
-      if (msgq->nmsgs > 0)
+      if (msgq->nmsgs)
         {
           eventset |= POLLIN;
         }
 
-      poll_notify(&fds, 1, eventset);
+      nxmq_pollnotify(msgq, eventset);
     }
   else if (fds->priv != NULL)
     {
@@ -155,8 +155,7 @@ errout:
 }
 
 static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
-                         int oflags, mode_t umask, va_list ap,
-                         FAR int *created)
+                         int oflags, mode_t umask, va_list ap, int *created)
 {
   FAR struct inode *inode;
   FAR struct mqueue_inode_s *msgq;
@@ -192,14 +191,6 @@ static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
 
       mode = va_arg(ap, mode_t);
       attr = va_arg(ap, FAR struct mq_attr *);
-      if (attr != NULL)
-        {
-          if (attr->mq_maxmsg <= 0 || attr->mq_msgsize <= 0)
-            {
-              ret = -EINVAL;
-              goto errout;
-            }
-        }
     }
 
   mode &= ~umask;
@@ -240,6 +231,7 @@ static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
       /* Something exists at this path.  Get the search results */
 
       inode = desc.node;
+      DEBUGASSERT(inode != NULL);
 
       /* Verify that the inode is a message queue */
 
@@ -261,9 +253,10 @@ static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
 
       /* Associate the inode with a file structure */
 
-      memset(mq, 0, sizeof(*mq));
-      mq->f_oflags = oflags;
-      mq->f_inode  = inode;
+      mq->f_oflags  = oflags;
+      mq->f_pos     = 0;
+      mq->f_inode   = inode;
+      mq->f_priv    = NULL;
 
       if (created)
         {
@@ -310,9 +303,10 @@ static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
 
       /* Associate the inode with a file structure */
 
-      memset(mq, 0, sizeof(*mq));
-      mq->f_oflags = oflags;
-      mq->f_inode  = inode;
+      mq->f_oflags  = oflags;
+      mq->f_pos     = 0;
+      mq->f_inode   = inode;
+      mq->f_priv    = NULL;
 
       INODE_SET_MQUEUE(inode);
       inode->u.i_ops    = &g_nxmq_fileops;

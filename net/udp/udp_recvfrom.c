@@ -30,7 +30,6 @@
 #include <debug.h>
 #include <assert.h>
 
-#include <sys/time.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/net/net.h>
 #include <nuttx/mm/iob.h>
@@ -43,7 +42,6 @@
 #include "devif/devif.h"
 #include "udp/udp.h"
 #include "socket/socket.h"
-#include "utils/utils.h"
 
 /****************************************************************************
  * Private Types
@@ -57,66 +55,69 @@ struct udp_recvfrom_s
   sem_t                    ir_sem;       /* Semaphore signals recv completion */
   ssize_t                  ir_recvlen;   /* The received length */
   int                      ir_result;    /* Success:OK, failure:negated errno */
-  int                      ir_flags;     /* Flags on received message.  */
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-#ifdef CONFIG_NET_TIMESTAMP
-static void udp_store_cmsg_timestamp(FAR struct udp_recvfrom_s *pstate,
-                                     FAR struct timespec *timestamp)
-{
-  FAR struct msghdr *msg = pstate->ir_msg;
-  struct timeval tv;
-
-  TIMESPEC_TO_TIMEVAL(&tv, timestamp);
-  cmsg_append(msg, SOL_SOCKET, SO_TIMESTAMP,
-              &tv, sizeof(struct timeval));
-}
-#endif
-
-#ifdef CONFIG_NET_SOCKOPTS
 static void udp_recvpktinfo(FAR struct udp_recvfrom_s *pstate,
                             FAR void *srcaddr, uint8_t ifindex)
 {
-  FAR struct msghdr     *msg  = pstate->ir_msg;
-  FAR struct udp_conn_s *conn = pstate->ir_conn;
+  FAR struct msghdr     *msg      = pstate->ir_msg;
+  FAR struct udp_conn_s *conn     = pstate->ir_conn;
+  FAR struct cmsghdr    *control  = msg->msg_control;
+  size_t                 cmsg_len = 0;
+
+  if (!(conn->flags & _UDP_FLAG_PKTINFO))
+    {
+      goto out;
+    }
 
 #ifdef CONFIG_NET_IPv4
-  if (conn->domain == PF_INET &&
-      _SO_GETOPT(conn->sconn.s_options, IP_PKTINFO))
+  if (conn->domain == PF_INET)
     {
-      FAR struct sockaddr_in *infrom = srcaddr;
-      struct in_pktinfo       pktinfo;
+      FAR struct sockaddr_in *infrom  = srcaddr;
+      FAR struct in_pktinfo *pkt_info = CMSG_DATA(control);
 
-      pktinfo.ipi_ifindex         = ifindex;
-      pktinfo.ipi_addr.s_addr     = infrom->sin_addr.s_addr;
-      pktinfo.ipi_spec_dst.s_addr = conn->u.ipv4.laddr;
+      if (msg->msg_controllen < CMSG_LEN(sizeof(struct in_pktinfo)))
+        {
+          goto out;
+        }
 
-      cmsg_append(msg, IPPROTO_IP, IP_PKTINFO, &pktinfo, sizeof(pktinfo));
+      cmsg_len                      = CMSG_LEN(sizeof(struct in_pktinfo));
+      control->cmsg_level           = IPPROTO_IP;
+      control->cmsg_type            = IP_PKTINFO;
+      control->cmsg_len             = cmsg_len;
+      pkt_info->ipi_ifindex         = ifindex;
+      pkt_info->ipi_addr.s_addr     = infrom->sin_addr.s_addr;
+      pkt_info->ipi_spec_dst.s_addr = conn->u.ipv4.laddr;
     }
 #endif
 
 #ifdef CONFIG_NET_IPv6
-  if (conn->domain == PF_INET6 &&
-      _SO_GETOPT(conn->sconn.s_options, IPV6_RECVPKTINFO))
+  if (conn->domain == PF_INET6)
     {
-      FAR struct sockaddr_in6 *infrom = srcaddr;
-      struct in6_pktinfo       pktinfo;
+      FAR struct sockaddr_in6 *infrom  = srcaddr;
+      FAR struct in6_pktinfo *pkt_info = CMSG_DATA(control);
 
-      pktinfo.ipi6_ifindex = ifindex;
-      net_ipv6addr_copy(&pktinfo.ipi6_addr, infrom->sin6_addr.s6_addr);
+      if (msg->msg_controllen < CMSG_LEN(sizeof(struct in6_pktinfo)))
+        {
+          goto out;
+        }
 
-      cmsg_append(msg, IPPROTO_IPV6, IPV6_PKTINFO, &pktinfo,
-                  sizeof(pktinfo));
+      cmsg_len               = CMSG_LEN(sizeof(struct in6_pktinfo));
+      control->cmsg_level    = IPPROTO_IPV6;
+      control->cmsg_type     = IPV6_PKTINFO;
+      control->cmsg_len      = cmsg_len;
+      pkt_info->ipi6_ifindex = ifindex;
+      net_ipv6addr_copy(&pkt_info->ipi6_addr, infrom->sin6_addr.s6_addr);
     }
 #endif
+
+out:
+  msg->msg_controllen = cmsg_len;
 }
-#else
-#define udp_recvpktinfo(p, s, i) {(void)(p); (void)(s); (void)(i);}
-#endif
 
 /****************************************************************************
  * Name: udp_recvfrom_newdata
@@ -178,72 +179,36 @@ static inline void udp_readahead(struct udp_recvfrom_s *pstate)
 
   pstate->ir_recvlen = -1;
 
-  if ((iob = conn->readahead) != NULL)
+  if ((iob = iob_peek_queue(&conn->readahead)) != NULL)
     {
-      int recvlen;
-      int offset = 0;
-      uint16_t datalen;
+      int recvlen = pstate->ir_msg->msg_iov->iov_len;
       uint8_t src_addr_size;
+      uint8_t offset = 0;
+      FAR void *srcaddr;
       uint8_t ifindex;
-#ifdef CONFIG_NET_IPv6
-      uint8_t srcaddr[sizeof(struct sockaddr_in6)];
-#else
-      uint8_t srcaddr[sizeof(struct sockaddr_in)];
-#endif
 
-      /* Unflatten saved connection information
-       * Layout: |datalen|ifindex|src_addr_size|src_addr|[timestamp]|data|
-       */
+      DEBUGASSERT(iob->io_pktlen > 0);
 
-      recvlen = iob_copyout((FAR uint8_t *)&datalen, iob,
-                            sizeof(datalen), offset);
-      offset += sizeof(datalen);
-      DEBUGASSERT(recvlen == sizeof(datalen));
+      /* Unflatten saved connection information */
 
 #ifdef CONFIG_NETDEV_IFINDEX
-      recvlen = iob_copyout(&ifindex, iob, sizeof(ifindex), offset);
-      offset += sizeof(ifindex);
-      DEBUGASSERT(recvlen == sizeof(ifindex));
+      ifindex = iob->io_data[offset++];
 #else
-      ifindex = 1;
+      ifindex = 0;
 #endif
-      recvlen = iob_copyout(&src_addr_size, iob,
-                            sizeof(src_addr_size), offset);
-      offset += sizeof(src_addr_size);
-      DEBUGASSERT(recvlen == sizeof(src_addr_size));
-
-      recvlen = iob_copyout(srcaddr, iob, src_addr_size, offset);
-      offset += src_addr_size;
-      DEBUGASSERT(recvlen == src_addr_size);
-
-#ifdef CONFIG_NET_TIMESTAMP
-      /* Unpack stored timestamp if SO_TIMESTAMP socket option is enabled */
-
-      if (conn->timestamp)
-        {
-          struct timespec timestamp;
-          recvlen = iob_copyout((FAR uint8_t *)&timestamp, iob,
-                                sizeof(struct timespec), offset);
-          DEBUGASSERT(recvlen == sizeof(struct timespec));
-
-          udp_store_cmsg_timestamp(pstate, &timestamp);
-        }
-
-      offset += sizeof(struct timespec);
-#endif
+      src_addr_size = iob->io_data[offset++];
+      srcaddr = &iob->io_data[offset];
 
       /* Copy to user */
 
-      recvlen = iob_copyout(pstate->ir_msg->msg_iov->iov_base, iob,
-                            MIN(pstate->ir_msg->msg_iov->iov_len, datalen),
-                            offset);
+      recvlen = iob_copyout(pstate->ir_msg->msg_iov->iov_base,
+                            iob, recvlen, 0);
 
       /* Update the accumulated size of the data read */
 
       pstate->ir_recvlen = recvlen;
 
-      ninfo("Received %d bytes (of %d, total %d)\n",
-            recvlen, datalen, iob->io_pktlen);
+      ninfo("Received %d bytes (of %d)\n", recvlen, iob->io_pktlen);
 
       if (pstate->ir_msg->msg_name)
         {
@@ -257,20 +222,15 @@ static inline void udp_readahead(struct udp_recvfrom_s *pstate)
 
       udp_recvpktinfo(pstate, srcaddr, ifindex);
 
-      /* Remove the packet from the head of the I/O buffer chain. */
+      /* Remove the I/O buffer chain from the head of the read-ahead
+       * buffer queue.
+       */
 
-      if (!(pstate->ir_flags & MSG_PEEK))
-        {
-          if (offset + datalen >= iob->io_pktlen)
-            {
-              iob_free_chain(iob);
-              conn->readahead = NULL;
-            }
-          else
-            {
-              conn->readahead = iob_trimhead(iob, offset + datalen);
-            }
-        }
+      iob_remove_queue(&conn->readahead);
+
+      /* And free the I/O buffer chain */
+
+      iob_free_chain(iob);
     }
 }
 
@@ -339,8 +299,8 @@ static inline void udp_sender(FAR struct net_driver_s *dev,
 
           FAR struct sockaddr_in6 *infrom6 =
             (FAR struct sockaddr_in6 *)srcaddr;
-          FAR struct udp_hdr_s *udp   = UDPIPv4BUF;
-          FAR struct ipv4_hdr_s *ipv4 = IPv4BUF;
+          FAR struct udp_hdr_s *udp   = UDPIPv6BUF;
+          FAR struct ipv6_hdr_s *ipv6 = IPv6BUF;
           in_addr_t ipv4addr;
 
           /* Encode the IPv4 address as an IPv4-mapped IPv6 address */
@@ -348,7 +308,7 @@ static inline void udp_sender(FAR struct net_driver_s *dev,
           infrom6->sin6_family = AF_INET6;
           infrom6->sin6_port = udp->srcport;
           fromlen  = sizeof(struct sockaddr_in6);
-          ipv4addr = net_ip4addr_conv32(ipv4->srcipaddr);
+          ipv4addr = net_ip4addr_conv32(ipv6->srcipaddr);
           ip6_map_ipv4addr(ipv4addr, infrom6->sin6_addr.s6_addr16);
         }
       else
@@ -379,7 +339,7 @@ static inline void udp_sender(FAR struct net_driver_s *dev,
 #ifdef CONFIG_NETDEV_IFINDEX
   udp_recvpktinfo(pstate, srcaddr, dev->d_ifindex);
 #else
-  udp_recvpktinfo(pstate, srcaddr, 1);
+  udp_recvpktinfo(pstate, srcaddr, 0);
 #endif
 }
 
@@ -464,15 +424,6 @@ static uint16_t udp_eventhandler(FAR struct net_driver_s *dev,
 
       else if ((flags & UDP_NEWDATA) != 0)
         {
-          /* Save packet timestamp, if requested */
-
-#ifdef CONFIG_NET_TIMESTAMP
-          if (pstate->ir_conn->timestamp)
-            {
-              udp_store_cmsg_timestamp(pstate, &dev->d_rxtime);
-            }
-#endif
-
           /* Save the sender's address in the caller's 'from' location */
 
           udp_sender(dev, pstate);
@@ -489,21 +440,13 @@ static uint16_t udp_eventhandler(FAR struct net_driver_s *dev,
 
           udp_terminate(pstate, OK);
 
-          /* In read-ahead mode, UDP_NEWDATA and iob need to be reserved
-           * and let udp_callback to call net_dataevent and put this packet
-           * into conn->readahead
-           */
+          /* Indicate that the data has been consumed */
 
-          if (!(pstate->ir_flags & MSG_PEEK))
-            {
-              /* Indicate that the data has been consumed */
+          flags &= ~UDP_NEWDATA;
 
-              flags &= ~UDP_NEWDATA;
+          /* Indicate no data in the buffer */
 
-              /* Indicate no data in the buffer */
-
-              netdev_iob_release(dev);
-            }
+          netdev_iob_release(dev);
         }
     }
 
@@ -530,16 +473,14 @@ static uint16_t udp_eventhandler(FAR struct net_driver_s *dev,
 
 static void udp_recvfrom_initialize(FAR struct udp_conn_s *conn,
                                     FAR struct msghdr *msg,
-                                    FAR struct udp_recvfrom_s *pstate,
-                                    int flags)
+                                    FAR struct udp_recvfrom_s *pstate)
 {
   /* Initialize the state structure. */
 
   memset(pstate, 0, sizeof(struct udp_recvfrom_s));
   nxsem_init(&pstate->ir_sem, 0, 0); /* Doesn't really fail */
 
-  pstate->ir_msg   = msg;
-  pstate->ir_flags = flags;
+  pstate->ir_msg  = msg;
 
   /* Set up the start time for the timeout */
 
@@ -623,7 +564,7 @@ static ssize_t udp_recvfrom_result(int result, struct udp_recvfrom_s *pstate)
 ssize_t psock_udp_recvfrom(FAR struct socket *psock, FAR struct msghdr *msg,
                            int flags)
 {
-  FAR struct udp_conn_s *conn = psock->s_conn;
+  FAR struct udp_conn_s *conn = (FAR struct udp_conn_s *)psock->s_conn;
   FAR struct net_driver_s *dev;
   struct udp_recvfrom_s state;
   int ret;
@@ -635,7 +576,7 @@ ssize_t psock_udp_recvfrom(FAR struct socket *psock, FAR struct msghdr *msg,
    */
 
   net_lock();
-  udp_recvfrom_initialize(conn, msg, &state, flags);
+  udp_recvfrom_initialize(conn, msg, &state);
 
   /* Copy the read-ahead data from the packet */
 

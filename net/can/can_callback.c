@@ -148,8 +148,7 @@ uint16_t can_callback(FAR struct net_driver_s *dev,
               tv.tv_usec = ts->tv_nsec / 1000;
 
               len = iob_trycopyin(dev->d_iob, (FAR uint8_t *)&tv,
-                                  sizeof(struct timeval),
-                                  -CONFIG_NET_LL_GUARDSIZE, false);
+                                  sizeof(struct timeval), 0, false);
               if (len != sizeof(struct timeval))
                 {
                   dev->d_len = 0;
@@ -214,16 +213,11 @@ uint16_t can_datahandler(FAR struct net_driver_s *dev,
       can_readahead_signal(conn);
 #endif
       ret = iob->io_pktlen;
-
-      /* Device buffer has been enqueued, clear the handle */
-
-      netdev_iob_clear(dev);
     }
-  else
-    {
-      nerr("ERROR: Failed to queue the I/O buffer chain: %d\n", ret);
-      netdev_iob_release(dev);
-    }
+
+  /* Device buffer must be enqueue or freed, clear the handle */
+
+  netdev_iob_clear(dev);
 
   return ret;
 }

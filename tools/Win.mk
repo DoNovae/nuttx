@@ -22,6 +22,12 @@ export SHELL=cmd
 
 export TOPDIR := ${shell echo %CD%}
 
+# Build any necessary tools needed early in the build.
+# incdir - Is needed immediately by all Make.defs file.
+
+DUMMY  := ${shell $(MAKE) -C tools -f Makefile.host incdir \
+          INCDIR="$(TOPDIR)\tools\incdir.bat"}
+
 include $(TOPDIR)\Make.defs
 -include $(TOPDIR)\.version
 
@@ -46,8 +52,6 @@ ARCH_INC = $(ARCH_DIR)\include
 
 ifeq ($(CONFIG_APPS_DIR),)
 CONFIG_APPS_DIR = ..\apps
-else
-CONFIG_APPS_DIR := $(patsubst "%",%,$(CONFIG_APPS_DIR))
 endif
 APPDIR := $(realpath ${shell if exist "$(CONFIG_APPS_DIR)\Makefile" echo $(CONFIG_APPS_DIR)})
 
@@ -204,13 +208,6 @@ else
 include\setjmp.h:
 endif
 
-# Targets used to generate compiler-specific include paths
-# Build this tools needed early in the build
-# so we define it as a dependency of `context` target
-
-tools\incdir$(HOSTEXEEXT):
-	$(Q) $(MAKE) -C tools -f Makefile.host incdir INCDIR="$(TOPDIR)\tools\incdir.bat"
-
 # Targets used to build include\nuttx\version.h.  Creation of version.h is
 # part of the overall NuttX configuration sequence. Notice that the
 # tools\mkversion tool is built and used to create include\nuttx\version.h
@@ -232,19 +229,10 @@ include\nuttx\version.h: $(TOPDIR)\.version tools\mkversion$(HOSTEXEEXT)
 # part of the overall NuttX configuration sequence. Notice that the
 # tools\mkconfig tool is built and used to create include\nuttx\config.h
 
-tools\mkconfig$(HOSTEXEEXT): prebuild
+tools\mkconfig$(HOSTEXEEXT):
 	$(Q) $(MAKE) -C tools -f Makefile.host mkconfig$(HOSTEXEEXT)
 
 include\nuttx\config.h: $(TOPDIR)\.config tools\mkconfig$(HOSTEXEEXT)
-	$(Q) grep -v "CONFIG_BASE_DEFCONFIG" "$(TOPDIR)\.config" > "$(TOPDIR)\.config.tmp"
-# In-place edit can mess up permissions on Windows
-	$(Q) if ! cmp -s "$(TOPDIR)\.config.tmp" "$(TOPDIR)\.config.orig" ; then \
-		sed "/CONFIG_BASE_DEFCONFIG/ { /-dirty/! s/\"$$/-dirty\"/ }" "$(TOPDIR)\.config" > "$(TOPDIR)\.config-temp"; \
-	else \
-		sed "s/-dirty//g" "$(TOPDIR)\.config" > "$(TOPDIR)\.config-temp"; \
-	fi
-	$(Q) mv -f "$(TOPDIR)\.config-temp" "$(TOPDIR)\.config"
-	$(Q) rm -f "$(TOPDIR)\.config.tmp"
 	$(Q) tools\mkconfig$(HOSTEXEEXT) $(TOPDIR) > include\nuttx\config.h
 
 # Targets used to create dependencies
@@ -265,18 +253,10 @@ include\arch:
 	$(Q) $(DIRLINK) $(TOPDIR)\$(ARCH_DIR)\include $@
 
 # Link the boards\<arch>\<chip>\<board>\include directory to include\arch\board
-# If the above path does not exist, then we try to link to common
-
-LINK_INCLUDE_DIR=$(BOARD_DIR)/include
-ifeq ($(wildcard $(LINK_INCLUDE_DIR)),)
-	ifneq ($(strip $(BOARD_COMMON_DIR)),)
-		LINK_INCLUDE_DIR = $(BOARD_COMMON_DIR)/include
-	endif
-endif
 
 include\arch\board: | include\arch
 	@echo "LN: $@ to $(BOARD_DIR)\include"
-	$(Q) $(DIRLINK) $(LINK_INCLUDE_DIR) $@
+	$(Q) $(DIRLINK) $(BOARD_DIR)\include $@
 
 # Link the boards\<arch>\<chip>\common dir to arch\<arch-name>\src\board
 # Link the boards\<arch>\<chip>\<board>\src dir to arch\<arch-name>\src\board\board
@@ -425,7 +405,7 @@ endif
 
 CONTEXTDIRS_DEPS = $(patsubst %,%\.context,$(CONTEXTDIRS))
 
-context: tools\incdir$(HOSTEXEEXT) include\nuttx\config.h include\nuttx\version.h $(CONTEXTDIRS_DEPS) .dirlinks | staging
+context: include\nuttx\config.h include\nuttx\version.h $(CONTEXTDIRS_DEPS) .dirlinks | staging
 
 ifeq ($(NEED_MATH_H),y)
 context: include\math.h
@@ -481,16 +461,6 @@ clean_context:
 # build those libraries.
 
 include tools/LibTargets.mk
-
-# prebuild
-#
-# Some architectures require the use of special tools and special handling
-# BEFORE building NuttX. The `Make.defs` files for those architectures
-# should override the following define with the correct operations for
-# that platform.
-
-prebuild:
-	$(call PREBUILD, $(TOPDIR))
 
 # pass1 and pass2
 #
@@ -601,10 +571,10 @@ pass2dep: context tools\mkdeps$(HOSTEXEEXT)
 # location: https://bitbucket.org/nuttx/tools/downloads/.  See
 # misc\tools\README.txt for additional information.
 
-KCONFIG_ENV = set APPSDIR=$(patsubst "%",%,${CONFIG_APPS_DIR})& \
-              set EXTERNALDIR=$(EXTERNALDIR)& \
-              set APPSBINDIR=$(patsubst "%",%,${CONFIG_APPS_DIR})& \
-              set BINDIR=$(patsubst "%",%,${TOPDIR})&
+KCONFIG_ENV = set APPSDIR=$(patsubst "%",%,${CONFIG_APPS_DIR}) & \
+              set EXTERNALDIR=$(EXTERNALDIR) & \
+              set APPSBINDIR=$(patsubst "%",%,${CONFIG_APPS_DIR}) & \
+              set BINDIR=$(patsubst "%",%,${TOPDIR}) &
 
 config:
 	$(Q) $(MAKE) clean_context
@@ -634,7 +604,6 @@ nconfig:
 savedefconfig: apps_preconfig
 	$(Q) ${KCONFIG_ENV} kconfig-conf --savedefconfig defconfig.tmp Kconfig
 	$(Q) kconfig-tweak --file defconfig.tmp -u CONFIG_APPS_DIR
-	$(Q) kconfig-tweak --file defconfig.tmp -u CONFIG_BASE_DEFCONFIG
 	$(Q) grep "CONFIG_ARCH=" .config >> defconfig.tmp
 	-$(Q) grep "^CONFIG_ARCH_CHIP_" .config >> defconfig.tmp
 	-$(Q) grep "CONFIG_ARCH_CHIP=" .config >> defconfig.tmp
@@ -713,7 +682,6 @@ endif
 	$(call DELFILE, defconfig)
 	$(call DELFILE, .config)
 	$(call DELFILE, .config.old)
-	$(call DELFILE, .config.orig)
 
 # Application housekeeping targets.  The APPDIR variable refers to the user
 # application directory.  A sample apps\ directory is included with NuttX,

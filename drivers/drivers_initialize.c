@@ -38,16 +38,11 @@
 #include <nuttx/note/note_driver.h>
 #include <nuttx/power/pm.h>
 #include <nuttx/power/regulator.h>
-#include <nuttx/segger/rtt.h>
 #include <nuttx/sensors/sensor.h>
 #include <nuttx/serial/pty.h>
-#include <nuttx/serial/uart_ram.h>
 #include <nuttx/syslog/syslog.h>
 #include <nuttx/syslog/syslog_console.h>
-#include <nuttx/trace.h>
 #include <nuttx/usrsock/usrsock_rpmsg.h>
-#include <nuttx/virtio/virtio.h>
-#include <nuttx/drivers/optee.h>
 
 /****************************************************************************
  * Public Functions
@@ -68,15 +63,9 @@
 
 void drivers_initialize(void)
 {
-  drivers_trace_begin();
-
   /* Register devices */
 
   syslog_initialize();
-
-#ifdef CONFIG_SERIAL_RTT
-  serial_rtt_initialize();
-#endif
 
 #if defined(CONFIG_DEV_NULL)
   devnull_register();   /* Standard /dev/null */
@@ -98,10 +87,6 @@ void drivers_initialize(void)
   loop_register();      /* Standard /dev/loop */
 #endif
 
-#if defined(CONFIG_DEV_ASCII)
-  devascii_register();  /* Non-standard /dev/ascii */
-#endif
-
 #if defined(CONFIG_DRIVERS_NOTE)
   note_initialize();    /* Non-standard /dev/note */
 #endif
@@ -118,10 +103,6 @@ void drivers_initialize(void)
 
 #ifdef CONFIG_RPMSG_UART
   rpmsg_serialinit();
-#endif
-
-#ifdef CONFIG_RAM_UART
-  ram_serialinit();
 #endif
 
   /* Initialize the console device driver (if it is other than the standard
@@ -213,14 +194,4 @@ void drivers_initialize(void)
 #ifdef CONFIG_MTD_LOOP
   mtd_loop_register();
 #endif
-
-#ifdef CONFIG_DRIVERS_VIRTIO
-  virtio_register_drivers();
-#endif
-
-#ifndef CONFIG_DEV_OPTEE_NONE
-  optee_register();
-#endif
-
-  drivers_trace_end();
 }

@@ -635,14 +635,6 @@
 #define NVIC_HFAULTS_FORCED             (1 << 30) /* Bit 30: FORCED Mask */
 #define NVIC_HFAULTS_DEBUGEVT           (1 << 31) /* Bit 31: DEBUGEVT Mask */
 
-/* Debug Fault Status Register */
-
-#define NVIC_DFAULTS_HALTED             (1 << 0)  /* Bit 0:  Halted Mask */
-#define NVIC_DFAULTS_BKPT               (1 << 1)  /* Bit 1:  BKPT or FPB Mask */
-#define NVIC_DFAULTS_DWTTRAP            (1 << 2)  /* Bit 2:  DWT Mask */
-#define NVIC_DFAULTS_VCATCH             (1 << 3)  /* Bit 3:  Vector catch Mask */
-#define NVIC_DFAULTS_EXTERNAL           (1 << 4)  /* Bit 4:  External debug request Mask */
-
 /* Cache Level ID register (Cortex-M7) */
 
 #define NVIC_CLIDR_L1CT_SHIFT           (0)      /* Bits 0-2: Level 1 cache type */
@@ -687,8 +679,8 @@
 /* Cache Size Selection Register (Cortex-M7) */
 
 #define NVIC_CSSELR_IND                 (1 << 0)  /* Bit 0: Selects either instruction or data cache */
-#  define NVIC_CSSELR_IND_ICACHE        (1 << 0)  /*   1=Instruction Cache */
-#  define NVIC_CSSELR_IND_DCACHE        (0 << 0)  /*   0=Data Cache */
+#  define NVIC_CSSELR_IND_ICACHE        (0 << 0)  /*   0=Instruction Cache */
+#  define NVIC_CSSELR_IND_DCACHE        (1 << 0)  /*   1=Data Cache */
 
 #define NVIC_CSSELR_LEVEL_SHIFT         (1)       /* Bit 1-3: Selects cache level */
 #define NVIC_CSSELR_LEVEL_MASK          (7 << NVIC_CSSELR_LEVEL_SHIFT)

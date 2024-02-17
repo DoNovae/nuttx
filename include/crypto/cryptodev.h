@@ -111,25 +111,16 @@
 #define CRYPTO_AES_192_GMAC     18
 #define CRYPTO_AES_256_GMAC     19
 #define CRYPTO_AES_GMAC         20
-#define CRYPTO_AES_OFB          21
-#define CRYPTO_AES_CFB_8        22
-#define CRYPTO_AES_CFB_128      23
-#define CRYPTO_CHACHA20_POLY1305 24
-#define CRYPTO_CHACHA20_POLY1305_MAC 25
-#define CRYPTO_MD5              26
-#define CRYPTO_SHA1             27
-#define CRYPTO_SHA2_224         28
-#define CRYPTO_SHA2_256         29
-#define CRYPTO_SHA2_384         30
-#define CRYPTO_SHA2_512         31
-#define CRYPTO_ESN              32 /* Support for Extended Sequence Numbers */
-#define CRYPTO_ALGORITHM_MAX    32 /* Keep updated */
+#define CRYPTO_CHACHA20_POLY1305 21
+#define CRYPTO_CHACHA20_POLY1305_MAC 22
+#define CRYPTO_ESN              23 /* Support for Extended Sequence Numbers */
+#define CRYPTO_ALGORITHM_MAX    23 /* Keep updated */
 
 /* Algorithm flags */
 
-#define CRYPTO_ALG_FLAG_SUPPORTED   0x01 /* Algorithm is supported */
-#define CRYPTO_ALG_FLAG_RNG_ENABLE  0x02 /* Has HW RNG for DH/DSA */
-#define CRYPTO_ALG_FLAG_DSA_SHA     0x04 /* Can do SHA on msg */
+#define	CRYPTO_ALG_FLAG_SUPPORTED   0x01 /* Algorithm is supported */
+#define	CRYPTO_ALG_FLAG_RNG_ENABLE  0x02 /* Has HW RNG for DH/DSA */
+#define	CRYPTO_ALG_FLAG_DSA_SHA     0x04 /* Can do SHA on msg */
 
 /* Standard initialization structure beginning */
 
@@ -211,7 +202,6 @@ struct cryptop
 
   caddr_t crp_mac;
   caddr_t crp_dst;
-  caddr_t crp_iv;
 };
 
 #define CRYPTO_BUF_IOV 0x1
@@ -240,20 +230,18 @@ struct crypt_kop
   struct crparam crk_param[CRK_MAXPARAM];
 };
 
-#define CRK_MOD_EXP           0
-#define CRK_MOD_EXP_CRT       1
-#define CRK_DSA_SIGN          2
-#define CRK_DSA_VERIFY        3
-#define CRK_DH_COMPUTE_KEY    4
-#define CRK_RSA_PCKS15_VERIFY 5
-#define CRK_ALGORITHM_MAX     5 /* Keep updated */
+#define CRK_MOD_EXP        0
+#define CRK_MOD_EXP_CRT    1
+#define CRK_DSA_SIGN       2
+#define CRK_DSA_VERIFY     3
+#define CRK_DH_COMPUTE_KEY 4
+#define CRK_ALGORITHM_MAX  4 /* Keep updated */
 
-#define CRF_MOD_EXP           (1 << CRK_MOD_EXP)
-#define CRF_MOD_EXP_CRT       (1 << CRK_MOD_EXP_CRT)
-#define CRF_DSA_SIGN          (1 << CRK_DSA_SIGN)
-#define CRF_DSA_VERIFY        (1 << CRK_DSA_VERIFY)
-#define CRF_DH_COMPUTE_KEY    (1 << CRK_DH_COMPUTE_KEY)
-#define CRF_RSA_PCKS15_VERIFY (1 << CRK_RSA_PCKS15_VERIFY)
+#define CRF_MOD_EXP        (1 << CRK_MOD_EXP)
+#define CRF_MOD_EXP_CRT    (1 << CRK_MOD_EXP_CRT)
+#define CRF_DSA_SIGN       (1 << CRK_DSA_SIGN)
+#define CRF_DSA_VERIFY     (1 << CRK_DSA_VERIFY)
+#define CRF_DH_COMPUTE_KEY (1 << CRK_DH_COMPUTE_KEY)
 
 struct cryptkop
 {

@@ -25,7 +25,6 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <stdatomic.h>
 #include <sched.h>
 #include <assert.h>
 
@@ -33,13 +32,9 @@
 #include <nuttx/sched_note.h>
 #include <arch/irq.h>
 
-#if defined(CONFIG_TICKET_SPINLOCK) || defined(CONFIG_RW_SPINLOCK)
-#  include <stdatomic.h>
-#endif
-
 #include "sched/sched.h"
 
-#if defined(CONFIG_SPINLOCK) || defined(CONFIG_TICKET_SPINLOCK)
+#ifdef CONFIG_SPINLOCK
 
 /****************************************************************************
  * Public Functions
@@ -76,13 +71,7 @@ void spin_lock(FAR volatile spinlock_t *lock)
   sched_note_spinlock(this_task(), lock, NOTE_SPINLOCK_LOCK);
 #endif
 
-#ifdef CONFIG_TICKET_SPINLOCK
-  unsigned short ticket =
-    atomic_fetch_add((FAR atomic_ushort *)&lock->tickets.next, 1);
-  while (atomic_load((FAR atomic_ushort *)&lock->tickets.owner) != ticket)
-#else /* CONFIG_SPINLOCK */
   while (up_testset(lock) == SP_LOCKED)
-#endif
     {
       SP_DSB();
       SP_WFE();
@@ -120,13 +109,7 @@ void spin_lock(FAR volatile spinlock_t *lock)
 
 void spin_lock_wo_note(FAR volatile spinlock_t *lock)
 {
-#ifdef CONFIG_TICKET_SPINLOCK
-  unsigned short ticket =
-    atomic_fetch_add((FAR atomic_ushort *)&lock->tickets.next, 1);
-  while (atomic_load((FAR atomic_ushort *)&lock->tickets.owner) != ticket)
-#else /* CONFIG_TICKET_SPINLOCK */
   while (up_testset(lock) == SP_LOCKED)
-#endif
     {
       SP_DSB();
       SP_WFE();
@@ -146,15 +129,15 @@ void spin_lock_wo_note(FAR volatile spinlock_t *lock)
  *   lock - A reference to the spinlock object to lock.
  *
  * Returned Value:
- *   false   - Failure, the spinlock was already locked
- *   true    - Success, the spinlock was successfully locked
+ *   SP_LOCKED   - Failure, the spinlock was already locked
+ *   SP_UNLOCKED - Success, the spinlock was successfully locked
  *
  * Assumptions:
  *   Not running at the interrupt level.
  *
  ****************************************************************************/
 
-bool spin_trylock(FAR volatile spinlock_t *lock)
+spinlock_t spin_trylock(FAR volatile spinlock_t *lock)
 {
 #ifdef CONFIG_SCHED_INSTRUMENTATION_SPINLOCKS
   /* Notify that we are waiting for a spinlock */
@@ -162,29 +145,7 @@ bool spin_trylock(FAR volatile spinlock_t *lock)
   sched_note_spinlock(this_task(), lock, NOTE_SPINLOCK_LOCK);
 #endif
 
-#ifdef CONFIG_TICKET_SPINLOCK
-  unsigned short ticket =
-    atomic_load((FAR atomic_ushort *)&lock->tickets.next);
-
-  spinlock_t old =
-    {
-        {
-          ticket, ticket
-        }
-    };
-
-  spinlock_t new =
-    {
-        {
-          ticket, ticket + 1
-        }
-    };
-
-  if (!atomic_compare_exchange_strong((FAR atomic_uint *)&lock->value,
-                                      &old.value, new.value))
-#else /* CONFIG_TICKET_SPINLOCK */
   if (up_testset(lock) == SP_LOCKED)
-#endif /* CONFIG_TICKET_SPINLOCK */
     {
 #ifdef CONFIG_SCHED_INSTRUMENTATION_SPINLOCKS
       /* Notify that we abort for a spinlock */
@@ -192,7 +153,7 @@ bool spin_trylock(FAR volatile spinlock_t *lock)
       sched_note_spinlock(this_task(), lock, NOTE_SPINLOCK_ABORT);
 #endif
       SP_DSB();
-      return false;
+      return SP_LOCKED;
     }
 
 #ifdef CONFIG_SCHED_INSTRUMENTATION_SPINLOCKS
@@ -201,7 +162,7 @@ bool spin_trylock(FAR volatile spinlock_t *lock)
   sched_note_spinlock(this_task(), lock, NOTE_SPINLOCK_LOCKED);
 #endif
   SP_DMB();
-  return true;
+  return SP_UNLOCKED;
 }
 
 /****************************************************************************
@@ -218,46 +179,24 @@ bool spin_trylock(FAR volatile spinlock_t *lock)
  *   lock - A reference to the spinlock object to lock.
  *
  * Returned Value:
- *   false   - Failure, the spinlock was already locked
- *   true    - Success, the spinlock was successfully locked
+ *   SP_LOCKED   - Failure, the spinlock was already locked
+ *   SP_UNLOCKED - Success, the spinlock was successfully locked
  *
  * Assumptions:
  *   Not running at the interrupt level.
  *
  ****************************************************************************/
 
-bool spin_trylock_wo_note(FAR volatile spinlock_t *lock)
+spinlock_t spin_trylock_wo_note(FAR volatile spinlock_t *lock)
 {
-#ifdef CONFIG_TICKET_SPINLOCK
-  unsigned short ticket =
-    atomic_load((FAR atomic_ushort *)&lock->tickets.next);
-
-  spinlock_t old =
-    {
-        {
-          ticket, ticket
-        }
-    };
-
-  spinlock_t new =
-    {
-        {
-          ticket, ticket + 1
-        }
-    };
-
-  if (!atomic_compare_exchange_strong((FAR atomic_uint *)&lock->value,
-                                      &old.value, new.value))
-#else /* CONFIG_TICKET_SPINLOCK */
   if (up_testset(lock) == SP_LOCKED)
-#endif /* CONFIG_TICKET_SPINLOCK */
     {
       SP_DSB();
-      return false;
+      return SP_LOCKED;
     }
 
   SP_DMB();
-  return true;
+  return SP_UNLOCKED;
 }
 
 /****************************************************************************
@@ -287,11 +226,7 @@ void spin_unlock(FAR volatile spinlock_t *lock)
 #endif
 
   SP_DMB();
-#ifdef CONFIG_TICKET_SPINLOCK
-  atomic_fetch_add((FAR atomic_ushort *)&lock->tickets.owner, 1);
-#else
   *lock = SP_UNLOCKED;
-#endif
   SP_DSB();
   SP_SEV();
 }
@@ -320,11 +255,7 @@ void spin_unlock(FAR volatile spinlock_t *lock)
 void spin_unlock_wo_note(FAR volatile spinlock_t *lock)
 {
   SP_DMB();
-#ifdef CONFIG_TICKET_SPINLOCK
-  atomic_fetch_add((FAR atomic_ushort *)&lock->tickets.owner, 1);
-#else
   *lock = SP_UNLOCKED;
-#endif
   SP_DSB();
   SP_SEV();
 }
@@ -453,232 +384,4 @@ void spin_clrbit(FAR volatile cpu_set_t *set, unsigned int cpu,
 }
 #endif
 
-#ifdef CONFIG_RW_SPINLOCK
-
-/****************************************************************************
- * Name: read_lock
- *
- * Description:
- *   If this task does not already hold the spinlock, then loop until the
- *   spinlock is successfully locked.
- *
- *   This implementation is non-reentrant and set a bit of lock.
- *
- *  The priority of reader is higher than writter if a reader hold the
- *  lock, a new reader can get its lock but writer can't get this lock.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to lock.
- *
- * Returned Value:
- *   None.  When the function returns, the spinlock was successfully locked
- *   by this CPU.
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
-
-void read_lock(FAR volatile rwlock_t *lock)
-{
-  while (true)
-    {
-      int old = atomic_load((FAR atomic_int *)lock);
-      if (old <= RW_SP_WRITE_LOCKED)
-        {
-          DEBUGASSERT(old == RW_SP_WRITE_LOCKED);
-          SP_DSB();
-          SP_WFE();
-        }
-      else if(atomic_compare_exchange_strong((FAR atomic_int *)lock,
-                                             &old, old + 1))
-        {
-          break;
-        }
-    }
-
-  SP_DMB();
-}
-
-/****************************************************************************
- * Name: read_trylock
- *
- * Description:
- *   If this task does not already hold the spinlock, then try to get the
- * lock.
- *
- *   This implementation is non-reentrant and set a bit of lock.
- *
- *  The priority of reader is higher than writter if a reader hold the
- *  lock, a new reader can get its lock but writer can't get this lock.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to lock.
- *
- * Returned Value:
- *   false   - Failure, the spinlock was already locked
- *   true    - Success, the spinlock was successfully locked
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
-
-bool read_trylock(FAR volatile rwlock_t *lock)
-{
-  while (true)
-    {
-      int old = atomic_load((FAR atomic_int *)lock);
-      if (old <= RW_SP_WRITE_LOCKED)
-        {
-          DEBUGASSERT(old == RW_SP_WRITE_LOCKED);
-          return false;
-        }
-      else if (atomic_compare_exchange_strong((FAR atomic_int *)lock,
-                                              &old, old + 1))
-        {
-          break;
-        }
-    }
-
-  SP_DMB();
-  return true;
-}
-
-/****************************************************************************
- * Name: read_unlock
- *
- * Description:
- *   Release a bit on a non-reentrant spinlock.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to unlock.
- *
- * Returned Value:
- *   None.
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
-
-void read_unlock(FAR volatile rwlock_t *lock)
-{
-  DEBUGASSERT(atomic_load((FAR atomic_int *)lock) >= RW_SP_READ_LOCKED);
-
-  SP_DMB();
-  atomic_fetch_sub((FAR atomic_int *)lock, 1);
-  SP_DSB();
-  SP_SEV();
-}
-
-/****************************************************************************
- * Name: write_lock
- *
- * Description:
- *   If this task does not already hold the spinlock, then loop until the
- *   spinlock is successfully locked.
- *
- *   This implementation is non-reentrant and set all bit on lock to avoid
- *   readers and writers.
- *
- *  The priority of reader is higher than writter if a reader hold the
- *  lock, a new reader can get its lock but writer can't get this lock.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to lock.
- *
- * Returned Value:
- *   None.  When the function returns, the spinlock was successfully locked
- *   by this CPU.
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
-
-void write_lock(FAR volatile rwlock_t *lock)
-{
-  int zero = RW_SP_UNLOCKED;
-
-  while (!atomic_compare_exchange_strong((FAR atomic_int *)lock,
-                                         &zero, RW_SP_WRITE_LOCKED))
-    {
-      SP_DSB();
-      SP_WFE();
-    }
-
-  SP_DMB();
-}
-
-/****************************************************************************
- * Name: write_trylock
- *
- * Description:
- *   If this task does not already hold the spinlock, then loop until the
- *   spinlock is successfully locked.
- *
- *   This implementation is non-reentrant and set all bit on lock to avoid
- *   readers and writers.
- *
- *  The priority of reader is higher than writter if a reader hold the
- *  lock, a new reader can get its lock but writer can't get this lock.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to lock.
- *
- * Returned Value:
- *   false   - Failure, the spinlock was already locked
- *   true    - Success, the spinlock was successfully locked
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
-
-bool write_trylock(FAR volatile rwlock_t *lock)
-{
-  int zero = RW_SP_UNLOCKED;
-
-  if (atomic_compare_exchange_strong((FAR atomic_int *)lock,
-                                     &zero, RW_SP_WRITE_LOCKED))
-    {
-      SP_DMB();
-      return true;
-    }
-
-  SP_DSB();
-  return false;
-}
-
-/****************************************************************************
- * Name: write_unlock
- *
- * Description:
- *   Release write lock on a non-reentrant spinlock.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to unlock.
- *
- * Returned Value:
- *   None.
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
-
-void write_unlock(FAR volatile rwlock_t *lock)
-{
-  /* Ensure this cpu already get write lock */
-
-  DEBUGASSERT(atomic_load((FAR atomic_int *)lock) == RW_SP_WRITE_LOCKED);
-
-  SP_DMB();
-  atomic_store((FAR atomic_int *)lock, RW_SP_UNLOCKED);
-  SP_DSB();
-  SP_SEV();
-}
-
-#endif /* CONFIG_RW_SPINLOCK */
 #endif /* CONFIG_SPINLOCK */

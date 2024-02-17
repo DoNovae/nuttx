@@ -344,8 +344,8 @@ struct lpc43_usbdev_s
 static uint32_t lpc43_getreg(uint32_t addr);
 static void lpc43_putreg(uint32_t val, uint32_t addr);
 #else
-#  define lpc43_getreg(addr)     getreg32(addr)
-#  define lpc43_putreg(val,addr) putreg32(val,addr)
+# define lpc43_getreg(addr)     getreg32(addr)
+# define lpc43_putreg(val,addr) putreg32(val,addr)
 #endif
 
 static inline void lpc43_clrbits(uint32_t mask, uint32_t addr);
@@ -1893,7 +1893,7 @@ static int lpc43_usbinterrupt(int irq, void *context, void *arg)
     {
       usbtrace(TRACE_INTDECODE(LPC43_TRACEINTID_FRAME), 0);
 
-      priv->sof = lpc43_getreg(LPC43_USBDEV_FRINDEX);
+      priv->sof = (int)lpc43_getreg(LPC43_USBDEV_FRINDEX_OFFSET);
     }
 #endif
 
@@ -2180,7 +2180,7 @@ usbdev_req_s *lpc43_epallocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, ((struct lpc43_ep_s *)ep)->epphy);
 
-  privreq = kmm_malloc(sizeof(struct lpc43_req_s));
+  privreq = (struct lpc43_req_s *)kmm_malloc(sizeof(struct lpc43_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(LPC43_TRACEERR_ALLOCFAIL), 0);
@@ -2602,7 +2602,7 @@ static int lpc43_getframe(struct usbdev_s *dev)
 
   /* FIXME: this actually returns the micro frame number! */
 
-  return (int)lpc43_getreg(LPC43_USBDEV_FRINDEX);
+  return (int)lpc43_getreg(LPC43_USBDEV_FRINDEX_OFFSET);
 #endif
 }
 

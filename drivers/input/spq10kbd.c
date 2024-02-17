@@ -453,6 +453,7 @@ static int spq10kbd_open(FAR struct file *filep)
   FAR struct inode          *inode;
   FAR struct spq10kbd_dev_s *priv;
 
+  DEBUGASSERT(filep && filep->f_inode);
   inode = filep->f_inode;
   priv  = inode->i_private;
 
@@ -476,6 +477,7 @@ static int spq10kbd_close(FAR struct file *filep)
   FAR struct inode          *inode;
   FAR struct spq10kbd_dev_s *priv;
 
+  DEBUGASSERT(filep && filep->f_inode);
   inode = filep->f_inode;
   priv  = inode->i_private;
 
@@ -505,7 +507,7 @@ static ssize_t spq10kbd_read(FAR struct file *filep, FAR char *buffer,
   uint16_t                   tail;
   int                        ret;
 
-  DEBUGASSERT(buffer);
+  DEBUGASSERT(filep && filep->f_inode && buffer);
   inode = filep->f_inode;
   priv  = inode->i_private;
 
@@ -605,7 +607,7 @@ static int spq10kbd_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int                        ret;
   int                        i;
 
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && filep->f_inode && fds);
   inode = filep->f_inode;
   priv  = inode->i_private;
 
@@ -640,8 +642,8 @@ static int spq10kbd_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (i >= CONFIG_SPQ10KBD_NPOLLWAITERS)
         {
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
 
@@ -651,7 +653,7 @@ static int spq10kbd_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (priv->headndx != priv->tailndx)
         {
-          poll_notify(&fds, 1, POLLIN);
+          poll_notify(priv->fds, CONFIG_SPQ10KBD_NPOLLWAITERS, POLLIN);
         }
     }
   else
@@ -663,8 +665,8 @@ static int spq10kbd_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       /* Remove all memory of the poll setup */
 
-      *slot     = NULL;
-      fds->priv = NULL;
+      *slot                = NULL;
+      fds->priv            = NULL;
     }
 
 errout:
@@ -973,7 +975,8 @@ int spq10kbd_register(FAR struct i2c_master_s *i2c,
   DEBUGASSERT(config->attach != NULL && config->enable != NULL &&
               config->clear  != NULL);
 
-  priv = kmm_zalloc(sizeof(struct spq10kbd_dev_s));
+  priv = (FAR struct spq10kbd_dev_s *)kmm_zalloc(
+    sizeof(struct spq10kbd_dev_s));
   if (!priv)
     {
       ierr("ERROR: kmm_zalloc(%d) failed\n", sizeof(struct spq10kbd_dev_s));

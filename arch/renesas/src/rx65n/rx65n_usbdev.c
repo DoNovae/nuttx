@@ -291,12 +291,12 @@ uint8_t g_buffer[64] ;
 
 /* Register operations */
 
-#  define rx65n_getreg8(addr)      getreg8(addr)
-#  define rx65n_getreg16(addr)     getreg16(addr)
-#  define rx65n_getreg32(addr)     getreg32(addr)
-#  define rx65n_putreg8(val,addr)  putreg8(val,addr)
-#  define rx65n_putreg16(val,addr) putreg16(val,addr)
-#  define rx65n_putreg32(val,addr) putreg32(val,addr)
+# define rx65n_getreg8(addr)      getreg8(addr)
+# define rx65n_getreg16(addr)     getreg16(addr)
+# define rx65n_getreg32(addr)     getreg32(addr)
+# define rx65n_putreg8(val,addr)  putreg8(val,addr)
+# define rx65n_putreg16(val,addr) putreg16(val,addr)
+# define rx65n_putreg32(val,addr) putreg32(val,addr)
 
 /* Request queue operations *************************************************/
 
@@ -3025,7 +3025,7 @@ static struct usbdev_req_s *rx65n_epallocreq(struct usbdev_ep_s *ep)
 #endif
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = kmm_malloc(sizeof(struct rx65n_req_s));
+  privreq = (struct rx65n_req_s *)kmm_malloc(sizeof(struct rx65n_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(RX65N_TRACEERR_ALLOCFAIL), 0);

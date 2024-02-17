@@ -455,8 +455,8 @@ struct stm32_usbdev_s
 static uint32_t    stm32_getreg(uint32_t addr);
 static void        stm32_putreg(uint32_t val, uint32_t addr);
 #else
-#  define stm32_getreg(addr)     getreg32(addr)
-#  define stm32_putreg(val,addr) putreg32(val,addr)
+# define stm32_getreg(addr)     getreg32(addr)
+# define stm32_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Request queue operations *************************************************/
@@ -1327,19 +1327,6 @@ static void stm32_epin_request(struct stm32_usbdev_s *priv,
           uint32_t empmsk = stm32_getreg(STM32_OTGHS_DIEPEMPMSK);
           empmsk |= OTGHS_DIEPEMPMSK(privep->epphy);
           stm32_putreg(empmsk, STM32_OTGHS_DIEPEMPMSK);
-
-#ifdef CONFIG_DEBUG_FEATURES
-          /* Check if the configured TXFIFO size is sufficient for a given
-           * request. If not, raise an assertion here.
-           */
-
-          regval = stm32_getreg(STM32_OTGHS_DIEPTXF(privep->epphy));
-          regval &= OTGHS_DIEPTXF_INEPTXFD_MASK;
-          regval >>= OTGHS_DIEPTXF_INEPTXFD_SHIFT;
-          uerr("EP%" PRId8 " TXLEN=%" PRId32 " nwords=%d\n",
-               privep->epphy, regval, nwords);
-          DEBUGASSERT(regval >= nwords);
-#endif
 
           /* Terminate the transfer.  We will try again when the TxFIFO empty
            * interrupt is received.
@@ -4317,7 +4304,7 @@ static struct usbdev_req_s *stm32_ep_allocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, ((struct stm32_ep_s *)ep)->epphy);
 
-  privreq = kmm_malloc(sizeof(struct stm32_req_s));
+  privreq = (struct stm32_req_s *)kmm_malloc(sizeof(struct stm32_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(STM32_TRACEERR_ALLOCFAIL), 0);
@@ -4364,7 +4351,7 @@ static void stm32_ep_freereq(struct usbdev_ep_s *ep,
 #ifdef CONFIG_USBDEV_DMA
 static void *stm32_ep_allocbuffer(struct usbdev_ep_s *ep, uint16_t bytes)
 {
-  usbtrace(TRACE_EPALLOCBUFFER, ((struct stm32_ep_s *)ep)->epphy);
+  usbtrace(TRACE_EPALLOCBUFFER, privep->epphy);
 
 #ifdef CONFIG_USBDEV_DMAMEMORY
   return usbdev_dma_alloc(bytes);
@@ -4385,7 +4372,7 @@ static void *stm32_ep_allocbuffer(struct usbdev_ep_s *ep, uint16_t bytes)
 #ifdef CONFIG_USBDEV_DMA
 static void stm32_ep_freebuffer(struct usbdev_ep_s *ep, void *buf)
 {
-  usbtrace(TRACE_EPFREEBUFFER, ((struct stm32_ep_s *)ep)->epphy);
+  usbtrace(TRACE_EPFREEBUFFER, privep->epphy);
 
 #ifdef CONFIG_USBDEV_DMAMEMORY
   usbdev_dma_free(buf);

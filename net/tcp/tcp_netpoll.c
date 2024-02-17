@@ -165,9 +165,9 @@ static uint16_t tcp_poll_eventhandler(FAR struct net_driver_s *dev,
         {
           /* Stop further callbacks */
 
-          info->cb->flags = 0;
-          info->cb->priv  = NULL;
-          info->cb->event = NULL;
+          info->cb->flags   = 0;
+          info->cb->priv    = NULL;
+          info->cb->event   = NULL;
         }
     }
 
@@ -219,8 +219,7 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
 
   /* Non-blocking connection ? */
 
-  nonblock_conn = ((conn->tcpstateflags == TCP_ALLOCATED ||
-                    conn->tcpstateflags == TCP_SYN_SENT) &&
+  nonblock_conn = (conn->tcpstateflags == TCP_SYN_SENT &&
                    _SS_ISNONBLOCK(conn->sconn.s_flags));
 
   /* Find a container to hold the poll information */
@@ -256,16 +255,17 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
    * callback processing.
    */
 
-  cb->flags = TCP_DISCONN_EVENTS;
-  cb->priv  = info;
-  cb->event = tcp_poll_eventhandler;
+  cb->flags    = TCP_DISCONN_EVENTS;
+  cb->priv     = (FAR void *)info;
+  cb->event    = tcp_poll_eventhandler;
 
   if ((fds->events & POLLOUT) != 0)
     {
-      cb->flags |= TCP_POLL;
+      cb->flags |= TCP_POLL
 #if defined(CONFIG_NET_TCP_WRITE_BUFFERS)
-      cb->flags |= TCP_ACKDATA;
+                   | TCP_ACKDATA
 #endif
+                   ;
 
       /* Monitor the connected event */
 
@@ -284,11 +284,11 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
    * for use during poll teardown as well.
    */
 
-  fds->priv = info;
+  fds->priv    = (FAR void *)info;
 
   /* Check for read data or backlogged connection availability now */
 
-  if (conn->readahead != NULL || tcp_backlogpending(conn))
+  if (conn->readahead != NULL || tcp_backlogavailable(conn))
     {
       /* Normal data may be read without blocking. */
 
@@ -343,7 +343,6 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
        * exceptional event.
        */
 
-      _SO_CONN_SETERRNO(conn, ENOTCONN);
       eventset |= POLLERR | POLLHUP;
     }
   else if (_SS_ISCONNECTED(conn->sconn.s_flags) &&

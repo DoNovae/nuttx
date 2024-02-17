@@ -38,12 +38,12 @@ config GD32F450ZK_EVAL_CONSOLE_BOARD
 	select USART0_SERIALDRIVER
 
 config GD32F450ZK_EVAL_CONSOLE_VIRTUAL
-	bool "Virtual ComPort"
+	bool "Virtual Comport"
 	select GD32_USART3
 	select USART3_SERIALDRIVER
 
 config GD32F450ZK_EVAL_CONSOLE_NONE
-	bool "No Serial Console"
+	bool "No Console"
 
 endchoice # "Select Console wiring"
 

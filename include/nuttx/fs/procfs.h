@@ -59,8 +59,6 @@ struct procfs_operations
   ssize_t (*write)(FAR struct file *filep,
                    FAR const char *buffer,
                    size_t buflen);
-  int     (*poll)(FAR struct file *filep, FAR struct pollfd *fds,
-                  bool setup);
 
   /* The two structures need not be common after this point. The following
    * are extended methods needed to deal with the unique needs of mounted
@@ -223,27 +221,6 @@ size_t procfs_memcpy(FAR const char *src, size_t srclen,
 
 int procfs_snprintf(FAR char *buf, size_t size,
                     FAR const IPTR char *format, ...) printf_like(3, 4);
-
-/****************************************************************************
- * Name: procfs_sprintf
- *
- * Description:
- *   This function used to continous format string and copy it to buffer.
- *   Every single string length must be smaller then LINEBUF_SIZE.
- *
- * Input Parameters:
- *   buf          - The address of the user's receive buffer.
- *   size         - The size (in bytes) of the user's receive buffer.
- *   offset       - On input, when *offset is larger the 0 , this is the
- *                  number of bytes to skip before returning data; If bytes
- *                  were skipped, this *offset will be decremented. when it
- *                  decrements to a negative value, -*offset is the number of
- *                  data copied to buffer.
- *
- ****************************************************************************/
-
-void procfs_sprintf(FAR char *buf, size_t size, FAR off_t *offset,
-                    FAR const IPTR char *format, ...) printf_like(4, 5);
 
 /****************************************************************************
  * Name: procfs_register

@@ -57,7 +57,7 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover the open file state from the struct file instance */
 
@@ -65,7 +65,7 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
 
   /* Recover the volume state from the open file */
 
-  volume = filep->f_inode->i_private;
+  volume = (FAR struct nxffs_volume_s *)filep->f_inode->i_private;
   DEBUGASSERT(volume != NULL);
 
   /* Get exclusive access to the volume.  Note that the volume lock
@@ -75,7 +75,7 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
   ret = nxmutex_lock(&volume->lock);
   if (ret < 0)
     {
-      ferr("ERROR: nxmutex_lock failed: %d\n", ret);
+      ferr("ERROR: nxsem_wait failed: %d\n", ret);
       goto errout;
     }
 

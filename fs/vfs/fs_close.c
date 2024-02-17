@@ -80,7 +80,10 @@ int file_close(FAR struct file *filep)
 
       /* Reset the user file struct instance so that it cannot be reused. */
 
-      memset(filep, 0, sizeof(*filep));
+      filep->f_oflags = 0;
+      filep->f_pos    = 0;
+      filep->f_inode  = NULL;
+      filep->f_priv   = NULL;
     }
 
   return ret;

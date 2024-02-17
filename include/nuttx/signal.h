@@ -105,7 +105,7 @@ extern "C"
 #  define _SIG_PROCMASK(h,s,o)  nxsig_procmask(h,s,o)
 #  define _SIG_SIGACTION(s,a,o) nxsig_action(s,a,o,false)
 #  define _SIG_QUEUE(p,s,v)     nxsig_queue(p,s,v)
-#  define _SIG_KILL(p,s)        nxsig_kill(p,s)
+#  define _SIG_KILL(p,s)        nxsig_kill(p,s);
 #  define _SIG_WAITINFO(s,i)    nxsig_timedwait(s,i,NULL)
 #  define _SIG_NANOSLEEP(r,a)   nxsig_nanosleep(r,a)
 #  define _SIG_SLEEP(s)         nxsig_sleep(s)
@@ -116,7 +116,7 @@ extern "C"
 #  define _SIG_PROCMASK(h,s,o)  sigprocmask(h,s,o)
 #  define _SIG_SIGACTION(s,a,o) sigaction(s,a,o)
 #  define _SIG_QUEUE(p,s,v)     sigqueue(p,s,v)
-#  define _SIG_KILL(p,s)        kill(p,s)
+#  define _SIG_KILL(p,s)        kill(p,s);
 #  define _SIG_WAITINFO(s,i)    sigwaitinfo(s,i)
 #  define _SIG_NANOSLEEP(r,a)   nanosleep(r,a)
 #  define _SIG_SLEEP(s)         sleep(s)
@@ -638,7 +638,7 @@ int nxsig_notification(pid_t pid, FAR struct sigevent *event,
 #ifdef CONFIG_SIG_EVTHREAD
 void nxsig_cancel_notification(FAR struct sigwork_s *work);
 #else
-#  define nxsig_cancel_notification(work) (void)(work)
+  #define nxsig_cancel_notification(work) (void)(work)
 #endif
 
 #ifdef __cplusplus

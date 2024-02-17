@@ -52,9 +52,9 @@ static int  can_setup(FAR struct socket *psock);
 static sockcaps_t can_sockcaps(FAR struct socket *psock);
 static void can_addref(FAR struct socket *psock);
 static int  can_bind(FAR struct socket *psock,
-                     FAR const struct sockaddr *addr, socklen_t addrlen);
+              FAR const struct sockaddr *addr, socklen_t addrlen);
 static int  can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
-                           bool setup);
+              bool setup);
 static int can_close(FAR struct socket *psock);
 
 /****************************************************************************
@@ -270,6 +270,8 @@ static void can_addref(FAR struct socket *psock)
 {
   FAR struct can_conn_s *conn;
 
+  DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
+
   conn = psock->s_conn;
   DEBUGASSERT(conn->crefs > 0 && conn->crefs < 255);
   conn->crefs++;
@@ -310,13 +312,13 @@ static int can_bind(FAR struct socket *psock,
 {
   FAR struct sockaddr_can *canaddr;
   FAR struct can_conn_s *conn;
-  DEBUGASSERT(addr != NULL &&
+  DEBUGASSERT(psock != NULL && psock->s_conn != NULL && addr != NULL &&
               addrlen >= sizeof(struct sockaddr_can));
 
   /* Save the address information in the connection structure */
 
   canaddr = (FAR struct sockaddr_can *)addr;
-  conn    = psock->s_conn;
+  conn    = (FAR struct can_conn_s *)psock->s_conn;
 
   /* Bind CAN device to socket */
 
@@ -363,7 +365,8 @@ static int can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
   pollevent_t eventset = 0;
   int ret = OK;
 
-  conn = psock->s_conn;
+  DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
+  conn = (FAR struct can_conn_s *)psock->s_conn;
   info = conn->pollinfo;
 
   /* FIXME add NETDEV_DOWN support */
@@ -385,18 +388,18 @@ static int can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
 
       /* Initialize the poll info container */
 
-      info->psock = psock;
-      info->fds   = fds;
-      info->cb    = cb;
+      info->psock  = psock;
+      info->fds    = fds;
+      info->cb     = cb;
 
       /* Initialize the callback structure.  Save the reference to the info
        * structure as callback private data so that it will be available
        * during callback processing.
        */
 
-      cb->flags = NETDEV_DOWN;
-      cb->priv  = info;
-      cb->event = can_poll_eventhandler;
+      cb->flags    = NETDEV_DOWN;
+      cb->priv     = (FAR void *)info;
+      cb->event    = can_poll_eventhandler;
 
       if ((fds->events & POLLOUT) != 0)
         {
@@ -412,7 +415,7 @@ static int can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
        * for use during poll teardown as well.
        */
 
-      fds->priv = info;
+      fds->priv = (FAR void *)info;
 
       /* Check for read data availability now */
 
@@ -491,7 +494,7 @@ static int can_close(FAR struct socket *psock)
     {
       /* Yes... inform user-space daemon of socket close. */
 
-      /* #warning Missing logic */
+#warning Missing logic
 
       /* Free the connection structure */
 

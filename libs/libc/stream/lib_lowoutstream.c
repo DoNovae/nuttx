@@ -34,26 +34,6 @@
 #include "libc.h"
 
 /****************************************************************************
- * Private Functions Prototypes
- ****************************************************************************/
-
-static void lowoutstream_putc(FAR struct lib_outstream_s *self, int ch);
-static int lowoutstream_puts(FAR struct lib_outstream_s *self,
-                             FAR const void *buf, int len);
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-struct lib_outstream_s g_lowoutstream =
-{
-  0,
-  lowoutstream_putc,
-  lowoutstream_puts,
-  lib_noflush
-};
-
-/****************************************************************************
  * Private Functions
  ****************************************************************************/
 
@@ -61,13 +41,13 @@ struct lib_outstream_s g_lowoutstream =
  * Name: lowoutstream_putc
  ****************************************************************************/
 
-static void lowoutstream_putc(FAR struct lib_outstream_s *self, int ch)
+static void lowoutstream_putc(FAR struct lib_outstream_s *this, int ch)
 {
-  DEBUGASSERT(self);
+  DEBUGASSERT(this);
 
   if (up_putc(ch) != EOF)
     {
-      self->nput++;
+      this->nput++;
     }
 }
 
@@ -75,12 +55,12 @@ static void lowoutstream_putc(FAR struct lib_outstream_s *self, int ch)
  * Name: lowoutstream_puts
  ****************************************************************************/
 
-static int lowoutstream_puts(FAR struct lib_outstream_s *self,
+static int lowoutstream_puts(FAR struct lib_outstream_s *this,
                              FAR const void *buf, int len)
 {
-  DEBUGASSERT(self);
+  DEBUGASSERT(this);
 
-  self->nput += len;
+  this->nput += len;
   up_nputs(buf, len);
   return len;
 }

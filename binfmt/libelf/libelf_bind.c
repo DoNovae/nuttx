@@ -34,6 +34,7 @@
 #include <nuttx/elf.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/binfmt/elf.h>
+#include <nuttx/binfmt/symtab.h>
 
 #include "libelf.h"
 
@@ -50,18 +51,9 @@
 #endif
 
 #ifdef CONFIG_ELF_DUMPBUFFER
-#  define elf_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
+# define elf_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
 #else
-#  define elf_dumpbuffer(m,b,n)
-#endif
-
-#ifdef ARCH_ELFDATA
-#  define ARCH_ELFDATA_DEF  arch_elfdata_t arch_data; \
-                            memset(&arch_data, 0, sizeof(arch_elfdata_t))
-#  define ARCH_ELFDATA_PARM &arch_data
-#else
-#  define ARCH_ELFDATA_DEF
-#  define ARCH_ELFDATA_PARM NULL
+# define elf_dumpbuffer(m,b,n)
 #endif
 
 /****************************************************************************
@@ -193,10 +185,6 @@ static int elf_relocate(FAR struct elf_loadinfo_s *loadinfo, int relidx,
   int                   ret;
   int                   i;
   int                   j;
-
-  /* Define potential architecture specific elf data container */
-
-  ARCH_ELFDATA_DEF;
 
   rels = kmm_malloc(CONFIG_ELF_RELOCATION_BUFFERCOUNT * sizeof(Elf_Rel));
   if (rels == NULL)
@@ -347,7 +335,7 @@ static int elf_relocate(FAR struct elf_loadinfo_s *loadinfo, int relidx,
 
       /* Now perform the architecture-specific relocation */
 
-      ret = up_relocate(rel, sym, addr, ARCH_ELFDATA_PARM);
+      ret = up_relocate(rel, sym, addr);
       if (ret < 0)
         {
           berr("ERROR: Section %d reloc %d: Relocation failed: %d\n",
@@ -382,10 +370,6 @@ static int elf_relocateadd(FAR struct elf_loadinfo_s *loadinfo, int relidx,
   int                   ret;
   int                   i;
   int                   j;
-
-  /* Define potential architecture specific elf data container */
-
-  ARCH_ELFDATA_DEF;
 
   relas = kmm_malloc(CONFIG_ELF_RELOCATION_BUFFERCOUNT * sizeof(Elf_Rela));
   if (relas == NULL)
@@ -496,7 +480,7 @@ static int elf_relocateadd(FAR struct elf_loadinfo_s *loadinfo, int relidx,
 
               if (ret == -ESRCH)
                 {
-                  bwarn("Section %d reloc %d: "
+                  berr("Section %d reloc %d: "
                        "Undefined symbol[%d] has no name: %d\n",
                        relidx, i, symidx, ret);
                 }
@@ -536,7 +520,7 @@ static int elf_relocateadd(FAR struct elf_loadinfo_s *loadinfo, int relidx,
 
       /* Now perform the architecture-specific relocation */
 
-      ret = up_relocateadd(rela, sym, addr, ARCH_ELFDATA_PARM);
+      ret = up_relocateadd(rela, sym, addr);
       if (ret < 0)
         {
           berr("ERROR: Section %d reloc %d: Relocation failed: %d\n",
@@ -586,6 +570,17 @@ int elf_bind(FAR struct elf_loadinfo_s *loadinfo,
   ret = elf_findsymtab(loadinfo);
   if (ret < 0)
     {
+      return ret;
+    }
+
+  /* Allocate an I/O buffer.  This buffer is used by elf_symname() to
+   * accumulate the variable length symbol name.
+   */
+
+  ret = elf_allocbuffer(loadinfo);
+  if (ret < 0)
+    {
+      berr("elf_allocbuffer failed: %d\n", ret);
       return ret;
     }
 

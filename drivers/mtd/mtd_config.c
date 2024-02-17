@@ -37,7 +37,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <poll.h>
-#include <fcntl.h>
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
@@ -113,7 +112,7 @@ static int     mtdconfig_poll(FAR struct file *filep, FAR struct pollfd *fds,
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_mtdconfig_fops =
+static const struct file_operations mtdconfig_fops =
 {
   mtdconfig_open,  /* open */
   mtdconfig_close, /* close */
@@ -573,7 +572,7 @@ static off_t mtdconfig_ramconsolidate(FAR struct mtdconfig_struct_s *dev)
 
   /* Allocate a consolidation buffer */
 
-  pbuf = kmm_malloc(dev->erasesize);
+  pbuf = (FAR uint8_t *)kmm_malloc(dev->erasesize);
   if (pbuf == NULL)
     {
       /* Unable to allocate buffer, can't consolidate! */
@@ -773,7 +772,7 @@ static off_t  mtdconfig_consolidate(FAR struct mtdconfig_struct_s *dev)
 
   /* Allocate a small buffer for moving data */
 
-  pbuf = kmm_malloc(dev->blocksize);
+  pbuf = (FAR uint8_t *)kmm_malloc(dev->blocksize);
   if (pbuf == NULL)
     {
       return 0;
@@ -1165,7 +1164,7 @@ static int mtdconfig_setconfig(FAR struct mtdconfig_struct_s *dev,
 
   /* Allocate a temp block buffer */
 
-  dev->buffer = kmm_malloc(dev->blocksize);
+  dev->buffer = (FAR uint8_t *)kmm_malloc(dev->blocksize);
   if (dev->buffer == NULL)
     {
       return -ENOMEM;
@@ -1393,7 +1392,7 @@ static int mtdconfig_getconfig(FAR struct mtdconfig_struct_s *dev,
 
   /* Allocate a temp block buffer */
 
-  dev->buffer = kmm_malloc(dev->blocksize);
+  dev->buffer = (FAR uint8_t *)kmm_malloc(dev->blocksize);
   if (dev->buffer == NULL)
     {
       return -ENOMEM;
@@ -1424,17 +1423,14 @@ static int mtdconfig_getconfig(FAR struct mtdconfig_struct_s *dev,
 
       /* Perform the read */
 
-      if (pdata->configdata && bytes_to_read)
+      ret = mtdconfig_readbytes(dev, offset + sizeof(hdr), pdata->configdata,
+                                bytes_to_read);
+      if (ret != OK)
         {
-          ret = mtdconfig_readbytes(dev, offset + sizeof(hdr),
-                                    pdata->configdata, bytes_to_read);
-          if (ret != OK)
-            {
-              /* Error reading the data */
+          /* Error reading the data */
 
-              ret = -EIO;
-              goto errout;
-            }
+          ret = -EIO;
+          goto errout;
         }
 
       /* Set return data length to match the config item length */
@@ -1464,7 +1460,7 @@ static int mtdconfig_deleteconfig(FAR struct mtdconfig_struct_s *dev,
 
   /* Allocate a temp block buffer */
 
-  dev->buffer = kmm_malloc(dev->blocksize);
+  dev->buffer = (FAR uint8_t *)kmm_malloc(dev->blocksize);
   if (dev->buffer == NULL)
     {
       return -ENOMEM;
@@ -1512,7 +1508,7 @@ static int mtdconfig_firstconfig(FAR struct mtdconfig_struct_s *dev,
 
   /* Allocate a temp block buffer */
 
-  dev->buffer = kmm_malloc(dev->blocksize);
+  dev->buffer = (FAR uint8_t *)kmm_malloc(dev->blocksize);
   if (dev->buffer == NULL)
     {
       return -ENOMEM;
@@ -1580,7 +1576,7 @@ static int mtdconfig_nextconfig(FAR struct mtdconfig_struct_s *dev,
 
   /* Allocate a temp block buffer */
 
-  dev->buffer = kmm_malloc(dev->blocksize);
+  dev->buffer = (FAR uint8_t *)kmm_malloc(dev->blocksize);
   if (dev->buffer == NULL)
     {
       return -ENOMEM;
@@ -1780,7 +1776,7 @@ int mtdconfig_register(FAR struct mtd_dev_s *mtd)
         }
 
       nxmutex_init(&dev->lock);
-      register_driver("/dev/config", &g_mtdconfig_fops, 0666, dev);
+      register_driver("/dev/config", &mtdconfig_fops, 0666, dev);
     }
 
 errout:
@@ -1802,7 +1798,7 @@ int mtdconfig_unregister(void)
   FAR struct inode *inode;
   FAR struct mtdconfig_struct_s *dev;
 
-  ret = file_open(&file, "/dev/config", O_CLOEXEC);
+  ret = file_open(&file, "/dev/config", 0);
   if (ret < 0)
     {
       ferr("ERROR: open /dev/config failed: %d\n", ret);
@@ -1810,7 +1806,7 @@ int mtdconfig_unregister(void)
     }
 
   inode = file.f_inode;
-  dev = inode->i_private;
+  dev = (FAR struct mtdconfig_struct_s *)inode->i_private;
   nxmutex_destroy(&dev->lock);
   kmm_free(dev);
 

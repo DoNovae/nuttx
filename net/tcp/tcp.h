@@ -71,7 +71,7 @@
 #  define TCP_WBPKTLEN(wrb)          ((wrb)->wb_iob->io_pktlen)
 #  define TCP_WBSENT(wrb)            ((wrb)->wb_sent)
 #  define TCP_WBNRTX(wrb)            ((wrb)->wb_nrtx)
-#if defined(CONFIG_NET_TCP_FAST_RETRANSMIT) && !defined(CONFIG_NET_TCP_CC_NEWRENO)
+#ifdef CONFIG_NET_TCP_FAST_RETRANSMIT
 #  define TCP_WBNACK(wrb)            ((wrb)->wb_nack)
 #endif
 #  define TCP_WBIOB(wrb)             ((wrb)->wb_iob)
@@ -94,27 +94,18 @@
 
 /* 32-bit modular arithmetics for tcp sequence numbers */
 
-#define TCP_SEQ_LT(a, b)    ((int32_t)((a) - (b)) < 0)
-#define TCP_SEQ_GT(a, b)    TCP_SEQ_LT(b, a)
-#define TCP_SEQ_LTE(a, b)   (!TCP_SEQ_GT(a, b))
-#define TCP_SEQ_GTE(a, b)   (!TCP_SEQ_LT(a, b))
+#define TCP_SEQ_LT(a, b)	((int32_t)((a) - (b)) < 0)
+#define TCP_SEQ_GT(a, b)	TCP_SEQ_LT(b, a)
+#define TCP_SEQ_LTE(a, b)	(!TCP_SEQ_GT(a, b))
+#define TCP_SEQ_GTE(a, b)	(!TCP_SEQ_LT(a, b))
 
-#define TCP_SEQ_ADD(a, b)   ((uint32_t)((a) + (b)))
-#define TCP_SEQ_SUB(a, b)   ((uint32_t)((a) - (b)))
+#define TCP_SEQ_ADD(a, b)	((uint32_t)((a) + (b)))
+#define TCP_SEQ_SUB(a, b)	((uint32_t)((a) - (b)))
 
 /* The TCP options flags */
 
 #define TCP_WSCALE            0x01U /* Window Scale option enabled */
 #define TCP_SACK              0x02U /* Selective ACKs enabled */
-#define TCP_CLOSE_ARRANGED    0x04U /* Connection is arranged to be freed */
-
-#ifdef CONFIG_NET_TCP_CC_NEWRENO
-/* The TCP flags for congestion control */
-
-#define TCP_INFR              0x08U /* The flag in Fast Recovery */
-#define TCP_INFT              0x10U /* The flag in Fast Transmitted */
-
-#endif
 
 /* The Max Range count of TCP Selective ACKs */
 
@@ -125,9 +116,6 @@
  */
 
 #define TCP_FAST_RETRANSMISSION_THRESH 3
-
-#define TCP_RTO_MAX 240 /* 120s,The unit is half a second */
-#define TCP_RTO_MIN 1   /* 0.5s */
 
 /****************************************************************************
  * Public Type Definitions
@@ -241,20 +229,7 @@ struct tcp_conn_s
   uint16_t rport;         /* The remoteTCP port, in network byte order */
   uint16_t mss;           /* Current maximum segment size for the
                            * connection */
-#ifdef CONFIG_NET_TCPPROTO_OPTIONS
-  uint16_t user_mss;      /* Configured maximum segment size for the
-                           * connection */
-#endif
   uint32_t rcv_adv;       /* The right edge of the recv window advertized */
-#ifdef CONFIG_NET_TCP_CC_NEWRENO
-  uint32_t last_ackno;    /* The ack number at the last receive ack */
-  uint32_t dupacks;       /* The number of duplicate ack */
-  uint32_t fr_recover;    /* The snd_seq at the retransmissions */
-
-  uint32_t cwnd;          /* The Congestion window */
-  uint32_t max_cwnd;      /* The Congestion window maximum value */
-  uint32_t ssthresh;      /* The Slow start threshold */
-#endif
 #ifdef CONFIG_NET_TCP_WINDOW_SCALE
   uint32_t snd_wnd;       /* Sequence and acknowledgement numbers of last
                            * window update */
@@ -292,10 +267,11 @@ struct tcp_conn_s
 
   /* Read-ahead buffering.
    *
-   *   readahead - An IOB chain where the TCP/IP read-ahead data is retained.
+   *   readahead - A singly linked list of type struct iob_s
+   *               where the TCP/IP read-ahead data is retained.
    */
 
-  FAR struct iob_s *readahead;   /* Read-ahead buffering */
+  struct iob_s *readahead;   /* Read-ahead buffering */
 
 #ifdef CONFIG_NET_TCP_OUT_OF_ORDER
 
@@ -358,7 +334,6 @@ struct tcp_conn_s
 #if defined(CONFIG_NET_SENDFILE) && defined(CONFIG_NET_TCP_WRITE_BUFFERS)
   bool       sendfile;    /* True if sendfile operation is in progress */
 #endif
-  bool       zero_probe;   /* TCP zero window probe timer */
 
   /* connevents is a list of callbacks for each socket the uses this
    * connection (there can be more that one in the event that the the socket
@@ -410,7 +385,7 @@ struct tcp_wrbuffer_s
   uint16_t   wb_sent;      /* Number of bytes sent from the I/O buffer chain */
   uint8_t    wb_nrtx;      /* The number of retransmissions for the last
                             * segment sent */
-#if defined(CONFIG_NET_TCP_FAST_RETRANSMIT) && !defined(CONFIG_NET_TCP_CC_NEWRENO)
+#ifdef CONFIG_NET_TCP_FAST_RETRANSMIT
   uint8_t    wb_nack;      /* The number of ack count */
 #endif
   struct iob_s *wb_iob;    /* Head of the I/O buffer chain */
@@ -622,8 +597,7 @@ int tcp_remote_ipv6_device(FAR struct tcp_conn_s *conn);
  ****************************************************************************/
 
 FAR struct tcp_conn_s *tcp_alloc_accept(FAR struct net_driver_s *dev,
-                                        FAR struct tcp_hdr_s *tcp,
-                                        FAR struct tcp_conn_s *listener);
+                                        FAR struct tcp_hdr_s *tcp);
 
 /****************************************************************************
  * Name: tcp_selectport
@@ -764,7 +738,7 @@ void tcp_stop_monitor(FAR struct tcp_conn_s *conn, uint16_t flags);
  * Input Parameters:
  *   conn  - The TCP connection of interest
  *   cb    - devif callback structure
- *   flags - Set of connection events
+ *   flags - Set of connection events events
  *
  * Returned Value:
  *   None
@@ -896,7 +870,7 @@ uint32_t tcp_addsequence(FAR uint8_t *seqno, uint16_t len);
  *
  ****************************************************************************/
 
-void tcp_initsequence(FAR struct tcp_conn_s *conn);
+void tcp_initsequence(FAR uint8_t *seqno);
 
 /****************************************************************************
  * Name: tcp_nextsequence
@@ -1377,6 +1351,21 @@ uint16_t tcp_datahandler(FAR struct net_driver_s *dev,
                          uint16_t offset);
 
 /****************************************************************************
+ * Name: tcp_dataconcat
+ *
+ * Description:
+ *   Concatenate iob_s chain iob2 to iob1, if CONFIG_NET_TCP_RECV_PACK is
+ *   endabled, pack all data in the I/O buffer chain.
+ *
+ * Returned Value:
+ *   The number of bytes actually buffered is returned.  This will be either
+ *   zero or equal to iob1->io_pktlen.
+ *
+ ****************************************************************************/
+
+uint16_t tcp_dataconcat(FAR struct iob_s **iob1, FAR struct iob_s **iob2);
+
+/****************************************************************************
  * Name: tcp_backlogcreate
  *
  * Description:
@@ -1436,7 +1425,7 @@ int tcp_backlogadd(FAR struct tcp_conn_s *conn,
 #endif
 
 /****************************************************************************
- * Name: tcp_backlogpending
+ * Name: tcp_backlogavailable
  *
  * Description:
  *   Called from poll().  Before waiting for a new connection, poll will
@@ -1448,27 +1437,9 @@ int tcp_backlogadd(FAR struct tcp_conn_s *conn,
  ****************************************************************************/
 
 #ifdef CONFIG_NET_TCPBACKLOG
-bool tcp_backlogpending(FAR struct tcp_conn_s *conn);
-#else
-#  define tcp_backlogpending(c) (false)
-#endif
-
-/****************************************************************************
- * Name: tcp_backlogavailable
- *
- * Description:
- *  Called from tcp_input().  Before alloc a new accept connection, tcp_input
- *  will call this API to see if there are free node in the backlog.
- *
- * Assumptions:
- *   Called from network socket logic with the network locked
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_TCPBACKLOG
 bool tcp_backlogavailable(FAR struct tcp_conn_s *conn);
 #else
-#  define tcp_backlogavailable(c) (true)
+#  define tcp_backlogavailable(c) (false)
 #endif
 
 /****************************************************************************
@@ -2240,94 +2211,9 @@ int tcp_ofoseg_bufsize(FAR struct tcp_conn_s *conn);
 
 bool tcp_reorder_ofosegs(int nofosegs, FAR struct tcp_ofoseg_s *ofosegs);
 
-/****************************************************************************
- * Name: tcp_cc_init
- *
- * Description:
- *   Initialize the congestion control variables, cwnd, ssthresh and dupacks.
- *   The function is called on starting a new connection.
- *
- * Input Parameters:
- *   conn   - The TCP connection of interest
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   The normal user level code is calling the connect/accept to start a new
- *   connection.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_TCP_CC_NEWRENO
-void tcp_cc_init(FAR struct tcp_conn_s *conn);
-
-/****************************************************************************
- * Name: tcp_cc_update
- *
- * Description:
- *   Update the congestion control variables when recieve the SYNACK/ACK
- *   packet from the peer in the connection phase.
- *
- * Input Parameters:
- *   conn   - The TCP connection of interest
- *   tcp    - The TCP header.
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-void tcp_cc_update(FAR struct tcp_conn_s *conn, FAR struct tcp_hdr_s *tcp);
-
-/****************************************************************************
- * Name: tcp_cc_recv_ack
- *
- * Description:
- *   Update congestion control variables
- *
- * Input Parameters:
- *   conn   - The TCP connection of interest
- *   tcp    - The TCP header.
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-void tcp_cc_recv_ack(FAR struct tcp_conn_s *conn, FAR struct tcp_hdr_s *tcp);
-#endif
-
 #ifdef __cplusplus
 }
 #endif
-
-/****************************************************************************
- * Name: tcp_set_zero_probe
- *
- * Description:
- *   Update the TCP probe timer for the provided TCP connection,
- *   The timeout is accurate
- *
- * Input Parameters:
- *   conn    - The TCP "connection" to poll for TX data
- *   flags   - Set of connection events
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   conn is not NULL.
- *
- ****************************************************************************/
-
-void tcp_set_zero_probe(FAR struct tcp_conn_s *conn, uint16_t flags);
 
 #endif /* !CONFIG_NET_TCP_NO_STACK */
 #endif /* CONFIG_NET_TCP */

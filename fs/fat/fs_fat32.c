@@ -45,16 +45,6 @@
 #include "fs_fat32.h"
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#if defined(CONFIG_FS_LARGEFILE)
-#  define OFF_MAX INT64_MAX
-#else
-#  define OFF_MAX INT32_MAX
-#endif
-
-/****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
@@ -117,7 +107,7 @@ static int     fat_stat(struct inode *mountpt, const char *relpath,
  * with any compiler.
  */
 
-const struct mountpt_operations g_fat_operations =
+const struct mountpt_operations fat_operations =
 {
   fat_open,          /* open */
   fat_close,         /* close */
@@ -127,7 +117,6 @@ const struct mountpt_operations g_fat_operations =
   fat_ioctl,         /* ioctl */
   NULL,              /* mmap */
   fat_truncate,      /* truncate */
-  NULL,              /* poll */
   fat_sync,          /* sync */
   fat_dup,           /* dup */
   fat_fstat,         /* fstat */
@@ -170,7 +159,7 @@ static int fat_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv == NULL);
+  DEBUGASSERT(filep->f_priv == NULL && filep->f_inode != NULL);
 
   /* Get the mountpoint inode reference from the file structure and the
    * mountpoint private data from the inode structure
@@ -314,7 +303,7 @@ static int fat_open(FAR struct file *filep, FAR const char *relpath,
    * file.
    */
 
-  ff = kmm_zalloc(sizeof(struct fat_file_s));
+  ff = (FAR struct fat_file_s *)kmm_zalloc(sizeof(struct fat_file_s));
   if (!ff)
     {
       ret = -ENOMEM;
@@ -409,7 +398,7 @@ static int fat_close(FAR struct file *filep)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -495,7 +484,7 @@ static ssize_t fat_read(FAR struct file *filep, FAR char *buffer,
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -584,7 +573,7 @@ static ssize_t fat_read(FAR struct file *filep, FAR char *buffer,
           /* Find the next cluster in the FAT. */
 
           cluster = fat_getcluster(fs, ff->ff_currentcluster);
-          if (cluster < 2 || cluster >= fs->fs_nclusters + 2)
+          if (cluster < 2 || cluster >= fs->fs_nclusters)
             {
               ret = -EINVAL; /* Not the right error */
               goto errout_with_lock;
@@ -733,7 +722,7 @@ static ssize_t fat_write(FAR struct file *filep, FAR const char *buffer,
   bool force_indirect = false;
 #endif
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -775,7 +764,7 @@ static ssize_t fat_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Check if the file size would exceed the range of off_t */
 
-  if (buflen > OFF_MAX || ff->ff_size > OFF_MAX - (off_t)buflen)
+  if (ff->ff_size + buflen < ff->ff_size)
     {
       ret = -EFBIG;
       goto errout_with_lock;
@@ -836,7 +825,7 @@ static ssize_t fat_write(FAR struct file *filep, FAR const char *buffer,
               ret = cluster;
               goto errout_with_lock;
             }
-          else if (cluster < 2 || cluster >= fs->fs_nclusters + 2)
+          else if (cluster < 2 || cluster >= fs->fs_nclusters)
             {
               ret = -ENOSPC;
               goto errout_with_lock;
@@ -1028,7 +1017,7 @@ static off_t fat_seek(FAR struct file *filep, off_t offset, int whence)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -1214,7 +1203,7 @@ static off_t fat_seek(FAR struct file *filep, off_t offset, int whence)
               break;
             }
 
-          if (cluster >= fs->fs_nclusters + 2)
+          if (cluster >= fs->fs_nclusters)
             {
               ret = -ENOSPC;
               goto errout_with_lock;
@@ -1281,7 +1270,7 @@ static int fat_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Check for the forced mount condition */
 
@@ -1338,7 +1327,7 @@ static int fat_sync(FAR struct file *filep)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Check for the forced mount condition */
 
@@ -1477,7 +1466,7 @@ static int fat_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   /* Recover our private data from the struct file instance */
 
-  fs = oldp->f_inode->i_private;
+  fs = (struct fat_mountpt_s *)oldp->f_inode->i_private;
 
   DEBUGASSERT(fs != NULL);
 
@@ -1499,7 +1488,7 @@ static int fat_dup(FAR const struct file *oldp, FAR struct file *newp)
    * dup'ed file.
    */
 
-  newff = kmm_malloc(sizeof(struct fat_file_s));
+  newff = (FAR struct fat_file_s *)kmm_malloc(sizeof(struct fat_file_s));
   if (!newff)
     {
       ret = -ENOMEM;
@@ -1713,7 +1702,7 @@ static int fat_fstat(FAR const struct file *filep, FAR struct stat *buf)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Get the mountpoint inode reference from the file structure and the
    * mountpoint private data from the inode structure
@@ -1787,7 +1776,7 @@ static int fat_truncate(FAR struct file *filep, off_t length)
   off_t oldsize;
   int ret;
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -2180,7 +2169,7 @@ static int fat_bind(FAR struct inode *blkdriver, FAR const void *data,
 
   /* Create an instance of the mountpt state structure */
 
-  fs = kmm_zalloc(sizeof(struct fat_mountpt_s));
+  fs = (struct fat_mountpt_s *)kmm_zalloc(sizeof(struct fat_mountpt_s));
   if (!fs)
     {
       return -ENOMEM;
@@ -2344,6 +2333,7 @@ static int fat_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   /* Fill in the statfs info */
 
+  memset(buf, 0, sizeof(struct statfs));
   buf->f_type    = MSDOS_SUPER_MAGIC;
 
   /* We will claim that the optimal transfer size is the size of a cluster
@@ -2654,7 +2644,7 @@ errout_with_lock:
  *
  ****************************************************************************/
 
-static int fat_rmdir(FAR struct inode *mountpt, FAR const char *relpath)
+int fat_rmdir(FAR struct inode *mountpt, FAR const char *relpath)
 {
   FAR struct fat_mountpt_s *fs;
   int ret;
@@ -2702,8 +2692,8 @@ static int fat_rmdir(FAR struct inode *mountpt, FAR const char *relpath)
  *
  ****************************************************************************/
 
-static int fat_rename(FAR struct inode *mountpt, FAR const char *oldrelpath,
-                      FAR const char *newrelpath)
+int fat_rename(FAR struct inode *mountpt, FAR const char *oldrelpath,
+               FAR const char *newrelpath)
 {
   FAR struct fat_mountpt_s *fs;
   FAR struct fat_dirinfo_s dirinfo;

@@ -25,13 +25,10 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/addrenv.h>
 #include <nuttx/config.h>
-#include <nuttx/userspace.h>
 
 #include <sys/types.h>
 #include <stdbool.h>
-#include <malloc.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -101,44 +98,6 @@
 #  endif
 #endif
 
-#define mm_memdump_s malltask
-
-#if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_BUILD_KERNEL)
-/* In the kernel build, there are multiple user heaps; one for each task
- * group.  In this build configuration, the user heap structure lies
- * in a reserved region at the beginning of the .bss/.data address
- * space (CONFIG_ARCH_DATA_VBASE).  The size of that region is given by
- * ARCH_DATA_RESERVE_SIZE
- */
-
-#  define USR_HEAP (ARCH_DATA_RESERVE->ar_usrheap)
-
-#elif defined(CONFIG_BUILD_PROTECTED) && defined(__KERNEL__)
-/* In the protected mode, there are two heaps:  A kernel heap and a single
- * user heap.  Kernel code must obtain the address of the user heap data
- * structure from the userspace interface.
- */
-
-#  define USR_HEAP (*USERSPACE->us_heap)
-
-#else
-/* Otherwise, the user heap data structures are in common .bss */
-
-#  define USR_HEAP g_mmheap
-#endif
-
-#ifdef CONFIG_MM_KERNEL_HEAP
-#  define MM_INTERNAL_HEAP(heap) ((heap) == USR_HEAP || (heap) == g_kmmheap)
-#else
-#  define MM_INTERNAL_HEAP(heap) ((heap) == USR_HEAP)
-#endif
-
-#define MM_DUMP_ASSIGN(dump, pid) ((dump) == (pid))
-#define MM_DUMP_ALLOC(dump, pid) \
-    ((dump) == PID_MM_ALLOC && (pid) != PID_MM_MEMPOOL)
-#define MM_DUMP_LEAK(dump, pid) \
-    ((dump) == PID_MM_LEAK && (pid) >= 0 && nxsched_get_tcb(pid) == NULL)
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -156,10 +115,6 @@ extern "C"
 {
 #else
 #define EXTERN extern
-#endif
-
-#if CONFIG_MM_BACKTRACE >= 0
-extern unsigned long g_mm_seqno;
 #endif
 
 /* User heap structure:
@@ -294,7 +249,7 @@ FAR void *kmm_zalloc(size_t size) malloc_like1(1);
 /* Functions contained in kmm_memdump.c *************************************/
 
 #ifdef CONFIG_MM_KERNEL_HEAP
-void kmm_memdump(FAR const struct mm_memdump_s *dump);
+void kmm_memdump(pid_t pid);
 #endif
 
 /* Functions contained in mm_memalign.c *************************************/
@@ -353,23 +308,24 @@ void kmm_extend(FAR void *mem, size_t size, int region);
 
 /* Functions contained in mm_mallinfo.c *************************************/
 
-struct mallinfo mm_mallinfo(FAR struct mm_heap_s *heap);
-struct mallinfo_task mm_mallinfo_task(FAR struct mm_heap_s *heap,
-                                      FAR const struct malltask *task);
+struct mallinfo; /* Forward reference */
+int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info);
+struct mallinfo_task; /* Forward reference */
+int mm_mallinfo_task(FAR struct mm_heap_s *heap,
+                     FAR struct mallinfo_task *info);
 
 /* Functions contained in kmm_mallinfo.c ************************************/
 
 #ifdef CONFIG_MM_KERNEL_HEAP
 struct mallinfo kmm_mallinfo(void);
 #  if CONFIG_MM_BACKTRACE >= 0
-struct mallinfo_task kmm_mallinfo_task(FAR const struct malltask *task);
+struct mallinfo_task kmm_mallinfo_task(pid_t pid);
 #  endif
 #endif
 
 /* Functions contained in mm_memdump.c **************************************/
 
-void mm_memdump(FAR struct mm_heap_s *heap,
-                FAR const struct mm_memdump_s *dump);
+void mm_memdump(FAR struct mm_heap_s *heap, pid_t pid);
 
 #ifdef CONFIG_DEBUG_MM
 /* Functions contained in mm_checkcorruption.c ******************************/
@@ -382,7 +338,7 @@ FAR void umm_checkcorruption(void);
 
 /* Functions contained in umm_memdump.c *************************************/
 
-void umm_memdump(FAR const struct mm_memdump_s *dump);
+void umm_memdump(pid_t pid);
 
 /* Functions contained in kmm_checkcorruption.c *****************************/
 

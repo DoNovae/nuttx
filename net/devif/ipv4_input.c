@@ -207,7 +207,7 @@ static int ipv4_in(FAR struct net_driver_s *dev)
   totlen = (ipv4->len[0] << 8) + ipv4->len[1];
   if (totlen < dev->d_len)
     {
-      iob_update_pktlen(dev->d_iob, totlen, false);
+      iob_update_pktlen(dev->d_iob, totlen);
       dev->d_len = totlen;
     }
   else if (totlen > dev->d_len)
@@ -490,12 +490,6 @@ int ipv4_input(FAR struct net_driver_s *dev)
 {
   FAR uint8_t *buf;
   int ret;
-
-  /* Store reception timestamp if enabled and not provided by hardware. */
-
-#if defined(CONFIG_NET_TIMESTAMP) && !defined(CONFIG_ARCH_HAVE_NETDEV_TIMESTAMP)
-  clock_gettime(CLOCK_REALTIME, &dev->d_rxtime);
-#endif
 
   if (dev->d_iob != NULL)
     {

@@ -48,6 +48,7 @@
 #include "xmc4_gpio.h"
 #include "xmc4_spi.h"
 #include "xmc4_usic.h"
+#include "hardware/xmc4_spi.h"
 #include "hardware/xmc4_usic.h"
 #include "hardware/xmc4_pinmux.h"
 
@@ -221,7 +222,7 @@ static bool     spi_checkreg(struct xmc4_spidev_s *spi, bool wr,
                              uint32_t value, uint32_t address);
 
 #else
-#  define       spi_checkreg(spi, wr, value, address)  (false)
+# define        spi_checkreg(spi, wr, value, address)  (false)
 #endif
 
 static inline uint32_t spi_getreg(struct xmc4_spidev_s *spi,
@@ -233,7 +234,7 @@ static inline struct xmc4_spidev_s *spi_device(struct xmc4_spics_s *spics);
 #ifdef CONFIG_DEBUG_SPI_INFO
 static void     spi_dumpregs(struct xmc4_spidev_s *spi, const char *msg);
 #else
-#  define       spi_dumpregs(spi, msg)
+# define        spi_dumpregs(spi, msg)
 #endif
 
 static inline void spi_flush(struct xmc4_spidev_s *spi);
@@ -1793,7 +1794,7 @@ struct spi_dev_s *xmc4_spibus_initialize(int channel)
    * chip select structures.
    */
 
-  spics = kmm_zalloc(sizeof(struct xmc4_spics_s));
+  spics = (struct xmc4_spics_s *)kmm_zalloc(sizeof(struct xmc4_spics_s));
   if (!spics)
     {
       spierr("ERROR: Failed to allocate a chip select structure\n");

@@ -843,11 +843,11 @@ static int fusb303_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int ret = OK;
   int i;
 
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv = (FAR struct fusb303_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
@@ -893,7 +893,7 @@ static int fusb303_poll(FAR struct file *filep, FAR struct pollfd *fds,
       flags = enter_critical_section();
       if (priv->int_pending)
         {
-          poll_notify(&fds, 1, POLLIN);
+          poll_notify(priv->fds, CONFIG_FUSB303_NPOLLWAITERS, POLLIN);
         }
 
       leave_critical_section(flags);

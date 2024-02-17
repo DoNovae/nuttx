@@ -36,11 +36,11 @@ endif
 
 # Common assembly language files
 
-CMN_ASRCS += arm_cpuhead.S arm_vectors.S arm_saveusercontext.S
+CMN_ASRCS += arm_cpuhead.S arm_vectoraddrexcptn.S arm_vectors.S
 
 # Common C source files
 
-CMN_CSRCS += arm_cache.c arm_cpuinfo.c arm_dataabort.c
+CMN_CSRCS += arm_cache.c arm_dataabort.c
 CMN_CSRCS += arm_doirq.c arm_gicv2.c arm_gicv2_dump.c
 CMN_CSRCS += arm_initialstate.c arm_mmu.c arm_prefetchabort.c
 CMN_CSRCS += arm_schedulesigaction.c arm_sigdeliver.c
@@ -65,7 +65,6 @@ endif
 
 ifeq ($(CONFIG_ARCH_ADDRENV),y)
   CMN_CSRCS += arm_addrenv.c arm_addrenv_utils.c arm_addrenv_perms.c arm_pgalloc.c
-  CMN_CSRCS += arm_addrenv_pgmap.c
   ifeq ($(CONFIG_ARCH_STACK_DYNAMIC),y)
     CMN_CSRCS += arm_addrenv_ustack.c
   endif
@@ -94,7 +93,3 @@ ifeq ($(CONFIG_SMP),y)
   CMN_CSRCS += arm_scu.c
 endif
 
-ifeq ($(CONFIG_ARCH_HAVE_PSCI),y)
-  CMN_ASRCS += arm_smccc.S
-  CMN_CSRCS += arm_cpu_psci.c
-endif

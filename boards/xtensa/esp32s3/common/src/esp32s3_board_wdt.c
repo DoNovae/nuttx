@@ -31,6 +31,8 @@
 #include "esp32s3_wdt_lowerhalf.h"
 #include "esp32s3_wdt.h"
 
+#include "esp32s3-devkit.h"
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -81,15 +83,6 @@ int board_wdt_init(void)
       return ret;
     }
 #endif /* CONFIG_ESP32S3_RWDT */
-
-#ifdef CONFIG_ESP32S3_XTWDT
-  ret = esp32s3_wdt_initialize("/dev/watchdog3", ESP32S3_WDT_XTWDT);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize XTWDT: %d\n", ret);
-      return ret;
-    }
-#endif /* CONFIG_ESP32S3_XTWDT */
 
   return ret;
 }

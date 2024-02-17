@@ -136,7 +136,7 @@ static int  mac802154dev_ioctl(FAR struct file *filep, int cmd,
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_mac802154dev_fops =
+static const struct file_operations mac802154dev_fops =
 {
   mac802154dev_open,  /* open */
   mac802154dev_close, /* close */
@@ -165,6 +165,7 @@ static int mac802154dev_open(FAR struct file *filep)
   FAR struct mac802154dev_open_s *opriv;
   int ret;
 
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   inode = filep->f_inode;
 
   dev   = inode->i_private;
@@ -225,11 +226,11 @@ static int mac802154dev_close(FAR struct file *filep)
   bool closing;
   int ret;
 
-  DEBUGASSERT(filep->f_priv);
+  DEBUGASSERT(filep && filep->f_priv && filep->f_inode);
   opriv = filep->f_priv;
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  dev = (FAR struct mac802154_chardevice_s *)inode->i_private;
 
   /* Handle an improbable race conditions with the following atomic test
    * and set.
@@ -337,9 +338,10 @@ static ssize_t mac802154dev_read(FAR struct file *filep, FAR char *buffer,
   struct ieee802154_get_req_s req;
   int ret;
 
+  DEBUGASSERT(filep && filep->f_inode);
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  dev = (FAR struct mac802154_chardevice_s *)inode->i_private;
 
   /* Check to make sure the buffer is the right size for the struct */
 
@@ -482,9 +484,10 @@ static ssize_t mac802154dev_write(FAR struct file *filep,
   FAR struct iob_s *iob;
   int ret;
 
+  DEBUGASSERT(filep && filep->f_inode);
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  dev  = inode->i_private;
+  dev  = (FAR struct mac802154_chardevice_s *)inode->i_private;
 
   /* Check if the struct is the correct size */
 
@@ -550,11 +553,11 @@ static int mac802154dev_ioctl(FAR struct file *filep, int cmd,
     (FAR union ieee802154_macarg_u *)((uintptr_t)arg);
   int ret;
 
-  DEBUGASSERT(filep->f_priv != NULL &&
+  DEBUGASSERT(filep != NULL && filep->f_priv != NULL &&
               filep->f_inode != NULL);
   inode = filep->f_inode;
   DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  dev = (FAR struct mac802154_chardevice_s *)inode->i_private;
 
   /* Get exclusive access to the driver structure */
 
@@ -859,7 +862,7 @@ int mac802154dev_register(MACHANDLE mac, int minor)
 
   /* Register the mac character driver */
 
-  ret = register_driver(devname, &g_mac802154dev_fops, 0666, dev);
+  ret = register_driver(devname, &mac802154dev_fops, 0666, dev);
   if (ret < 0)
     {
       wlerr("ERROR: register_driver failed: %d\n", ret);

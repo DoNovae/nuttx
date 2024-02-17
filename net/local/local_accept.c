@@ -62,7 +62,7 @@ static int local_waitlisten(FAR struct local_conn_s *server)
         }
     }
 
-  /* There is an accept conn waiting to be processed */
+  /* There is a client waiting for the connection */
 
   return OK;
 }
@@ -100,13 +100,15 @@ int local_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
                  int flags)
 {
   FAR struct local_conn_s *server;
+  FAR struct local_conn_s *client;
   FAR struct local_conn_s *conn;
   FAR dq_entry_t *waiter;
   bool nonblock = !!(flags & SOCK_NONBLOCK);
-  int ret = OK;
+  int ret;
 
   /* Some sanity checks */
 
+  DEBUGASSERT(psock && psock->s_conn);
   DEBUGASSERT(newsock && !newsock->s_conn);
 
   /* Is the socket a stream? */
@@ -120,10 +122,11 @@ int local_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
    * address
    */
 
-  server = psock->s_conn;
+  server = (FAR struct local_conn_s *)psock->s_conn;
 
   if (server->lc_proto != SOCK_STREAM ||
-      server->lc_state != LOCAL_STATE_LISTENING)
+      server->lc_state != LOCAL_STATE_LISTENING ||
+      server->lc_type  != LOCAL_TYPE_PATHNAME)
     {
       return -EOPNOTSUPP;
     }
@@ -132,7 +135,7 @@ int local_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
 
   for (; ; )
     {
-      /* Are there pending connections.  Remove the accpet from the
+      /* Are there pending connections.  Remove the client from the
        * head of the waiting list.
        */
 
@@ -140,33 +143,111 @@ int local_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
 
       if (waiter)
         {
-          conn = container_of(waiter, struct local_conn_s,
-                              u.accept.lc_waiter);
+          client = container_of(waiter, struct local_conn_s,
+                                u.client.lc_waiter);
 
-          /* Decrement the number of pending accpets */
+          /* Decrement the number of pending clients */
 
           DEBUGASSERT(server->u.server.lc_pending > 0);
           server->u.server.lc_pending--;
 
-          /* Setup the accpet socket structure */
+          /* Create a new connection structure for the server side of the
+           * connection.
+           */
 
-          conn->lc_psock = newsock;
-
-          newsock->s_domain = psock->s_domain;
-          newsock->s_type   = SOCK_STREAM;
-          newsock->s_sockif = psock->s_sockif;
-          newsock->s_conn   = (FAR void *)conn;
-
-          /* Return the address family */
-
-          if (addr != NULL)
+          conn = local_alloc();
+          if (!conn)
             {
-              ret = local_getaddr(conn, addr, addrlen);
+              nerr("ERROR:  Failed to allocate new connection structure\n");
+              ret = -ENOMEM;
+            }
+          else
+            {
+              /* Initialize the new connection structure */
+
+              conn->lc_crefs  = 1;
+              conn->lc_proto  = SOCK_STREAM;
+              conn->lc_type   = LOCAL_TYPE_PATHNAME;
+              conn->lc_state  = LOCAL_STATE_CONNECTED;
+              conn->lc_psock  = psock;
+#ifdef CONFIG_NET_LOCAL_SCM
+              conn->lc_peer   = client;
+              client->lc_peer = conn;
+#endif /* CONFIG_NET_LOCAL_SCM */
+
+              strlcpy(conn->lc_path, client->lc_path, sizeof(conn->lc_path));
+              conn->lc_instance_id = client->lc_instance_id;
+
+              /* Open the server-side write-only FIFO.  This should not
+               * block.
+               */
+
+              ret = local_open_server_tx(conn, nonblock);
+              if (ret < 0)
+                {
+                  nerr("ERROR: Failed to open write-only FIFOs for %s: %d\n",
+                     conn->lc_path, ret);
+                }
             }
 
-          if (ret == OK && nonblock)
+          /* Do we have a connection?  Is the write-side FIFO opened? */
+
+          if (ret == OK)
             {
-              ret = local_set_nonblocking(conn);
+              DEBUGASSERT(conn->lc_outfile.f_inode != NULL);
+
+              /* Open the server-side read-only FIFO.  This should not
+               * block because the client side has already opening it
+               * for writing.
+               */
+
+              ret = local_open_server_rx(conn, nonblock);
+              if (ret < 0)
+                {
+                   nerr("ERROR: Failed to open read-only FIFOs for %s: %d\n",
+                        conn->lc_path, ret);
+                }
+            }
+
+          /* Do we have a connection?  Are the FIFOs opened? */
+
+          if (ret == OK)
+            {
+              DEBUGASSERT(conn->lc_infile.f_inode != NULL);
+
+              /* Return the address family */
+
+              if (addr != NULL)
+                {
+                  ret = local_getaddr(client, addr, addrlen);
+                }
+            }
+
+          if (ret == OK)
+            {
+              /* Setup the client socket structure */
+
+              newsock->s_domain = psock->s_domain;
+              newsock->s_type   = SOCK_STREAM;
+              newsock->s_sockif = psock->s_sockif;
+              newsock->s_conn   = (FAR void *)conn;
+            }
+
+          /* Signal the client with the result of the connection */
+
+          client->u.client.lc_result = ret;
+          if (client->lc_state == LOCAL_STATE_CONNECTING)
+            {
+              client->lc_state = LOCAL_STATE_CONNECTED;
+              _SO_SETERRNO(client->lc_psock, ret);
+              local_event_pollnotify(client, POLLOUT);
+            }
+
+          nxsem_post(&client->lc_waitsem);
+
+          if (ret == OK)
+            {
+              ret = net_sem_wait(&client->lc_donesem);
             }
 
           return ret;

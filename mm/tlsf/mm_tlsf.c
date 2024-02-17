@@ -28,6 +28,8 @@
 #include <errno.h>
 #include <assert.h>
 #include <debug.h>
+#include <execinfo.h>
+#include <malloc.h>
 #include <sched.h>
 #include <stdio.h>
 #include <string.h>
@@ -78,14 +80,6 @@ struct mm_heap_s
 
   size_t mm_heapsize;
 
-  /* This is the heap maximum used memory size */
-
-  size_t mm_maxused;
-
-  /* This is the current used size of the heap */
-
-  size_t mm_curused;
-
   /* This is the first and last of the heap */
 
   FAR void *mm_heapstart[CONFIG_MM_REGIONS];
@@ -103,12 +97,12 @@ struct mm_heap_s
   FAR struct mempool_multiple_s *mm_mpool;
 #endif
 
-  /* Free delay list, for some situation can't do free immediately */
+  /* Free delay list, for some situation can't do free immdiately */
 
+#ifdef CONFIG_SMP
   struct mm_delaynode_s *mm_delaylist[CONFIG_SMP_NCPUS];
-
-#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
-  size_t mm_delaycount[CONFIG_SMP_NCPUS];
+#else
+  struct mm_delaynode_s *mm_delaylist[1];
 #endif
 
 #if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMINFO)
@@ -116,28 +110,22 @@ struct mm_heap_s
 #endif
 };
 
+struct memdump_info_s
+{
+  pid_t pid;
+  int   blks;
+  int   size;
+};
+
 #if CONFIG_MM_BACKTRACE >= 0
 struct memdump_backtrace_s
 {
   pid_t pid;                                /* The pid for caller */
-  unsigned long seqno;                      /* The sequence of memory malloc */
 #if CONFIG_MM_BACKTRACE > 0
   FAR void *backtrace[CONFIG_MM_BACKTRACE]; /* The backtrace buffer for caller */
 #endif
 };
 #endif
-
-struct mm_mallinfo_handler_s
-{
-  FAR const struct malltask *task;
-  FAR struct mallinfo_task *info;
-};
-
-/****************************************************************************
- * Private Function Prototypes
- ****************************************************************************/
-
-static void mm_delayfree(struct mm_heap_s *heap, void *mem, bool delay);
 
 /****************************************************************************
  * Private Functions
@@ -150,25 +138,22 @@ static void mm_delayfree(struct mm_heap_s *heap, void *mem, bool delay);
  ****************************************************************************/
 
 static void memdump_backtrace(FAR struct mm_heap_s *heap,
-                              FAR struct memdump_backtrace_s *buf)
+                              FAR struct memdump_backtrace_s *dump)
 {
 #  if CONFIG_MM_BACKTRACE > 0
   FAR struct tcb_s *tcb;
 #  endif
 
-  buf->pid = _SCHED_GETTID();
-  buf->seqno = g_mm_seqno++;
+  dump->pid = _SCHED_GETPID();
 #  if CONFIG_MM_BACKTRACE > 0
-  tcb = nxsched_get_tcb(buf->pid);
+  tcb = nxsched_get_tcb(dump->pid);
   if (heap->mm_procfs.backtrace ||
-      (tcb && tcb->flags & TCB_FLAG_HEAP_DUMP))
+      (tcb && tcb->flags & TCB_FLAG_HEAPDUMP))
     {
-      int ret = sched_backtrace(buf->pid, buf->backtrace,
-                                CONFIG_MM_BACKTRACE,
-                                CONFIG_MM_BACKTRACE_SKIP);
+      int ret = backtrace(dump->backtrace, CONFIG_MM_BACKTRACE);
       if (ret < CONFIG_MM_BACKTRACE)
         {
-          buf->backtrace[ret] = NULL;
+          dump->backtrace[ret] = NULL;
         }
     }
 #  endif
@@ -187,16 +172,12 @@ static void add_delaylist(FAR struct mm_heap_s *heap, FAR void *mem)
 
   /* Delay the deallocation until a more appropriate time. */
 
-  flags = up_irq_save();
+  flags = enter_critical_section();
 
   tmp->flink = heap->mm_delaylist[up_cpu_index()];
   heap->mm_delaylist[up_cpu_index()] = tmp;
 
-#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
-  heap->mm_delaycount[up_cpu_index()]++;
-#endif
-
-  up_irq_restore(flags);
+  leave_critical_section(flags);
 #endif
 }
 
@@ -204,38 +185,22 @@ static void add_delaylist(FAR struct mm_heap_s *heap, FAR void *mem)
  * Name: free_delaylist
  ****************************************************************************/
 
-static bool free_delaylist(FAR struct mm_heap_s *heap, bool force)
+static void free_delaylist(FAR struct mm_heap_s *heap)
 {
-  bool ret = false;
 #if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
   FAR struct mm_delaynode_s *tmp;
   irqstate_t flags;
 
   /* Move the delay list to local */
 
-  flags = up_irq_save();
+  flags = enter_critical_section();
 
   tmp = heap->mm_delaylist[up_cpu_index()];
-
-#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
-  if (tmp == NULL ||
-      (!force &&
-        heap->mm_delaycount[up_cpu_index()] < CONFIG_MM_FREE_DELAYCOUNT_MAX))
-    {
-      up_irq_restore(flags);
-      return false;
-    }
-
-  heap->mm_delaycount[up_cpu_index()] = 0;
-#endif
-
   heap->mm_delaylist[up_cpu_index()] = NULL;
 
-  up_irq_restore(flags);
+  leave_critical_section(flags);
 
   /* Test if the delayed is empty */
-
-  ret = tmp != NULL;
 
   while (tmp)
     {
@@ -250,41 +215,10 @@ static bool free_delaylist(FAR struct mm_heap_s *heap, bool force)
        * 'while' condition above.
        */
 
-      mm_delayfree(heap, address, false);
+      mm_free(heap, address);
     }
-
 #endif
-  return ret;
 }
-
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0 && CONFIG_MM_BACKTRACE >= 0
-
-/****************************************************************************
- * Name: mempool_memalign
- *
- * Description:
- *   This function call mm_memalign and set mm_backtrace pid to free pid
- *   avoid repeated calculation.
- ****************************************************************************/
-
-static FAR void *mempool_memalign(FAR void *arg, size_t alignment,
-                                  size_t size)
-{
-  FAR struct memdump_backtrace_s *buf;
-  FAR void *ret;
-
-  ret = mm_memalign(arg, alignment, size);
-  if (ret)
-    {
-      buf = ret + mm_malloc_size(arg, ret);
-      buf->pid = PID_MM_MEMPOOL;
-    }
-
-  return ret;
-}
-#else
-#  define mempool_memalign mm_memalign
-#endif
 
 /****************************************************************************
  * Name: mallinfo_handler
@@ -317,37 +251,33 @@ static void mallinfo_handler(FAR void *ptr, size_t size, int used,
 static void mallinfo_task_handler(FAR void *ptr, size_t size, int used,
                                   FAR void *user)
 {
-  FAR struct mm_mallinfo_handler_s *handler = user;
-  FAR const struct malltask *task = handler->task;
-  FAR struct mallinfo_task *info = handler->info;
+#if CONFIG_MM_BACKTRACE >= 0
+  FAR struct memdump_backtrace_s *dump;
+#endif
+  FAR struct mallinfo_task *info = user;
+
+#if CONFIG_MM_BACKTRACE >= 0
+  size -= sizeof(struct memdump_backtrace_s);
+  dump = ptr + size;
 
   if (used)
     {
 #if CONFIG_MM_BACKTRACE < 0
-      if (task->pid == PID_MM_ALLOC)
-        {
-          info->aordblks++;
-          info->uordblks += size;
-        }
+      if (info->pid = -1)
 #else
-      FAR struct memdump_backtrace_s *buf =
-        ptr + size - sizeof(struct memdump_backtrace_s);
-
-      if ((MM_DUMP_ASSIGN(task->pid, buf->pid) ||
-           MM_DUMP_ALLOC(task->pid, buf->pid) ||
-           MM_DUMP_LEAK(task->pid, buf->pid)) &&
-          buf->seqno >= task->seqmin && buf->seqno <= task->seqmax)
+      if (info->pid == -1 || info->pid == dump->pid)
+#endif
         {
           info->aordblks++;
           info->uordblks += size;
         }
-#endif
     }
-  else if (task->pid == PID_MM_FREE)
+  else if (info->pid == -2)
     {
       info->aordblks++;
       info->uordblks += size;
     }
+#endif
 }
 
 /****************************************************************************
@@ -436,100 +366,49 @@ static void mm_unlock(FAR struct mm_heap_s *heap)
 static void memdump_handler(FAR void *ptr, size_t size, int used,
                             FAR void *user)
 {
-  FAR const struct mm_memdump_s *dump = user;
+  pid_t pid = *(FAR pid_t *)user;
+#if CONFIG_MM_BACKTRACE >= 0
+  FAR struct memdump_backtrace_s *dump;
+
+  size -= sizeof(struct memdump_backtrace_s);
+  dump = ptr + size;
+#endif
 
   if (used)
     {
 #if CONFIG_MM_BACKTRACE < 0
-      if (dump->pid == PID_MM_ALLOC)
-        {
-          syslog(LOG_INFO, "%12zu%*p\n", size, MM_PTR_FMT_WIDTH, ptr);
-        }
-#elif CONFIG_MM_BACKTRACE == 0
-      FAR struct memdump_backtrace_s *buf =
-        ptr + size - sizeof(struct memdump_backtrace_s);
-
-      if ((MM_DUMP_ASSIGN(dump->pid, buf->pid) ||
-           MM_DUMP_ALLOC(dump->pid, buf->pid) ||
-           MM_DUMP_LEAK(dump->pid, buf->pid)) &&
-          buf->seqno >= dump->seqmin && buf->seqno <= dump->seqmax)
-        {
-          syslog(LOG_INFO, "%6d%12zu%12lu%*p\n",
-                 buf->pid, size, buf->seqno, MM_PTR_FMT_WIDTH, ptr);
-        }
+      if (pid == -1)
 #else
-      FAR struct memdump_backtrace_s *buf =
-        ptr + size - sizeof(struct memdump_backtrace_s);
-
-      if ((MM_DUMP_ASSIGN(dump->pid, buf->pid) ||
-           MM_DUMP_ALLOC(dump->pid, buf->pid) ||
-           MM_DUMP_LEAK(dump->pid, buf->pid)) &&
-          buf->seqno >= dump->seqmin && buf->seqno <= dump->seqmax)
-        {
-          char tmp[CONFIG_MM_BACKTRACE * MM_PTR_FMT_WIDTH + 1] = "";
-
-          FAR const char *format = " %0*p";
-          int i;
-
-          for (i = 0; i < CONFIG_MM_BACKTRACE && buf->backtrace[i]; i++)
-            {
-              snprintf(tmp + i * MM_PTR_FMT_WIDTH,
-                       sizeof(tmp) - i * MM_PTR_FMT_WIDTH,
-                       format, MM_PTR_FMT_WIDTH - 1, buf->backtrace[i]);
-            }
-
-          syslog(LOG_INFO, "%6d%12zu%12lu%*p%s\n",
-                 buf->pid, size, buf->seqno, MM_PTR_FMT_WIDTH, ptr, tmp);
-        }
+      if (pid == -1 || dump->pid == pid)
 #endif
+        {
+#if CONFIG_MM_BACKTRACE < 0
+          syslog(LOG_INFO, "%12zu%*p\n", size, MM_PTR_FMT_WIDTH, ptr);
+#else
+#  if CONFIG_MM_BACKTRACE > 0
+          int i;
+          FAR const char *format = " %0*p";
+#  endif
+          char buf[CONFIG_MM_BACKTRACE * MM_PTR_FMT_WIDTH + 1];
+
+          buf[0] = '\0';
+#  if CONFIG_MM_BACKTRACE > 0
+          for (i = 0; i < CONFIG_MM_BACKTRACE && dump->backtrace[i]; i++)
+            {
+              sprintf(buf + i * MM_PTR_FMT_WIDTH, format,
+                      MM_PTR_FMT_WIDTH - 1, dump->backtrace[i]);
+            }
+#  endif
+
+         syslog(LOG_INFO, "%6d%12zu%*p%s\n",
+                (int)dump->pid, size, MM_PTR_FMT_WIDTH,
+                ptr, buf);
+#endif
+        }
     }
-  else if (dump->pid == PID_MM_FREE)
+  else if (pid <= -2)
     {
       syslog(LOG_INFO, "%12zu%*p\n", size, MM_PTR_FMT_WIDTH, ptr);
-    }
-}
-
-/****************************************************************************
- * Name: mm_delayfree
- *
- * Description:
- *   Delay free memory if `delay` is true, otherwise free it immediately.
- *
- ****************************************************************************/
-
-static void mm_delayfree(FAR struct mm_heap_s *heap, FAR void *mem,
-                         bool delay)
-{
-  if (mm_lock(heap) == 0)
-    {
-#ifdef CONFIG_MM_FILL_ALLOCATIONS
-      memset(mem, 0x55, mm_malloc_size(heap, mem));
-#endif
-
-      kasan_poison(mem, mm_malloc_size(heap, mem));
-
-      /* Update heap statistics */
-
-      heap->mm_curused -= mm_malloc_size(heap, mem);
-
-      /* Pass, return to the tlsf pool */
-
-      if (delay)
-        {
-          add_delaylist(heap, mem);
-        }
-      else
-        {
-          tlsf_free(heap->mm_tlsf, mem);
-        }
-
-      mm_unlock(heap);
-    }
-  else
-    {
-      /* Add to the delay list(see the comment in mm_lock) */
-
-      add_delaylist(heap, mem);
     }
 }
 
@@ -572,7 +451,7 @@ void mm_addregion(FAR struct mm_heap_s *heap, FAR void *heapstart,
     }
 
 #else
-#  define idx 0
+# define idx 0
 #endif
 
   /* Register to KASan for access check */
@@ -634,24 +513,25 @@ FAR void *mm_brkaddr(FAR struct mm_heap_s *heap, int region)
 
 FAR void *mm_calloc(FAR struct mm_heap_s *heap, size_t n, size_t elem_size)
 {
-  FAR void *mem = NULL;
+  FAR void *ret = NULL;
 
-  /* Verify input parameters
-   *
-   * elem_size or n is zero treats as valid input.
-   *
-   * Assure that the following multiplication cannot overflow the size_t
-   * type, i.e., that:  SIZE_MAX >= n * elem_size
-   *
-   * Refer to SEI CERT C Coding Standard.
-   */
+  /* Verify input parameters */
 
-  if (elem_size == 0 || n <= (SIZE_MAX / elem_size))
+  if (n > 0 && elem_size > 0)
     {
-      mem = mm_zalloc(heap, n * elem_size);
+      /* Assure that the following multiplication cannot overflow the size_t
+       * type, i.e., that:  SIZE_MAX >= n * elem_size
+       *
+       * Refer to SEI CERT C Coding Standard.
+       */
+
+      if (n <= (SIZE_MAX / elem_size))
+        {
+          ret = mm_zalloc(heap, n * elem_size);
+        }
     }
 
-  return mem;
+  return ret;
 }
 
 #ifdef CONFIG_DEBUG_MM
@@ -668,7 +548,7 @@ void mm_checkcorruption(FAR struct mm_heap_s *heap)
 #if CONFIG_MM_REGIONS > 1
   int region;
 #else
-#  define region 0
+# define region 0
 #endif
 
   /* Visit each region */
@@ -754,16 +634,17 @@ void mm_extend(FAR struct mm_heap_s *heap, FAR void *mem, size_t size,
 
 void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
 {
+  int ret;
+
+  UNUSED(ret);
   minfo("Freeing %p\n", mem);
 
   /* Protect against attempts to free a NULL reference */
 
-  if (mem == NULL)
+  if (!mem)
     {
       return;
     }
-
-  DEBUGASSERT(mm_heapmember(heap, mem));
 
 #if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
   if (mempool_multiple_free(heap->mm_mpool, mem) >= 0)
@@ -772,7 +653,21 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
     }
 #endif
 
-  mm_delayfree(heap, mem, CONFIG_MM_FREE_DELAYCOUNT_MAX > 0);
+  if (mm_lock(heap) == 0)
+    {
+      kasan_poison(mem, mm_malloc_size(heap, mem));
+
+      /* Pass, return to the tlsf pool */
+
+      tlsf_free(heap->mm_tlsf, mem);
+      mm_unlock(heap);
+    }
+  else
+    {
+      /* Add to the delay list(see the comment in mm_lock) */
+
+      add_delaylist(heap, mem);
+    }
 }
 
 /****************************************************************************
@@ -905,12 +800,11 @@ FAR struct mm_heap_s *mm_initialize(FAR const char *name,
     }
 
   heap->mm_mpool = mempool_multiple_init(name, poolsize, MEMPOOL_NPOOLS,
-                              (mempool_multiple_alloc_t)mempool_memalign,
-                              (mempool_multiple_alloc_size_t)mm_malloc_size,
-                              (mempool_multiple_free_t)mm_free, heap,
-                              CONFIG_MM_HEAP_MEMPOOL_CHUNK_SIZE,
-                              CONFIG_MM_HEAP_MEMPOOL_EXPAND_SIZE,
-                              CONFIG_MM_HEAP_MEMPOOL_DICTIONARY_EXPAND_SIZE);
+                                  (mempool_multiple_alloc_t)mm_memalign,
+                                  (mempool_multiple_free_t)mm_free, heap,
+                                  CONFIG_MM_HEAP_MEMPOOL_EXPAND,
+                                  CONFIG_MM_HEAP_MEMPOOL_DICTIONARY_EXPAND,
+                                  true);
 #endif
 
   return heap;
@@ -924,19 +818,17 @@ FAR struct mm_heap_s *mm_initialize(FAR const char *name,
  *
  ****************************************************************************/
 
-struct mallinfo mm_mallinfo(FAR struct mm_heap_s *heap)
+int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
 {
-  struct mallinfo info;
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
-  struct mallinfo poolinfo;
-#endif
 #if CONFIG_MM_REGIONS > 1
   int region;
 #else
-#  define region 0
+# define region 0
 #endif
 
-  memset(&info, 0, sizeof(struct mallinfo));
+  DEBUGASSERT(info);
+
+  memset(info, 0, sizeof(struct mallinfo));
 
   /* Visit each region */
 
@@ -948,46 +840,34 @@ struct mallinfo mm_mallinfo(FAR struct mm_heap_s *heap)
 
       DEBUGVERIFY(mm_lock(heap));
       tlsf_walk_pool(heap->mm_heapstart[region],
-                     mallinfo_handler, &info);
+                     mallinfo_handler, info);
       mm_unlock(heap);
     }
 #undef region
 
-  info.arena    = heap->mm_heapsize;
-  info.uordblks = info.arena - info.fordblks;
-  info.usmblks  = heap->mm_maxused;
+  info->arena    = heap->mm_heapsize;
+  info->uordblks = info->arena - info->fordblks;
 
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
-  poolinfo = mempool_multiple_mallinfo(heap->mm_mpool);
-
-  info.uordblks -= poolinfo.fordblks;
-  info.fordblks += poolinfo.fordblks;
-#endif
-
-  return info;
+  return OK;
 }
 
-struct mallinfo_task mm_mallinfo_task(FAR struct mm_heap_s *heap,
-                                      FAR const struct malltask *task)
+int mm_mallinfo_task(FAR struct mm_heap_s *heap,
+                     FAR struct mallinfo_task *info)
 {
-  struct mm_mallinfo_handler_s handle;
-  struct mallinfo_task info =
-    {
-      0, 0
-    };
-
 #if CONFIG_MM_REGIONS > 1
   int region;
 #else
 #define region 0
 #endif
 
+  DEBUGASSERT(info);
+  info->uordblks = 0;
+  info->aordblks = 0;
+
 #if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
-  info = mempool_multiple_info_task(heap->mm_mpool, task);
+  mempool_multiple_info_task(heap->mm_mpool, info);
 #endif
 
-  handle.task = task;
-  handle.info = &info;
 #if CONFIG_MM_REGIONS > 1
   for (region = 0; region < heap->mm_nregions; region++)
 #endif
@@ -996,12 +876,12 @@ struct mallinfo_task mm_mallinfo_task(FAR struct mm_heap_s *heap,
 
       DEBUGVERIFY(mm_lock(heap));
       tlsf_walk_pool(heap->mm_heapstart[region],
-                     mallinfo_task_handler, &handle);
+                     mallinfo_task_handler, info);
       mm_unlock(heap);
     }
 #undef region
 
-  return info;
+  return OK;
 }
 
 /****************************************************************************
@@ -1015,24 +895,23 @@ struct mallinfo_task mm_mallinfo_task(FAR struct mm_heap_s *heap,
  *   than or equal to 0, will dump pid allocated node and output backtrace.
  ****************************************************************************/
 
-void mm_memdump(FAR struct mm_heap_s *heap,
-                FAR const struct mm_memdump_s *dump)
+void mm_memdump(FAR struct mm_heap_s *heap, pid_t pid)
 {
 #if CONFIG_MM_REGIONS > 1
   int region;
 #else
-#  define region 0
+# define region 0
 #endif
-  struct mallinfo_task info;
+  struct memdump_info_s info;
 
-  if (dump->pid >= PID_MM_ALLOC)
+  if (pid >= -1)
     {
       syslog(LOG_INFO, "Dump all used memory node info:\n");
 #if CONFIG_MM_BACKTRACE < 0
       syslog(LOG_INFO, "%12s%*s\n", "Size", MM_PTR_FMT_WIDTH, "Address");
 #else
-      syslog(LOG_INFO, "%6s%12s%12s%*s %s\n", "PID", "Size", "Sequence",
-                        MM_PTR_FMT_WIDTH, "Address", "Backtrace");
+      syslog(LOG_INFO, "%6s%12s%*s %s\n", "PID", "Size", MM_PTR_FMT_WIDTH,
+            "Address", "Backtrace");
 #endif
     }
   else
@@ -1042,7 +921,7 @@ void mm_memdump(FAR struct mm_heap_s *heap,
     }
 
 #if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
-  mempool_multiple_memdump(heap->mm_mpool, dump);
+  mempool_multiple_memdump(heap->mm_mpool, pid);
 #endif
 
 #if CONFIG_MM_REGIONS > 1
@@ -1051,14 +930,15 @@ void mm_memdump(FAR struct mm_heap_s *heap,
     {
       DEBUGVERIFY(mm_lock(heap));
       tlsf_walk_pool(heap->mm_heapstart[region],
-                     memdump_handler, (FAR void *)dump);
+                     memdump_handler, &pid);
       mm_unlock(heap);
     }
 #undef region
 
-  info = mm_mallinfo_task(heap, dump);
+  info.pid = pid;
+  mm_mallinfo_task(heap, &info);
   syslog(LOG_INFO, "%12s%12s\n", "Total Blks", "Total Size");
-  syslog(LOG_INFO, "%12d%12d\n", info.aordblks, info.uordblks);
+  syslog(LOG_INFO, "%12d%12d\n", info.blks, info.size);
 }
 
 /****************************************************************************
@@ -1097,13 +977,6 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
 {
   FAR void *ret;
 
-  /* In case of zero-length allocations allocate the minimum size object */
-
-  if (size < 1)
-    {
-      size = 1;
-    }
-
 #if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
   ret = mempool_multiple_alloc(heap->mm_mpool, size);
   if (ret != NULL)
@@ -1114,7 +987,7 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
 
   /* Free the delay list first */
 
-  free_delaylist(heap, false);
+  free_delaylist(heap);
 
   /* Allocate from the tlsf pool */
 
@@ -1126,36 +999,17 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
   ret = tlsf_malloc(heap->mm_tlsf, size);
 #endif
 
-  heap->mm_curused += mm_malloc_size(heap, ret);
-  if (heap->mm_curused > heap->mm_maxused)
-    {
-      heap->mm_maxused = heap->mm_curused;
-    }
-
   mm_unlock(heap);
 
   if (ret)
     {
 #if CONFIG_MM_BACKTRACE >= 0
-      FAR struct memdump_backtrace_s *buf = ret + mm_malloc_size(heap, ret);
+      FAR struct memdump_backtrace_s *dump = ret + mm_malloc_size(heap, ret);
 
-      memdump_backtrace(heap, buf);
+      memdump_backtrace(heap, dump);
 #endif
       kasan_unpoison(ret, mm_malloc_size(heap, ret));
-
-#ifdef CONFIG_MM_FILL_ALLOCATIONS
-      memset(ret, 0xaa, mm_malloc_size(heap, ret));
-#endif
     }
-
-#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
-  /* Try again after free delay list */
-
-  else if (free_delaylist(heap, true))
-    {
-      return mm_malloc(heap, size);
-    }
-#endif
 
   return ret;
 }
@@ -1188,7 +1042,7 @@ FAR void *mm_memalign(FAR struct mm_heap_s *heap, size_t alignment,
 
   /* Free the delay list first */
 
-  free_delaylist(heap, false);
+  free_delaylist(heap);
 
   /* Allocate from the tlsf pool */
 
@@ -1199,33 +1053,17 @@ FAR void *mm_memalign(FAR struct mm_heap_s *heap, size_t alignment,
 #else
   ret = tlsf_memalign(heap->mm_tlsf, alignment, size);
 #endif
-
-  heap->mm_curused += mm_malloc_size(heap, ret);
-  if (heap->mm_curused > heap->mm_maxused)
-    {
-      heap->mm_maxused = heap->mm_curused;
-    }
-
   mm_unlock(heap);
 
   if (ret)
     {
 #if CONFIG_MM_BACKTRACE >= 0
-      FAR struct memdump_backtrace_s *buf = ret + mm_malloc_size(heap, ret);
+      FAR struct memdump_backtrace_s *dump = ret + mm_malloc_size(heap, ret);
 
-      memdump_backtrace(heap, buf);
+      memdump_backtrace(heap, dump);
 #endif
       kasan_unpoison(ret, mm_malloc_size(heap, ret));
     }
-
-#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
-  /* Try again after free delay list */
-
-  else if (free_delaylist(heap, true))
-    {
-      return mm_memalign(heap, alignment, size);
-    }
-#endif
 
   return ret;
 }
@@ -1258,20 +1096,15 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
 {
   FAR void *newmem;
 
-  /* If oldmem is NULL, then realloc is equivalent to malloc */
-
   if (oldmem == NULL)
     {
       return mm_malloc(heap, size);
     }
 
-  /* If size is zero, reallocate to the minim size object, so
-   * the memory pointed by oldmem is freed
-   */
-
-  if (size < 1)
+  if (size == 0)
     {
-      size = 1;
+      mm_free(heap, oldmem);
+      return NULL;
     }
 
 #if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
@@ -1294,6 +1127,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
 #endif
 
 #ifdef CONFIG_MM_KASAN
+
   newmem = mm_malloc(heap, size);
   if (newmem)
     {
@@ -1308,47 +1142,31 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
 #else
   /* Free the delay list first */
 
-  free_delaylist(heap, false);
+  free_delaylist(heap);
 
   /* Allocate from the tlsf pool */
 
   DEBUGVERIFY(mm_lock(heap));
-  heap->mm_curused -= mm_malloc_size(heap, oldmem);
 #if CONFIG_MM_BACKTRACE >= 0
   newmem = tlsf_realloc(heap->mm_tlsf, oldmem, size +
                         sizeof(struct memdump_backtrace_s));
 #else
   newmem = tlsf_realloc(heap->mm_tlsf, oldmem, size);
 #endif
-
-  heap->mm_curused += mm_malloc_size(heap, newmem ? newmem : oldmem);
-  if (heap->mm_curused > heap->mm_maxused)
-    {
-      heap->mm_maxused = heap->mm_curused;
-    }
-
   mm_unlock(heap);
 
 #if CONFIG_MM_BACKTRACE >= 0
   if (newmem)
     {
-      FAR struct memdump_backtrace_s *buf =
-        newmem + mm_malloc_size(heap, newmem);
+      FAR struct memdump_backtrace_s *dump = newmem +
+                                             mm_malloc_size(heap, newmem);
 
-      memdump_backtrace(heap, buf);
-    }
-#endif
-
-#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
-  /* Try again after free delay list */
-
-  if (newmem == NULL && free_delaylist(heap, true))
-    {
-      return mm_realloc(heap, oldmem, size);
+      memdump_backtrace(heap, dump);
     }
 #endif
 
 #endif
+
   return newmem;
 }
 

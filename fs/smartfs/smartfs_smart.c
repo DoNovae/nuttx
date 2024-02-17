@@ -47,7 +47,7 @@
 #include "smartfs.h"
 
 /****************************************************************************
- * Private Types
+ * Private Type
  ****************************************************************************/
 
 struct smartfs_dir_s
@@ -132,7 +132,7 @@ static mutex_t g_lock = NXMUTEX_INITIALIZER;
  * with any compiler.
  */
 
-const struct mountpt_operations g_smartfs_operations =
+const struct mountpt_operations smartfs_operations =
 {
   smartfs_open,          /* open */
   smartfs_close,         /* close */
@@ -142,7 +142,6 @@ const struct mountpt_operations g_smartfs_operations =
   smartfs_ioctl,         /* ioctl */
   NULL,                  /* mmap */
   smartfs_truncate,      /* truncate */
-  NULL,                  /* poll */
 
   smartfs_sync,          /* sync */
   smartfs_dup,           /* dup */
@@ -210,7 +209,7 @@ static int smartfs_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Locate the directory entry for this path */
 
-  sf = kmm_malloc(sizeof *sf);
+  sf = (FAR struct smartfs_ofile_s *)kmm_malloc(sizeof *sf);
   if (sf == NULL)
     {
       ret = -ENOMEM;
@@ -220,7 +219,7 @@ static int smartfs_open(FAR struct file *filep, FAR const char *relpath,
   /* Allocate a sector buffer if CRC enabled in the MTD layer */
 
 #ifdef CONFIG_SMARTFS_USE_SECTOR_BUFFER
-  sf->buffer = kmm_malloc(fs->fs_llformat.availbytes);
+  sf->buffer = (FAR uint8_t *)kmm_malloc(fs->fs_llformat.availbytes);
   if (sf->buffer == NULL)
     {
       /* Error ... no memory */
@@ -420,7 +419,7 @@ static int smartfs_close(FAR struct file *filep)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -528,7 +527,7 @@ static ssize_t smartfs_read(FAR struct file *filep, FAR char *buffer,
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -657,7 +656,7 @@ static ssize_t smartfs_write(FAR struct file *filep, FAR const char *buffer,
   size_t                             byteswritten;
   int                                ret;
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -961,7 +960,7 @@ static off_t smartfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -1019,7 +1018,7 @@ static int smartfs_sync(FAR struct file *filep)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -1092,11 +1091,11 @@ static int smartfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
   FAR struct smartfs_ofile_s *sf;
   int ret;
 
-  DEBUGASSERT(buf != NULL);
+  DEBUGASSERT(filep != NULL && buf != NULL);
 
   /* Recover our private data from the struct file instance */
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
   sf    = filep->f_priv;
   inode = filep->f_inode;
 
@@ -1135,7 +1134,7 @@ static int smartfs_truncate(FAR struct file *filep, off_t length)
   off_t oldsize;
   int ret;
 
-  DEBUGASSERT(filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Recover our private data from the struct file instance */
 
@@ -1611,6 +1610,7 @@ static int smartfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   /* Implement the logic!! */
 
+  memset(buf, 0, sizeof(struct statfs));
   buf->f_type = SMARTFS_MAGIC;
 
   /* Re-request the low-level format info to update free blocks */
@@ -1984,22 +1984,10 @@ int smartfs_rename(FAR struct inode *mountpt, FAR const char *oldrelpath,
       direntry = (FAR struct smartfs_entry_header_s *)
         &fs->fs_rwbuffer[oldentry.doffset];
 #if CONFIG_SMARTFS_ERASEDSTATE == 0xff
-#ifdef CONFIG_SMARTFS_ALIGNED_ACCESS
-      smartfs_wrle16(&direntry->flags,
-                     smartfs_rdle16(&direntry->flags)
-                     & ~SMARTFS_DIRENT_ACTIVE);
-#else
       direntry->flags &= ~SMARTFS_DIRENT_ACTIVE;
-#endif
-#else /* CONFIG_SMARTFS_ERASEDSTATE == 0xff */
-#ifdef CONFIG_SMARTFS_ALIGNED_ACCESS
-      smartfs_wrle16(&direntry->flags,
-                     smartfs_rdle16(&direntry->flags)
-                     | SMARTFS_DIRENT_ACTIVE);
 #else
       direntry->flags |= SMARTFS_DIRENT_ACTIVE;
 #endif
-#endif /* CONFIG_SMARTFS_ERASEDSTATE == 0xff */
 
       /* Now write the updated flags back to the device */
 

@@ -68,7 +68,6 @@
 #include "nat/nat.h"
 #include "netdev/netdev.h"
 #include "socket/socket.h"
-#include "igmp/igmp.h"
 #include "udp/udp.h"
 
 /****************************************************************************
@@ -78,7 +77,7 @@
 /* The array containing all UDP connections. */
 
 #if CONFIG_NET_UDP_PREALLOC_CONNS > 0
-static struct udp_conn_s g_udp_connections[CONFIG_NET_UDP_PREALLOC_CONNS];
+struct udp_conn_s g_udp_connections[CONFIG_NET_UDP_PREALLOC_CONNS];
 #endif
 
 /* A list of all free UDP connections */
@@ -464,7 +463,7 @@ static inline FAR struct udp_conn_s *
  ****************************************************************************/
 
 #if CONFIG_NET_UDP_ALLOC_CONNS > 0
-static FAR struct udp_conn_s *udp_alloc_conn(void)
+FAR struct udp_conn_s *udp_alloc_conn(void)
 {
   FAR struct udp_conn_s *conn;
   int i;
@@ -637,17 +636,17 @@ FAR struct udp_conn_s *udp_alloc(uint8_t domain)
     {
       /* Make sure that the connection is marked as uninitialized */
 
-      conn->sconn.ttl = IP_TTL_DEFAULT;
-      conn->flags     = 0;
-#if defined(CONFIG_NET_IPv4) || defined(CONFIG_NET_IPv6)
-      conn->domain    = domain;
+      conn->flags   = 0;
+#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
+      conn->domain  = domain;
 #endif
-      conn->lport     = 0;
+      conn->lport   = 0;
+      conn->ttl     = IP_TTL_DEFAULT;
 #if CONFIG_NET_RECV_BUFSIZE > 0
-      conn->rcvbufs   = CONFIG_NET_RECV_BUFSIZE;
+      conn->rcvbufs = CONFIG_NET_RECV_BUFSIZE;
 #endif
 #if CONFIG_NET_SEND_BUFSIZE > 0
-      conn->sndbufs   = CONFIG_NET_SEND_BUFSIZE;
+      conn->sndbufs = CONFIG_NET_SEND_BUFSIZE;
 
       nxsem_init(&conn->sndsem, 0, 0);
 #endif
@@ -692,9 +691,9 @@ void udp_free(FAR struct udp_conn_s *conn)
 
   dq_rem(&conn->sconn.node, &g_active_udp_connections);
 
-  /* Release any read-ahead buffers attached to the connection, NULL is ok */
+  /* Release any read-ahead buffers attached to the connection */
 
-  iob_free_chain(conn->readahead);
+  iob_free_queue(&conn->readahead);
 
 #ifdef CONFIG_NET_UDP_WRITE_BUFFERS
   /* Release any write buffers attached to the connection */
@@ -807,16 +806,6 @@ int udp_bind(FAR struct udp_conn_s *conn, FAR const struct sockaddr *addr)
 {
   uint16_t portno;
   int ret;
-  FAR struct net_driver_s *dev;
-
-#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
-  if (conn->domain != addr->sa_family)
-    {
-      nerr("ERROR: Invalid address type: %d != %d\n", conn->domain,
-           addr->sa_family);
-      return -EINVAL;
-    }
-#endif
 
 #ifdef CONFIG_NET_IPv4
 #ifdef CONFIG_NET_IPv6
@@ -825,29 +814,6 @@ int udp_bind(FAR struct udp_conn_s *conn, FAR const struct sockaddr *addr)
     {
       FAR const struct sockaddr_in *inaddr =
         (FAR const struct sockaddr_in *)addr;
-
-      if (!net_ipv4addr_cmp(inaddr->sin_addr.s_addr, INADDR_ANY) &&
-        !net_ipv4addr_cmp(inaddr->sin_addr.s_addr, HTONL(INADDR_LOOPBACK)) &&
-        !net_ipv4addr_cmp(inaddr->sin_addr.s_addr, INADDR_BROADCAST) &&
-        !IN_MULTICAST(NTOHL(inaddr->sin_addr.s_addr)))
-        {
-          ret = -EADDRNOTAVAIL;
-
-          for (dev = g_netdevices; dev; dev = dev->flink)
-            {
-              if (net_ipv4addr_cmp(inaddr->sin_addr.s_addr, dev->d_ipaddr))
-                {
-                  ret = 0;
-                  break;
-                }
-            }
-
-          if (ret == -EADDRNOTAVAIL)
-            {
-              net_unlock();
-              return ret;
-            }
-        }
 
       /* Get the port number that we are binding to */
 
@@ -869,33 +835,6 @@ int udp_bind(FAR struct udp_conn_s *conn, FAR const struct sockaddr *addr)
     {
       FAR const struct sockaddr_in6 *inaddr =
         (FAR const struct sockaddr_in6 *)addr;
-
-      if (!net_ipv6addr_cmp(inaddr->sin6_addr.in6_u.u6_addr16,
-                        g_ipv6_unspecaddr) &&
-      !net_ipv6addr_cmp(inaddr->sin6_addr.in6_u.u6_addr16,
-                        g_ipv6_loopback) &&
-      !net_ipv6addr_cmp(inaddr->sin6_addr.in6_u.u6_addr16,
-                        g_ipv6_allnodes) &&
-      !net_ipv6addr_cmp(inaddr->sin6_addr.in6_u.u6_addr16, g_ipv6_allnodes))
-        {
-          ret = -EADDRNOTAVAIL;
-
-          for (dev = g_netdevices; dev; dev = dev->flink)
-            {
-              if (NETDEV_IS_MY_V6ADDR(dev,
-                                      inaddr->sin6_addr.in6_u.u6_addr16))
-                {
-                  ret = 0;
-                  break;
-                }
-            }
-
-          if (ret == -EADDRNOTAVAIL)
-            {
-              net_unlock();
-              return ret;
-            }
-        }
 
       /* Get the port number that we are binding to */
 
@@ -1080,36 +1019,5 @@ int udp_connect(FAR struct udp_conn_s *conn, FAR const struct sockaddr *addr)
 
   return OK;
 }
-
-#if defined(CONFIG_NET_IGMP)
-/****************************************************************************
- * Name: udp_leavegroup
- *
- * Description:
- *   This function leaves the multicast group to which the conn belongs.
- *
- * Input Parameters:
- *   conn - A reference to UDP connection structure.  A value of NULL will
- *          disconnect from any previously connected address.
- *
- * Assumptions:
- *   This function is called (indirectly) from user code.  Interrupts may
- *   be enabled.
- *
- ****************************************************************************/
-
-void udp_leavegroup(FAR struct udp_conn_s *conn)
-{
-  if (conn->mreq.imr_multiaddr.s_addr != 0)
-    {
-      FAR struct net_driver_s *dev;
-
-      if ((dev = netdev_findbyindex(conn->mreq.imr_ifindex)) != NULL)
-        {
-          igmp_leavegroup(dev, &conn->mreq.imr_multiaddr);
-        }
-    }
-}
-#endif
 
 #endif /* CONFIG_NET && CONFIG_NET_UDP */

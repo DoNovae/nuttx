@@ -106,31 +106,27 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
         {
           /* Copy the packet data into the device packet buffer and send it */
 
-          int ret = devif_send(dev, pstate->snd_buffer,
-                               pstate->snd_buflen, 0);
+          devif_send(dev, pstate->snd_buffer, pstate->snd_buflen, 0);
           dev->d_len = dev->d_sndlen;
-          if (ret <= 0)
+          if (dev->d_sndlen == 0)
             {
-              pstate->snd_sent = ret;
-              goto end_wait;
+              return flags;
             }
 
           pstate->snd_sent = pstate->snd_buflen;
           if (pstate->pr_msglen > 0) /* concat cmsg data after packet */
             {
               memcpy(dev->d_buf + pstate->snd_buflen, pstate->pr_msgbuf,
-                     pstate->pr_msglen);
+                      pstate->pr_msglen);
               dev->d_sndlen = pstate->snd_buflen + pstate->pr_msglen;
             }
         }
 
-end_wait:
-
       /* Don't allow any further call backs. */
 
-      pstate->snd_cb->flags = 0;
-      pstate->snd_cb->priv  = NULL;
-      pstate->snd_cb->event = NULL;
+      pstate->snd_cb->flags    = 0;
+      pstate->snd_cb->priv     = NULL;
+      pstate->snd_cb->event    = NULL;
 
       /* Wake up the waiting thread */
 
@@ -189,7 +185,7 @@ ssize_t can_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       return -EDESTADDRREQ;
     }
 
-  conn = psock->s_conn;
+  conn = (FAR struct can_conn_s *)psock->s_conn;
 
   /* Get the device driver that will service this transfer */
 
@@ -202,8 +198,8 @@ ssize_t can_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 #if defined(CONFIG_NET_CANPROTO_OPTIONS) && defined(CONFIG_NET_CAN_CANFD)
   if (conn->fd_frames)
     {
-      if (msg->msg_iov->iov_len != CANFD_MTU &&
-          msg->msg_iov->iov_len != CAN_MTU)
+      if (msg->msg_iov->iov_len != CANFD_MTU
+              && msg->msg_iov->iov_len != CAN_MTU)
         {
           return -EINVAL;
         }
@@ -227,20 +223,19 @@ ssize_t can_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   memset(&state, 0, sizeof(struct send_s));
   nxsem_init(&state.snd_sem, 0, 0); /* Doesn't really fail */
 
-  state.snd_buflen = msg->msg_iov->iov_len;  /* bytes to send */
-  state.snd_buffer = msg->msg_iov->iov_base; /* Buffer to send from */
+  state.snd_buflen    = msg->msg_iov->iov_len;  /* bytes to send */
+  state.snd_buffer    = msg->msg_iov->iov_base; /* Buffer to send from */
 
 #ifdef CONFIG_NET_CAN_RAW_TX_DEADLINE
   if (msg->msg_controllen > sizeof(struct cmsghdr))
     {
-      FAR struct cmsghdr *cmsg = CMSG_FIRSTHDR(msg);
-      if (conn->tx_deadline &&
-          cmsg->cmsg_level == SOL_CAN_RAW &&
-          cmsg->cmsg_type == CAN_RAW_TX_DEADLINE &&
-          cmsg->cmsg_len == sizeof(struct timeval))
+      struct cmsghdr *cmsg = CMSG_FIRSTHDR(msg);
+      if (conn->tx_deadline && cmsg->cmsg_level == SOL_CAN_RAW
+              && cmsg->cmsg_type == CAN_RAW_TX_DEADLINE
+              && cmsg->cmsg_len == sizeof(struct timeval))
         {
-          state.pr_msgbuf = CMSG_DATA(cmsg); /* Buffer to cmsg data */
-          state.pr_msglen = cmsg->cmsg_len;  /* len of cmsg data */
+          state.pr_msgbuf     = CMSG_DATA(cmsg); /* Buffer to cmsg data */
+          state.pr_msglen     = cmsg->cmsg_len;  /* len of cmsg data */
         }
     }
 #endif

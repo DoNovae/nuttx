@@ -278,15 +278,19 @@ static ssize_t audio_write(FAR struct file *filep,
   FAR struct audio_upperhalf_s *upper = inode->i_private;
   FAR struct audio_lowerhalf_s *lower = upper->dev;
 
+  audinfo("buflen(%d)\n",buflen); // HBL
+
   /* TODO: Should we check permissions here? */
 
   /* Audio write operations get passed directly to the lower-level */
 
   if (lower->ops->write != NULL)
     {
+      audinfo("OK\n"); // HBL
       return lower->ops->write(lower, buffer, buflen);
     }
 
+  auderr("KO\n"); // HBL
   return 0;
 }
 
@@ -930,7 +934,8 @@ int audio_register(FAR const char *name, FAR struct audio_lowerhalf_s *dev)
 
   /* Allocate the upper-half data structure */
 
-  upper = kmm_zalloc(sizeof(struct audio_upperhalf_s));
+  upper = (FAR struct audio_upperhalf_s *)kmm_zalloc(
+                                           sizeof(struct audio_upperhalf_s));
   if (!upper)
     {
       auderr("ERROR: Allocation failed\n");

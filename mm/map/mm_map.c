@@ -64,15 +64,7 @@ static bool in_range(FAR const void *start, size_t length,
 
 int mm_map_lock(void)
 {
-  FAR struct tcb_s *tcb = nxsched_self();
-  FAR struct task_group_s *group = tcb->group;
-
-  if (group == NULL)
-    {
-      return -EINVAL;
-    }
-
-  return nxrmutex_lock(&group->tg_mm_map.mm_map_mutex);
+  return nxrmutex_lock(&get_current_mm()->mm_map_mutex);
 }
 
 /****************************************************************************
@@ -85,22 +77,14 @@ int mm_map_lock(void)
 
 void mm_map_unlock(void)
 {
-  FAR struct tcb_s *tcb = nxsched_self();
-  FAR struct task_group_s *group = tcb->group;
-
-  if (group == NULL)
-    {
-      return;
-    }
-
-  DEBUGVERIFY(nxrmutex_unlock(&group->tg_mm_map.mm_map_mutex));
+  DEBUGVERIFY(nxrmutex_unlock(&get_current_mm()->mm_map_mutex));
 }
 
 /****************************************************************************
  * Name: mm_map_initialize
  *
  * Description:
- *   Allocates a task group specific mm_map structure. Called when the group
+ *   Allocates a task group specific mm_map stucture. Called when the group
  *   is initialized
  *
  ****************************************************************************/
@@ -109,7 +93,6 @@ void mm_map_initialize(FAR struct mm_map_s *mm, bool kernel)
 {
   sq_init(&mm->mm_map_sq);
   nxrmutex_init(&mm->mm_map_mutex);
-  mm->map_count = 0;
 
   /* Create the virtual pages allocator for user process */
 
@@ -135,7 +118,7 @@ void mm_map_initialize(FAR struct mm_map_s *mm, bool kernel)
  * Name: mm_map_destroy
  *
  * Description:
- *   De-allocates a task group specific mm_map structure and the mm_map_mutex
+ *   De-allocates a task group specific mm_map stucture and the mm_map_mutex
  *
  ****************************************************************************/
 
@@ -165,12 +148,8 @@ void mm_map_destroy(FAR struct mm_map_s *mm)
             }
         }
 
-      mm->map_count--;
-
       kmm_free(entry);
     }
-
-  DEBUGASSERT(mm->map_count == 0);
 
   nxrmutex_destroy(&mm->mm_map_mutex);
 
@@ -192,8 +171,9 @@ void mm_map_destroy(FAR struct mm_map_s *mm)
  *
  ****************************************************************************/
 
-int mm_map_add(FAR struct mm_map_s *mm, FAR struct mm_map_entry_s *entry)
+int mm_map_add(FAR struct mm_map_entry_s *entry)
 {
+  FAR struct mm_map_s *mm = get_current_mm();
   FAR struct mm_map_entry_s *new_entry;
   int ret;
 
@@ -219,17 +199,6 @@ int mm_map_add(FAR struct mm_map_s *mm, FAR struct mm_map_entry_s *entry)
       return ret;
     }
 
-  /* Too many mappings? */
-
-  if (mm->map_count >= CONFIG_MM_MAP_COUNT_MAX)
-    {
-      kmm_free(new_entry);
-      nxrmutex_unlock(&mm->mm_map_mutex);
-      return -ENOMEM;
-    }
-
-  mm->map_count++;
-
   sq_addfirst((sq_entry_t *)new_entry, &mm->mm_map_sq);
 
   nxrmutex_unlock(&mm->mm_map_mutex);
@@ -245,9 +214,10 @@ int mm_map_add(FAR struct mm_map_s *mm, FAR struct mm_map_entry_s *entry)
  *
  ****************************************************************************/
 
-FAR struct mm_map_entry_s *mm_map_next(FAR struct mm_map_s *mm,
+FAR struct mm_map_entry_s *mm_map_next(
                            FAR const struct mm_map_entry_s *entry)
 {
+  FAR struct mm_map_s *mm = get_current_mm();
   FAR struct mm_map_entry_s *next_entry = NULL;
 
   if (nxrmutex_lock(&mm->mm_map_mutex) == OK)
@@ -276,10 +246,9 @@ FAR struct mm_map_entry_s *mm_map_next(FAR struct mm_map_s *mm,
  *
  ****************************************************************************/
 
-FAR struct mm_map_entry_s *mm_map_find(FAR struct mm_map_s *mm,
-                                       FAR const void *vaddr,
-                                       size_t length)
+FAR struct mm_map_entry_s *mm_map_find(FAR const void *vaddr, size_t length)
 {
+  FAR struct mm_map_s *mm = get_current_mm();
   FAR struct mm_map_entry_s *found_entry = NULL;
 
   if (nxrmutex_lock(&mm->mm_map_mutex) == OK)
@@ -341,7 +310,6 @@ int mm_map_remove(FAR struct mm_map_s *mm,
   if (entry == prev_entry)
     {
       sq_remfirst(&mm->mm_map_sq);
-      mm->map_count--;
       removed_entry = prev_entry;
     }
   else
@@ -354,7 +322,6 @@ int mm_map_remove(FAR struct mm_map_s *mm,
           if (entry == removed_entry)
             {
               sq_remafter((sq_entry_t *)prev_entry, &mm->mm_map_sq);
-              mm->map_count--;
               break;
             }
 

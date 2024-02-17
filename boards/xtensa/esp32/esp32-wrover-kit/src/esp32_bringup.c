@@ -44,6 +44,20 @@
 
 #include <arch/board/board.h>
 
+#include <nuttx/i2c/i2c_master.h>
+#include "esp32_board_i2c.h"
+#include "esp32_i2c.h"
+#include "esp32_gpio.h"
+
+#include <nuttx/audio/audio.h>
+#include <nuttx/audio/audio_i2s.h>
+#include <nuttx/audio/i2s.h>
+#include <nuttx/audio/pcm.h>
+
+#ifdef CONFIG_ESP32_I2S
+#  include "esp32_i2s.h"
+#endif
+
 #ifdef CONFIG_USERLED
 #  include <nuttx/leds/userled.h>
 #endif
@@ -73,6 +87,7 @@
 #endif
 
 #ifdef CONFIG_ESP32_I2C
+//#if defined(CONFIG_ESP32_I2C0) || defined(CONFIG_ESP32_I2C1)
 #  include "esp32_board_i2c.h"
 #endif
 
@@ -96,6 +111,12 @@
 #  include <nuttx/board.h>
 #  include <nuttx/lcd/lcd_dev.h>
 #endif
+
+#ifdef CONFIG_INPUT_M5TOUGH_CHSC6540
+/* I2C Address of CHSC6540 Touch Controller */
+#include <nuttx/input/chsc6540.h>
+#endif
+
 
 #ifdef CONFIG_RTC_DRIVER
 #  include "esp32_rtc_lowerhalf.h"
@@ -127,270 +148,353 @@
 
 int esp32_bringup(void)
 {
-  int ret;
+	int ret;
+
 
 #if defined(CONFIG_ESP32_SPIRAM) && \
-    defined(CONFIG_ESP32_SPIRAM_BANKSWITCH_ENABLE)
-  ret = esp_himem_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to init HIMEM: %d\n", ret);
-    }
+		defined(CONFIG_ESP32_SPIRAM_BANKSWITCH_ENABLE)
+	ret = esp_himem_init();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to init HIMEM: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_FS_PROCFS
-  /* Mount the procfs file system */
+	/* Mount the procfs file system */
 
-  ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to mount procfs at /proc: %d\n", ret);
-    }
+	ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to mount procfs at /proc: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_FS_TMPFS
-  /* Mount the tmpfs file system */
+	/* Mount the tmpfs file system */
 
-  ret = nx_mount(NULL, CONFIG_LIBC_TMPDIR, "tmpfs", 0, NULL);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to mount tmpfs at %s: %d\n",
-             CONFIG_LIBC_TMPDIR, ret);
-    }
+	ret = nx_mount(NULL, CONFIG_LIBC_TMPDIR, "tmpfs", 0, NULL);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to mount tmpfs at %s: %d\n",
+				CONFIG_LIBC_TMPDIR, ret);
+	}
 #endif
 
 #ifdef CONFIG_LCD_BACKPACK
-  /* slcd:0, i2c:0, rows=2, cols=16 */
+	/* slcd:0, i2c:0, rows=2, cols=16 */
 
-  ret = board_lcd_backpack_init(0, 0, 2, 16);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize PCF8574 LCD, error %d\n", ret);
-    }
+	ret = board_lcd_backpack_init(0, 0, 2, 16);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "Failed to initialize PCF8574 LCD, error %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_MMCSD
-  ret = esp32_mmcsd_initialize(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize SD slot: %d\n", ret);
-    }
+	ret = esp32_mmcsd_initialize(0);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "Failed to initialize SD slot: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_ESP32_SPIFLASH
-  ret = board_spiflash_init();
-  if (ret)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize SPI Flash\n");
-    }
+	ret = esp32_spiflash_init();
+	if (ret)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to initialize SPI Flash\n");
+	}
 #endif
 
 #ifdef CONFIG_ESP32_PARTITION_TABLE
-  ret = esp32_partition_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize partition error=%d\n",
-             ret);
-    }
+	ret = esp32_partition_init();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to initialize partition error=%d\n",
+				ret);
+	}
 #endif
 
 #ifdef CONFIG_ESP32_RT_TIMER
-  ret = esp32_rt_timer_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize RT timer: %d\n", ret);
-    }
+	ret = esp32_rt_timer_init();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "Failed to initialize RT timer: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_ESP32_BLE
-  ret = esp32_ble_initialize();
-  if (ret)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d\n", ret);
-    }
+	ret = esp32_ble_initialize();
+	if (ret)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_ESP32_WIFI
-  ret = board_wlan_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize wireless subsystem=%d\n",
-             ret);
-    }
+	ret = board_wlan_init();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to initialize wireless subsystem=%d\n",
+				ret);
+	}
 #endif
 
-/* First, register the timer drivers and let timer 1 for oneshot
- * if it is enabled.
- */
+	/* First, register the timer drivers and let timer 1 for oneshot
+	 * if it is enabled.
+	 */
 
 #ifdef CONFIG_TIMER
 
 #if defined(CONFIG_ESP32_TIMER0) && !defined(CONFIG_ESP32_RT_TIMER)
-  ret = esp32_timer_initialize("/dev/timer0", TIMER0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to initialize timer driver: %d\n",
-             ret);
-    }
+	ret = esp32_timer_initialize("/dev/timer0", TIMER0);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR,
+				"ERROR: Failed to initialize timer driver: %d\n",
+				ret);
+	}
 #endif
 
 #if defined(CONFIG_ESP32_TIMER1) && !defined(CONFIG_ONESHOT)
-  ret = esp32_timer_initialize("/dev/timer1", TIMER1);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to initialize timer driver: %d\n",
-             ret);
-    }
+	ret = esp32_timer_initialize("/dev/timer1", TIMER1);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR,
+				"ERROR: Failed to initialize timer driver: %d\n",
+				ret);
+	}
 #endif
 
 #ifdef CONFIG_ESP32_TIMER2
-  ret = esp32_timer_initialize("/dev/timer2", TIMER2);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to initialize timer driver: %d\n",
-             ret);
-    }
+	ret = esp32_timer_initialize("/dev/timer2", TIMER2);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR,
+				"ERROR: Failed to initialize timer driver: %d\n",
+				ret);
+	}
 #endif
 
 #ifdef CONFIG_ESP32_TIMER3
-  ret = esp32_timer_initialize("/dev/timer3", TIMER3);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to initialize timer driver: %d\n",
-             ret);
-    }
+	ret = esp32_timer_initialize("/dev/timer3", TIMER3);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR,
+				"ERROR: Failed to initialize timer driver: %d\n",
+				ret);
+	}
 #endif
 
 #endif /* CONFIG_TIMER */
 
-  /* Now register one oneshot driver */
+	/* Now register one oneshot driver */
 
 #if defined(CONFIG_ONESHOT) && defined(CONFIG_ESP32_TIMER1)
 
-  ret = esp32_oneshot_init(ONESHOT_TIMER, ONESHOT_RESOLUTION_US);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: esp32_oneshot_init() failed: %d\n", ret);
-    }
+	ret = esp32_oneshot_init(ONESHOT_TIMER, ONESHOT_RESOLUTION_US);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: esp32_oneshot_init() failed: %d\n", ret);
+	}
 
 #endif /* CONFIG_ONESHOT */
 
 #ifdef CONFIG_USERLED
-  /* Register the LED driver */
-
+	/* Register the LED driver */
+	/*
   ret = userled_lower_initialize("/dev/userleds");
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: userled_lower_initialize() failed: %d\n", ret);
-    }
+  n  }
+	 */
 #endif
 
 #ifdef CONFIG_WATCHDOG
-  /* Configure watchdog timer */
+	/* Configure watchdog timer */
 
-  ret = board_wdt_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to initialize watchdog drivers: %d\n",
-             ret);
-    }
+	ret = board_wdt_init();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR,
+				"ERROR: Failed to initialize watchdog drivers: %d\n",
+				ret);
+	}
 #endif
 
 #ifdef CONFIG_DEV_GPIO
-  ret = esp32_gpio_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize GPIO Driver: %d\n", ret);
-    }
+	ret = esp32_gpio_init();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "Failed to initialize GPIO Driver: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_I2C_DRIVER
 
 #ifdef CONFIG_ESP32_I2C0
-  ret = esp32_i2c_register(0);
+	ret = esp32_i2c_register(0);
 
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize I2C Driver for I2C0: %d\n", ret);
-    }
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "Failed to initialize I2C Driver for I2C0: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_ESP32_I2C1
-  ret = esp32_i2c_register(1);
+	ret = esp32_i2c_register(1);
 
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize I2C Driver for I2C1: %d\n", ret);
-    }
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "Failed to initialize I2C Driver for I2C1: %d\n", ret);
+	}
 #endif
 
 #endif
 
 #ifdef CONFIG_SENSORS_BMP180
-  /* Try to register BMP180 device in I2C0 */
+	/* Try to register BMP180 device in I2C0 */
 
-  ret = board_bmp180_initialize(0, 0);
+	ret = board_bmp180_initialize(0, 0);
 
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize BMP180 driver: %d\n", ret);
-    }
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "Failed to initialize BMP180 driver: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_INPUT_BUTTONS
-  /* Register the BUTTON driver */
+	/* Register the BUTTON driver */
 
-  ret = btn_lower_initialize("/dev/buttons");
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
-    }
+	ret = btn_lower_initialize("/dev/buttons");
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
+	}
 #endif
 
 #ifdef CONFIG_VIDEO_FB
-  ret = fb_register(0, 0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize Frame Buffer Driver.\n");
-    }
+	ret = fb_register(0, 0);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: Failed to initialize Frame Buffer Driver.\n");
+	}
 #endif
 
 #ifdef CONFIG_LCD_DEV
-  ret = board_lcd_initialize();
+	ret = board_lcd_initialize();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: board_lcd_initialize() failed: %d\n", ret);
+	}
+
+	ret = lcddev_register(0);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", ret);
+	}
+#endif/*CONFIG_LCD_DEV*/
+
+#ifdef CONFIG_INPUT_M5TOUGH_CHSC6540
+	/*
+	 * Touch switched on in board_lcd_initialize()
+	 */
+	struct i2c_master_s *i2c_bus;
+	struct i2c_config_s config;
+	int16_t irq_i16;
+	uint8_t cmd_a8[2]={0x5a,0x5a};
+
+	iinfo("CONFIG_INPUT_M5TOUGH_CHSC6540: esp32_i2cbus_initialize I2C%d\n",CHSC6540_I2C_NUM);
+
+	i2c_bus=esp32_i2cbus_initialize(CHSC6540_I2C_NUM);
+
+	if (i2c_bus == NULL)
+	{
+		ierr("ERROR: Failed to initialize I2C%d\n",CHSC6540_I2C_NUM);
+	}
+	/*
+	 * Touch pressed when low
+	 */
+	//i2c_register(i2c_bus, 0);
+	irq_i16=ESP32_PIN2IRQ(CHSC6540_INT_PIN);
+	esp32_gpioirqdisable(irq_i16);
+	esp32_configgpio(CHSC6540_INT_PIN,INPUT_FUNCTION_3|PULLUP);
+
+	/* Register the CHSC6540 driver */
+	ret=chsc6540_register("/dev/input0",i2c_bus,CHSC6540_I2C_ADDR,irq_i16);
+	if (ret < 0)
+	{
+		_err("ERROR: Failed to register CHSC6540\n");
+	}
+	/* Configure the interrupt for falling edges */
+	esp32_gpioirqenable(irq_i16,FALLING);
+
+	// Set up the I2C configuration
+	config.frequency = CHSC6540_I2C_FREQ;
+	config.address   = CHSC6540_I2C_ADDR;
+	config.addrlen   = 7;
+
+	iinfo("i2c_write %#x\n",cmd_a8[0]);
+	ret=i2c_write(i2c_bus,&config,cmd_a8,2); // INT mode change
+	if (ret < 0){
+		ierr("i2c_read failed: %d\n", ret);
+		return -ENODEV;
+	}
+#endif /*CONFIG_INPUT_M5TOUGH_CHSC6540*/
+
+
+#ifdef CONFIG_ESP32_I2S0
+  /* Configure I2S0 */
+#ifdef CONFIG_AUDIO_CS4344
+
+  /* Configure CS4344 audio on I2S0 */
+  ret = esp32_cs4344_initialize(ESP32_I2S0);
+  if (ret != OK)
+    {
+      syslog(LOG_ERR, "Failed to initialize CS4344 audio: %d\n", ret);
+    }
+#else
+
+  bool i2s_enable_tx = true;
+  bool i2s_enable_rx = false;
+
+  /*
+   * Configure I2S generic audio on I2S0
+   * cf boards/xtensa/esp32/common/src/esp32_board_i2sdev.c
+   * */
+
+  ret = board_i2sdev_initialize(ESP32_I2S0,i2s_enable_tx,i2s_enable_rx);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: board_lcd_initialize() failed: %d\n", ret);
+      syslog(LOG_ERR, "Failed to initialize I2S%d driver: %d\n",
+             CONFIG_ESP32_I2S0, ret);
     }
 
-  ret = lcddev_register(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", ret);
-    }
-#endif
+
+#endif /* CONFIG_AUDIO_CS4344 */
+#endif  /* CONFIG_ESP32_I2S0 */
+
+
 
 #ifdef CONFIG_RTC_DRIVER
-  /* Instantiate the ESP32 RTC driver */
+	/* Instantiate the ESP32 RTC driver */
 
-  ret = esp32_rtc_driverinit();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to Instantiate the RTC driver: %d\n", ret);
-    }
+	ret = esp32_rtc_driverinit();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR,
+				"ERROR: Failed to Instantiate the RTC driver: %d\n", ret);
+	}
 #endif
 
-  /* If we got here then perhaps not all initialization was successful, but
-   * at least enough succeeded to bring-up NSH with perhaps reduced
-   * capabilities.
-   */
+	/* If we got here then perhaps not all initialization was successful, but
+	 * at least enough succeeded to bring-up NSH with perhaps reduced
+	 * capabilities.
+	 */
 
-  UNUSED(ret);
-  return OK;
+	UNUSED(ret);
+	return OK;
 }
 

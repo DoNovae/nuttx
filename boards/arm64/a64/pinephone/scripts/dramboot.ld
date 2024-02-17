@@ -44,8 +44,7 @@ SECTIONS
 
   .init_section : {
         _sinit = ABSOLUTE(.);
-        KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
-        KEEP(*(.init_array .ctors))
+        *(.init_array .init_array.*)
         _einit = ABSOLUTE(.);
   }
 
@@ -88,10 +87,9 @@ SECTIONS
   _edata = .; /* End+1 of .data */
 
   .bss : {                     /* BSS */
-       . = ALIGN(8);
        _sbss = .;
        *(.bss)
-       . = ALIGN(8);
+       . = ALIGN(1 << 3);
   } :text
   . = ALIGN(4096);
   _ebss = .;

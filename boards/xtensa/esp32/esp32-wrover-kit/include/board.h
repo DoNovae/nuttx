@@ -40,90 +40,22 @@
 /* GPIO definitions *********************************************************/
 
 /* Display */
-
+// To get CONFIG_ESP32_SPI2 or CONFIG_ESP32_SPI3 configuration
 #define DISPLAY_SPI       2
-#define DISPLAY_DC        21
-#define DISPLAY_RST       18
-#define DISPLAY_BCKL      5
+#define DISPLAY_DC        15
+#define ILI9341_AXP_I2C_FREQ 400000
 
-/* LED definitions **********************************************************/
 
-/* Define how many LEDs this board has (needed by userleds) */
-
-#define BOARD_LED1        0
-#define BOARD_LED2        1
-#define BOARD_LED3        2
-
-#define BOARD_LED_RED     BOARD_LED1    /* GPIO 0 */
-#define BOARD_LED_GREEN   BOARD_LED2    /* GPIO 2 */
-#define BOARD_LED_BLUE    BOARD_LED3    /* GPIO 4 */
-
-/* LED bits for use with autoleds */
-
-#define BOARD_LED1_BIT    (1 << BOARD_LED1)
-#define BOARD_LED2_BIT    (1 << BOARD_LED2)
-#define BOARD_LED3_BIT    (1 << BOARD_LED3)
-
-/* GPIO 2 is used by MMCSD driver as MISO, therefore, it can't be used as
- * USER LED
+/*
+ * Touch
  */
-#ifdef CONFIG_MMCSD
+#define CHSC6540_INT_PIN 39
+#define CHSC6540_I2C_NUM 1
 
-/* GPIO 0 is used by BUTTONS, it can't be used as USER LED */
-#ifdef CONFIG_INPUT_BUTTONS
-#  define BOARD_NLEDS       1
-#else
-#  define BOARD_NLEDS       2
-#endif
-
-#else  /* MMCSD */
-
-/* GPIO 0 is used by BUTTONS, it can't be used as USER LED */
-#ifdef CONFIG_INPUT_BUTTONS
-#  define BOARD_NLEDS       2
-#else
-#  define BOARD_NLEDS       3
-#endif
-
-#endif
-
-/* If CONFIG_ARCH_LEDs is defined, then NuttX will control the 3 LEDs on
- * board the ESP-WROVER-KIT.  The following definitions describe how
- * NuttX controls the LEDs:
- */
-
-/* These values index an array that contains the bit definitions for the
- * correct LEDs (see esp32_autoleds.c).
- */
-
-#define LED_STARTED       0  /* LED2 */
-#define LED_HEAPALLOCATE  1  /* LED3 */
-#define LED_IRQSENABLED   2  /* LED3 + LED2 */
-#define LED_STACKCREATED  3  /* LED3 */
-#define LED_INIRQ         4  /* LED1 + LED3 */
-#define LED_SIGNAL        5  /* LED2 + LED3 */
-#define LED_ASSERTION     6  /* LED1 + LED2 + LED3 */
-#define LED_PANIC         7  /* LED1  + N/C  + N/C */
-
-/* The values below are used only to distinguish between the CPUs.
- * The LEDs are actually mapped as:
- *    CPU0 -> GPIO_LED1 (Red LED)
- *    CPU1 -> GPIO_LED2 (Green LED)
- * Note that from the previous list only LED_HEAPALLOCATE will still be
- * valid.  This is to avoid collisions and to keep a way to show a successful
- * heap allocation.  The LED used is still LED3 (Blue LED).
- */
-
-#ifdef CONFIG_ARCH_LEDS_CPU_ACTIVITY
-#  define LED_CPU0        8
-#  define LED_CPU1        9
-#  define LED_CPU         (LED_CPU0 + up_cpu_index())
-#endif
 
 /* GPIO pins used by the GPIO Subsystem */
-
-#define BOARD_NGPIOIN     1 /* Amount of GPIO Input pins */
-#define BOARD_NGPIOOUT    1 /* Amount of GPIO Output pins */
-#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
+#define BOARD_NGPIOIN     5 /* Amount of GPIO Input pins */
+#define BOARD_NGPIOOUT    5 /* Amount of GPIO Output pins */
+#define BOARD_NGPIOINT    5 /* Amount of GPIO Input w/ Interruption pins */
 
 #endif /* __BOARDS_XTENSA_ESP32_ESP32_WROVER_KIT_INCLUDE_BOARD_H */

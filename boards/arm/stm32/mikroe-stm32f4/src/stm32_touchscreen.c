@@ -260,7 +260,7 @@ static int tc_poll(struct file *filep, struct pollfd *fds, bool setup);
 
 /* This the vtable that supports the character driver interface */
 
-static const struct file_operations g_tc_fops =
+static const struct file_operations tc_fops =
 {
   tc_open,    /* open */
   tc_close,   /* close */
@@ -666,14 +666,12 @@ static int tc_waitsample(struct tc_dev_s *priv,
                               struct tc_sample_s *sample)
 {
   int ret;
-  irqstate_t flags;
 
-  /* Interrupts must be disabled when this is called to (1) prevent posting
-   * of semaphores from interrupt handlers, and (2) to prevent sampled data
-   * from changing until it has been reported.
+  /* Pre-emption must be disabled when this is called to prevent sampled
+   * data from changing until it has been reported.
    */
 
-  flags = enter_critical_section();
+  sched_lock();
 
   /* Now release the mutex that manages mutually exclusive access to
    * the device structure.  This may cause other tasks to become ready to
@@ -708,12 +706,13 @@ static int tc_waitsample(struct tc_dev_s *priv,
   ret = nxmutex_lock(&priv->devlock);
 
 errout:
-  /* Then re-enable interrupts.  We might get interrupt here and there
-   * could be a new sample.  But no new threads will run because we still
-   * have pre-emption disabled.
+  /* Restore pre-emption.  We might get suspended here but that is okay
+   * because we already have our sample.  Note:  this means that if there
+   * were two threads reading from the touchscreen for some reason, the data
+   * might be read out of order.
    */
 
-  leave_critical_section(flags);
+  sched_unlock();
   return ret;
 }
 
@@ -1096,10 +1095,11 @@ static int tc_open(struct file *filep)
   uint8_t          tmp;
   int              ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (struct tc_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -1147,10 +1147,11 @@ static int tc_close(struct file *filep)
   struct tc_dev_s *priv;
   int              ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (struct tc_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -1187,10 +1188,11 @@ static ssize_t tc_read(struct file *filep, char *buffer, size_t len)
   struct tc_sample_s    sample;
   int                   ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (struct tc_dev_s *)inode->i_private;
 
   /* Verify that the caller has provided a buffer large enough to receive
    * the touch data.
@@ -1310,10 +1312,11 @@ static int tc_ioctl(struct file *filep, int cmd, unsigned long arg)
   int ret;
 
   iinfo("cmd: %d arg: %ld\n", cmd, arg);
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (struct tc_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -1351,11 +1354,11 @@ static int tc_poll(struct file *filep, struct pollfd *fds, bool setup)
   int              i;
 
   iinfo("setup: %d\n", (int)setup);
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (struct tc_dev_s *)inode->i_private;
 
   /* Are we setting up the poll?  Or tearing it down? */
 
@@ -1398,8 +1401,8 @@ static int tc_poll(struct file *filep, struct pollfd *fds, bool setup)
       if (i >= CONFIG_TOUCHSCREEN_NPOLLWAITERS)
         {
           ierr("ERROR: No available slot found: %d\n", i);
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
 
@@ -1407,7 +1410,7 @@ static int tc_poll(struct file *filep, struct pollfd *fds, bool setup)
 
       if (priv->penchange)
         {
-          poll_notify(&fds, 1, POLLIN);
+          tc_notify(priv);
         }
     }
   else if (fds->priv)
@@ -1419,8 +1422,8 @@ static int tc_poll(struct file *filep, struct pollfd *fds, bool setup)
 
       /* Remove all memory of the poll setup */
 
-      *slot     = NULL;
-      fds->priv = NULL;
+      *slot                = NULL;
+      fds->priv            = NULL;
     }
 
 errout:
@@ -1487,7 +1490,7 @@ int stm32_tsc_setup(int minor)
 #ifndef CONFIG_TOUCHSCREEN_MULTIPLE
   priv = &g_touchscreen;
 #else
-  priv = kmm_malloc(sizeof(struct tc_dev_s));
+  priv = (struct tc_dev_s *)kmm_malloc(sizeof(struct tc_dev_s));
   if (!priv)
     {
       ierr("ERROR: kmm_malloc(%d) failed\n", sizeof(struct tc_dev_s));
@@ -1506,7 +1509,7 @@ int stm32_tsc_setup(int minor)
   snprintf(devname, sizeof(devname), DEV_FORMAT, minor);
   iinfo("Registering %s\n", devname);
 
-  ret = register_driver(devname, &g_tc_fops, 0666, priv);
+  ret = register_driver(devname, &tc_fops, 0666, priv);
   if (ret < 0)
     {
       ierr("ERROR: register_driver() failed: %d\n", ret);

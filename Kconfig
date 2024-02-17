@@ -68,31 +68,11 @@ config ALLOW_MIT_COMPONENTS
 
 config ALLOW_BSDNORDIC_COMPONENTS
 	bool "Use components that have 5-Clause Nordic licenses"
-	depends on ARCH_CHIP_NRF52 || ARCH_CHIP_NRF53 || ARCH_CHIP_NRF91
+	depends on ARCH_CHIP_NRF52 || ARCH_CHIP_NRF53
 	default n
 	---help---
 		When this option is enabled the project will allow the use
 		of components that have 5-Clause Nordic licenses.
-
-		NOTE: Please check that the license for each enabled
-		component matches your project license.
-
-config ALLOW_ECLIPSE_COMPONENTS
-	bool "Use components that have Eclipse Public Licenses"
-	default n
-	---help---
-		When this option is enabled the project will allow the use
-		of components that have EPL licenses.
-
-		NOTE: Please check that the license for each enabled
-		component matches your project license.
-
-config ALLOW_ICS_COMPONENTS
-	bool "Use components that have ICS license"
-	default n
-	---help---
-		When this option is enabled the project will allow the use
-		of components that have ICS licenses.
 
 		NOTE: Please check that the license for each enabled
 		component matches your project license.
@@ -138,7 +118,7 @@ config HOST_WINDOWS
 config HOST_OTHER
 	bool "Other"
 
-endchoice # Build Host Platform
+endchoice
 
 config TOOLCHAIN_WINDOWS
 	bool
@@ -195,7 +175,7 @@ config WINDOWS_OTHER
 		Build natively in another POSIX-like environment.  Additional
 		support may be necessary
 
-endchoice # Windows Build Environment
+endchoice
 
 config WINDOWS_MKLINK
 	bool "Use mklink"
@@ -263,15 +243,6 @@ config APPS_DIR
 		TOPDIR is the full path to the NuttX directory. It can be used, for
 		example, to include makefile fragments (e.g., .config or Make.defs)
 		or to set up include file paths.
-
-config BASE_DEFCONFIG
-	string "Base Configuration"
-	default ""
-	---help---
-		This will be automatically be updated by the configuration
-		script. This is the base configuration file that was used to create the
-		current configuration. It is useful for getting the current configuration
-		on runtime.
 
 config BUILD_LOADABLE
 	bool
@@ -427,13 +398,13 @@ config UIMAGE_ENTRY_POINT
 	hex "uImage entry point"
 	default 0x0
 
-endif # UBOOT_UIMAGE
+endif
 
 menuconfig DFU_BINARY
 	bool "DFU binary format"
 	select RAW_BINARY
 	---help---
-		Create the dfu binary used with dfu-utils.
+	Create the dfu binary used with dfu-utils.
 
 if DFU_BINARY
 
@@ -446,7 +417,7 @@ config DFU_VID
 config DFU_PID
 	hex "PID to use for DFU image"
 
-endif # DFU_BINARY
+endif
 endmenu # Binary Output Formats
 
 menu "Customize Header Files"
@@ -611,41 +582,15 @@ config ARCH_CHIP_DEBUG_H
 	---help---
 		The debug.h under include/arch/chip contains architecture dependent debugging primitives
 
-config ARCH_BOARD_DEBUG_H
-	bool "board debug.h"
-	---help---
-		The debug.h under include/arch/board contains board dependent debugging primitives
-
 endchoice # debug.h selection
 
 endmenu # Customize Header Files
 
 menu "Debug Options"
 
-config FORTIFY_SOURCE
-	int "Fortify Source"
-	default 0
-	range 0 3
-	---help---
-		Detect overflows of buffers in common string and memory functions
-		where the compiler can determine and validate the buffer sizes.
-		0 does not have any checks.
-		1 will only check for out-of-bounds at compile time.
-		2 will only perform out-of-bounds checks on stack variables.
-		3 On the basis of 2, add an out-of-bounds check for dynamically allocated variables.
-
 config NDEBUG
 	bool "Define NDEBUG globally"
 	default !DEBUG_ASSERTIONS
-
-config ASSERTIONS_FILENAME
-	bool "Enable library call assert(3) show the file name"
-	default DEBUG_ASSERTIONS_FILENAME || !DEFAULT_SMALL
-	depends on !NDEBUG
-	---help---
-		This option can display the file information of the library call assert(3)
-		function when it is enabled. This option maybe will take up a lot
-		of space from applications.
 
 config DEBUG_ALERT
 	bool
@@ -668,14 +613,14 @@ comment "Debug SYSLOG Output Controls"
 
 config DEBUG_ERROR
 	bool "Enable Error Output"
-	default y
+	default n
 	---help---
 		Enables output from [a-z]err() statements.  Errors are significant system
 		exceptions that require immediate attention.
 
 config DEBUG_WARN
 	bool "Enable Warnings Output"
-	default y
+	default n
 	depends on DEBUG_ERROR
 	---help---
 		Enables output from [a-z]warn() statements.  Warnings are considered to
@@ -684,7 +629,7 @@ config DEBUG_WARN
 
 config DEBUG_INFO
 	bool "Enable Informational Debug Output"
-	default y
+	default n
 	depends on DEBUG_WARN
 	---help---
 		Enables verbose "informational" debug output.  If you enable
@@ -709,15 +654,6 @@ config DEBUG_ASSERTIONS_EXPRESSION
 	---help---
 		This option can display the content information of the ASSERT()
 		function when it is triggered. This option maybe will take up a lot
-		of space.
-
-config DEBUG_ASSERTIONS_FILENAME
-	bool "Enable Debug Assertions show file name"
-	default !DEFAULT_SMALL
-	depends on DEBUG_ASSERTIONS
-	---help---
-		This option can display the file information of the ASSERT()
-		function when it is enabled. This option maybe will take up a lot
 		of space.
 
 comment "Subsystem Debug Options"
@@ -1615,44 +1551,6 @@ config DEBUG_PWM_INFO
 
 endif # DEBUG_PWM
 
-config DEBUG_CAPTURE
-	bool "CAPTURE Debug Features"
-	default n
-	depends on CAPTURE
-	---help---
-		Enable CAPTURE debug features.
-
-		Support for this debug option is architecture-specific and may not
-		be available for some MCUs.
-
-if DEBUG_CAPTURE
-
-config DEBUG_CAPTURE_ERROR
-	bool "CAPTURE Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable CAPTURE driver error output to SYSLOG.
-
-		Support for this debug option is architecture-specific and may not
-		be available for some MCUs.
-
-config DEBUG_CAPTURE_WARN
-	bool "CAPTURE Warnings Output"
-	default n
-	depends on DEBUG_WARN
-	---help---
-		Enable CAPTURE driver warning output to SYSLOG.
-
-config DEBUG_CAPTURE_INFO
-	bool "CAPTURE Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable CAPTURE driver informational output to SYSLOG.
-
-endif # DEBUG_CAPTURE
-
 config DEBUG_RC
 	bool "RC Debug Features"
 	default n
@@ -1690,79 +1588,6 @@ config DEBUG_RC_INFO
 		Enable RC driver informational output to SYSLOG.
 
 endif # DEBUG_RC
-
-config DEBUG_REGMAP
-	bool "REGMAP Debug Features"
-	default n
-	depends on REGMAP
-	---help---
-		Enable REGMAP debug features.
-
-		Support for this debug option is architecture-specific and may not
-		be available for some MCUs.
-
-if DEBUG_REGMAP
-
-config DEBUG_REGMAP_ERROR
-	bool "Regmap Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable regmap subsystems error output to SYSLOG.
-
-config DEBUG_REGMAP_WARN
-	bool "Regmap Warnings Output"
-	default n
-	depends on DEBUG_WARN
-	---help---
-		Enable regmap subsystems warning output to SYSLOG.
-
-config DEBUG_REGMAP_INFO
-	bool "Regmap Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable regmap subsystems informational output to SYSLOG.
-
-endif # DEBUG_REGMAP
-
-config DEBUG_RMT
-	bool "RMT Debug Features"
-	default n
-	depends on RMT
-	---help---
-		Enable RMT debug features.
-
-		Support for this debug option is architecture-specific and may not
-		be available for some MCUs.
-
-if DEBUG_RMT
-
-config DEBUG_RMT_ERROR
-	bool "RMT Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable RMT driver error output to SYSLOG.
-
-		Support for this debug option is architecture-specific and may not
-		be available for some MCUs.
-
-config DEBUG_RMT_WARN
-	bool "RMT Warnings Output"
-	default n
-	depends on DEBUG_WARN
-	---help---
-		Enable RMT driver warning output to SYSLOG.
-
-config DEBUG_RMT_INFO
-	bool "RMT Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable RMT driver informational output to SYSLOG.
-
-endif # DEBUG_RMT
 
 config DEBUG_RTC
 	bool "RTC Debug Features"
@@ -2043,39 +1868,6 @@ config DEBUG_MOTOR_INFO
 
 endif # DEBUG_MOTOR
 
-config DEBUG_STEPPER
-	bool "Stepper Motor Debug Features"
-	default n
-	depends on STEPPER
-	---help---
-		Enable motor debug features.
-
-if DEBUG_STEPPER
-
-config DEBUG_STEPPER_ERROR
-	bool "Stepper Motor Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable motor error output to SYSLOG.
-
-config DEBUG_STEPPER_WARN
-	bool "Stepper Motor Warnings Output"
-	default n
-	depends on DEBUG_WARN
-	---help---
-		Enable motor warning output to SYSLOG.
-
-config DEBUG_STEPPER_INFO
-	bool "Stepper Motor Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable motor informational output to SYSLOG.
-
-endif # DEBUG_STEPPER
-
-
 config DEBUG_VIDEO
 	bool "Video Debug Features"
 	default n
@@ -2140,129 +1932,15 @@ config DEBUG_VIRTIO_INFO
 
 endif # DEBUG_VIDEO
 
-config DEBUG_RESET
-	bool "RESET Debug Features"
-	default n
-	depends on RESET
-	---help---
-		Enable RESET debug features.
-
-if DEBUG_RESET
-
-config DEBUG_RESET_ERROR
-	bool "RESET Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable RESET driver error output to SYSLOG.
-
-config DEBUG_RESET_INFO
-	bool "RESET Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable RESET driver informational output to SYSLOG.
-
-endif # DEBUG_RESET
-
-config DEBUG_IPC
-	bool "IPC (Interprocessor communication) Debug Features"
-	default n
-	---help---
-		Enable IPC debug features.
-
-if DEBUG_IPC
-
-config DEBUG_IPC_ERROR
-	bool "IPC Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable IPC error output to SYSLOG.
-
-config DEBUG_IPC_WARN
-	bool "IPC Warnings Output"
-	default n
-	depends on DEBUG_WARN
-	---help---
-		Enable IPC warning output to SYSLOG.
-
-config DEBUG_IPC_INFO
-	bool "IPC Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable IPC informational output to SYSLOG.
-
-endif # DEBUG_IPC
-
-config DEBUG_PCI
-	bool "PCI Debug Features"
-	default n
-	depends on PCI
-	---help---
-		Enable PCI driver debug features.
-
-		Support for this debug option is architecture-specific and may not
-		be available for some MCUs.
-
-if DEBUG_PCI
-
-config DEBUG_PCI_ERROR
-	bool "PCI Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable PCI driver error output to SYSLOG.
-
-config DEBUG_PCI_WARN
-	bool "PCI Warnings Output"
-	default n
-	depends on DEBUG_WARN
-	---help---
-		Enable PCI driver warning output to SYSLOG.
-
-config DEBUG_PCI_INFO
-	bool "PCI Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable PCI driver informational output to SYSLOG.
-
-endif # DEBUG_PCI
-
-config DEBUG_RPMSG
-	bool "RPMSG Debug Features"
-	default n
-	depends on RPMSG
-	---help---
-		Enable RPMSG driver debug features.
-
-if DEBUG_RPMSG
-
-config DEBUG_RPMSG_ERROR
-	bool "RPMSG Error Output"
-	default n
-	depends on DEBUG_ERROR
-	---help---
-		Enable RPMSG driver error output to SYSLOG.
-
-config DEBUG_RPMSG_WARN
-	bool "RPMSG Warnings Output"
-	default n
-	depends on DEBUG_WARN
-	---help---
-		Enable RPMSG driver warning output to SYSLOG.
-
-config DEBUG_RPMSG_INFO
-	bool "RPMSG Informational Output"
-	default n
-	depends on DEBUG_INFO
-	---help---
-		Enable RPMSG driver informational output to SYSLOG.
-
-endif # DEBUG_RPMSG
 endif # DEBUG_FEATURES
+
+config DEBUG_TCBINFO
+	bool "Enable TCBinfo struct for debug"
+	default n
+	---help---
+		Enables tcbinfo struct for debugger information.
+		Selecting this option will enable g_tcbinfo in arch and
+		procfs.
 
 config ARCH_HAVE_STACKCHECK
 	bool
@@ -2295,17 +1973,10 @@ config STACK_CANARIES
 
 config STACK_USAGE
 	bool "Generate stack usage information"
-	---help---
+	help
 		Generate an extra file that specifies the maximum amount of stack used,
 		on a per-function basis. Please use https://github.com/HBehrens/puncover
 		or tools/showstack.sh to generate the more useful report.
-
-config STACK_USAGE_WARNING
-	int "Detect use of large stack variables"
-	default 0
-	---help---
-		Set the stack warning threshold, if the stack usage exceeds the
-		threshold, a warning will be generated
 
 config ARCH_HAVE_HEAPCHECK
 	bool
@@ -2335,10 +2006,10 @@ config FRAME_POINTER
 
 endmenu # Debug Options
 
-menuconfig TRACE
+menuconfig  TRACE
 	bool "Enable tracepoints"
 	default n
-	depends on SCHED_INSTRUMENTATION_DUMP
+	depends on SCHED_INSTRUMENTATION
 	---help---
 		If this option is enabled, tracepoints at critical code in
 		the kernel will be enabled.

@@ -93,33 +93,31 @@ struct battery_gauge_operations_s
 {
   /* Return the current battery state (see enum battery_status_e) */
 
-  CODE int (*state)(FAR struct battery_gauge_dev_s *dev, FAR int *status);
+  int (*state)(struct battery_gauge_dev_s *dev, int *status);
 
   /* Return true if the batter is online */
 
-  CODE int (*online)(FAR struct battery_gauge_dev_s *dev, FAR bool *status);
+  int (*online)(struct battery_gauge_dev_s *dev, bool *status);
 
   /* Current battery voltage */
 
-  CODE int (*voltage)(FAR struct battery_gauge_dev_s *dev, FAR b16_t *value);
+  int (*voltage)(struct battery_gauge_dev_s *dev, b16_t *value);
 
   /* Battery capacity */
 
-  CODE int (*capacity)(FAR struct battery_gauge_dev_s *dev,
-                       FAR b16_t *value);
+  int (*capacity)(struct battery_gauge_dev_s *dev, b16_t *value);
 
   /* Battery current */
 
-  CODE int (*current)(FAR struct battery_gauge_dev_s *dev, FAR b16_t *value);
+  int (*current)(struct battery_gauge_dev_s *dev, b16_t *value);
 
   /* Battery temp */
 
-  CODE int (*temp)(FAR struct battery_gauge_dev_s *dev, FAR b8_t *value);
+  int (*temp)(struct battery_gauge_dev_s *dev, b8_t *value);
 
   /* Battery chipid */
 
-  CODE int (*chipid)(FAR struct battery_gauge_dev_s *dev,
-                     FAR unsigned int *value);
+  int (*chipid)(struct battery_gauge_dev_s *dev, unsigned int *value);
 };
 
 /* This structure defines the battery driver state structure */
@@ -251,25 +249,6 @@ FAR struct battery_gauge_dev_s *max1704x_initialize(
                                                 FAR struct i2c_master_s *i2c,
                                                 uint8_t addr,
                                                 uint32_t frequency);
-#endif
-
-#if defined(CONFIG_GOLDFISH_BATTERY)
-/****************************************************************************
- * Name: goldfish_battery_register
- *
- * Description:
- *   Register a emulate battery to tyhe upper-half battery driver.
- *
- * Input Parameters:
- *   regs - the base address for the goldfish battery.
- *   irq - An irq num for the goldfish battery.
- *
- * Returned Value:
- *    Zero on success or a negated errno value on failure.
- *
- ****************************************************************************/
-
-int goldfish_battery_register(FAR void *regs, int irq);
 #endif
 
 #undef EXTERN

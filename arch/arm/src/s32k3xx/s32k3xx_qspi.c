@@ -151,7 +151,7 @@ static void qspi_resetregisters(void);
 #if defined(CONFIG_DEBUG_SPI_INFO) && defined(CONFIG_DEBUG_GPIO)
 static void     qspi_dumpgpioconfig(const char *msg);
 #else
-#  define       qspi_dumpgpioconfig(msg)
+# define        qspi_dumpgpioconfig(msg)
 #endif
 
 static inline uint32_t qspi_isbusy(void);
@@ -210,9 +210,6 @@ static const struct qspi_ops_s g_qspi0ops =
   .setfrequency      = qspi_setfrequency,
   .setmode           = qspi_setmode,
   .setbits           = qspi_setbits,
-#ifdef CONFIG_QSPI_HWFEATURES
-  .hwfeatures        = NULL,
-#endif
   .command           = qspi_command,
   .memory            = qspi_memory,
   .alloc             = qspi_alloc,

@@ -24,7 +24,6 @@
 
 #include <nuttx/config.h>
 
-#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <inttypes.h>
@@ -75,11 +74,6 @@ struct ftl_struct_s
   uint16_t              refs;     /* Number of references */
   bool                  unlinked; /* The driver has been unlinked */
   FAR uint8_t          *eblock;   /* One, in-memory erase block */
-
-  /* The nand block map between logic block and physical block */
-
-  FAR off_t            *lptable;
-  off_t                 lpcount;
 };
 
 /****************************************************************************
@@ -127,81 +121,6 @@ static const struct block_operations g_bops =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: ftl_init_map
- *
- * Description: Allocate logical block and physical block mapping table
- *              space, and scan the entire nand flash device to establish
- *              the mapping relationship between logical block and physical
- *              good block.
- *
- ****************************************************************************/
-
-static int ftl_init_map(FAR struct ftl_struct_s *dev)
-{
-  int j = 0;
-  int i;
-
-  if (dev->lptable == NULL)
-    {
-      dev->lptable = kmm_malloc(dev->geo.neraseblocks * sizeof(off_t));
-      if (dev->lptable == NULL)
-        {
-          return -ENOMEM;
-        }
-    }
-
-  for (i = 0; i < dev->geo.neraseblocks; i++)
-    {
-      if (!MTD_ISBAD(dev->mtd, i))
-        {
-          dev->lptable[j++] = i;
-        }
-    }
-
-  dev->lpcount = j;
-  return 0;
-}
-
-/****************************************************************************
- * Name: ftl_update_map
- *
- * Description: Update the lptable from the specified location, remap the
- *              relationship between logical blocks and physical good blocks.
- *
- ****************************************************************************/
-
-static void ftl_update_map(FAR struct ftl_struct_s *dev, off_t start)
-{
-  DEBUGASSERT(start < dev->lpcount);
-  memmove(&dev->lptable[start], &dev->lptable[start + 1],
-          (--dev->lpcount - start) * sizeof(dev->lptable[0]));
-}
-
-/****************************************************************************
- * Name: ftl_get_cblock
- *
- * Description: Get the number of consecutive eraseblocks from lptable.
- *
- ****************************************************************************/
-
-static size_t ftl_get_cblock(FAR struct ftl_struct_s *dev, off_t start,
-                             size_t count)
-{
-  off_t i;
-
-  count = MIN(count, dev->lpcount - start);
-  for (i = start; i < start + count - 1; i++)
-    {
-      if (dev->lptable[i + 1] - dev->lptable[i] != 1)
-        {
-          return i - start + 1;
-        }
-    }
-
-  return count;
-}
-
-/****************************************************************************
  * Name: ftl_open
  *
  * Description: Open the block device
@@ -212,8 +131,8 @@ static int ftl_open(FAR struct inode *inode)
 {
   FAR struct ftl_struct_s *dev;
 
-  DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev = (FAR struct ftl_struct_s *)inode->i_private;
 
   dev->refs++;
   return OK;
@@ -230,8 +149,8 @@ static int ftl_close(FAR struct inode *inode)
 {
   FAR struct ftl_struct_s *dev;
 
-  DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev = (FAR struct ftl_struct_s *)inode->i_private;
 
 #ifdef CONFIG_FTL_WRITEBUFFER
   rwb_flush(&dev->rwb);
@@ -254,164 +173,6 @@ static int ftl_close(FAR struct inode *inode)
 }
 
 /****************************************************************************
- * Name: ftl_mtd_bread
- *
- * Description:
- *   Read the specified number of sectors. If mtd device is nor flash, it
- *   can be read once time. If mtd device is nand flash, it can be read one
- *   block every time and need to skip bad block until the specified number
- *   of sectors finish.
- *
- ****************************************************************************/
-
-static ssize_t ftl_mtd_bread(FAR struct ftl_struct_s *dev, off_t startblock,
-                             size_t nblocks, FAR uint8_t *buffer)
-{
-  off_t mask = dev->blkper - 1;
-  size_t nread = nblocks;
-  ssize_t ret = OK;
-
-  if (dev->lptable == NULL)
-    {
-      ret = MTD_BREAD(dev->mtd, startblock, nblocks, buffer);
-      if (ret != nblocks)
-        {
-          ferr("ERROR: Read %zu blocks starting at block %" PRIdOFF
-               " failed: %zd\n", nblocks, startblock, ret);
-        }
-
-      return ret;
-    }
-
-  while (nblocks > 0)
-    {
-      off_t startphysicalblock;
-      off_t starteraseblock;
-      size_t count;
-
-      starteraseblock = startblock / dev->blkper;
-      if (starteraseblock >= dev->lpcount)
-        {
-          ret = -ENOSPC;
-          break;
-        }
-
-      count = ftl_get_cblock(dev, starteraseblock,
-                             (nblocks + mask) / dev->blkper);
-      count = MIN(count * dev->blkper, nblocks);
-      startphysicalblock = dev->lptable[starteraseblock] *
-                           dev->blkper + (startblock & mask);
-      ret = MTD_BREAD(dev->mtd, startphysicalblock, count, buffer);
-      if (ret == count || ret == -EUCLEAN)
-        {
-          nblocks -= count;
-          startblock += count;
-          buffer += count * dev->geo.blocksize;
-        }
-      else
-        {
-          ftl_update_map(dev, starteraseblock);
-          break;
-        }
-    }
-
-  return nblocks != nread ? nread - nblocks : ret;
-}
-
-/****************************************************************************
- * Name: ftl_mtd_bwrite
- *
- * Description:
- *   Write the specified eraseblocks. If mtd device is nor flash, it
- *   can be written once time. If mtd device is nand flash, it can be write
- *   one block every time and need to skip bad block until writing success.
- *
- ****************************************************************************/
-
-static ssize_t ftl_mtd_bwrite(FAR struct ftl_struct_s *dev, off_t startblock,
-                              FAR const uint8_t *buffer)
-{
-  off_t starteraseblock;
-  ssize_t ret;
-
-  if (dev->lptable == NULL)
-    {
-      ret = MTD_BWRITE(dev->mtd, startblock, dev->blkper, buffer);
-      if (ret != dev->blkper)
-        {
-          ferr("ERROR: Write block %" PRIdOFF " failed: %zd\n",
-               startblock, ret);
-        }
-
-      return ret;
-    }
-
-  starteraseblock = startblock / dev->blkper;
-  while (1)
-    {
-      if (starteraseblock >= dev->lpcount)
-        {
-          return -ENOSPC;
-        }
-
-      ret = MTD_BWRITE(dev->mtd, dev->lptable[starteraseblock] * dev->blkper,
-                       dev->blkper, buffer);
-      if (ret == dev->blkper)
-        {
-          return ret;
-        }
-
-      MTD_MARKBAD(dev->mtd, dev->lptable[starteraseblock]);
-      ftl_update_map(dev, starteraseblock);
-    }
-}
-
-/****************************************************************************
- * Name: ftl_mtd_erase
- *
- * Description:
- *   Erase the specified number of sectors. If mtd device is nor flash, it
- *   can be erased once time. If mtd device is nand flash, it can be erased
- *   one block every time and need to skip bad block until the specified
- *   number of sectors finish.
- *
- ****************************************************************************/
-
-static ssize_t ftl_mtd_erase(FAR struct ftl_struct_s *dev, off_t startblock)
-{
-  ssize_t ret;
-
-  if (dev->lptable == NULL)
-    {
-      ret = MTD_ERASE(dev->mtd, startblock, 1);
-      if (ret < 0)
-        {
-          ferr("ERROR: Erase block %" PRIdOFF " failed: %zd\n",
-               startblock, ret);
-        }
-
-      return ret;
-    }
-
-  while (1)
-    {
-      if (startblock >= dev->lpcount)
-        {
-          return -ENOSPC;
-        }
-
-      ret = MTD_ERASE(dev->mtd, dev->lptable[startblock], 1);
-      if (ret == 1)
-        {
-          return ret;
-        }
-
-      MTD_MARKBAD(dev->mtd, dev->lptable[startblock]);
-      ftl_update_map(dev, startblock);
-    }
-}
-
-/****************************************************************************
  * Name: ftl_reload
  *
  * Description:  Read the specified number of sectors
@@ -422,10 +183,18 @@ static ssize_t ftl_reload(FAR void *priv, FAR uint8_t *buffer,
                           off_t startblock, size_t nblocks)
 {
   struct ftl_struct_s *dev = (struct ftl_struct_s *)priv;
+  ssize_t nread;
 
   /* Read the full erase block into the buffer */
 
-  return ftl_mtd_bread(dev, startblock, nblocks, buffer);
+  nread   = MTD_BREAD(dev->mtd, startblock, nblocks, buffer);
+  if (nread != nblocks)
+    {
+      ferr("ERROR: Read %zu blocks starting at block %" PRIdOFF
+           " failed: %zd\n", nblocks, startblock, nread);
+    }
+
+  return nread;
 }
 
 /****************************************************************************
@@ -442,9 +211,9 @@ static ssize_t ftl_read(FAR struct inode *inode, unsigned char *buffer,
 
   finfo("sector: %" PRIuOFF " nsectors: %u\n", start_sector, nsectors);
 
-  DEBUGASSERT(inode->i_private);
+  DEBUGASSERT(inode && inode->i_private);
 
-  dev = inode->i_private;
+  dev = (FAR struct ftl_struct_s *)inode->i_private;
 #ifdef FTL_HAVE_RWBUFFER
   return rwb_read(&dev->rwb, start_sector, nsectors, buffer);
 #else
@@ -465,7 +234,7 @@ static int ftl_alloc_eblock(FAR struct ftl_struct_s *dev)
     {
       /* Allocate one, in-memory erase block buffer */
 
-      dev->eblock = kmm_malloc(dev->geo.erasesize);
+      dev->eblock = (FAR uint8_t *)kmm_malloc(dev->geo.erasesize);
     }
 
   return dev->eblock != NULL ? OK : -ENOMEM;
@@ -512,18 +281,22 @@ static ssize_t ftl_flush(FAR void *priv, FAR const uint8_t *buffer,
       /* Read the full erase block into the buffer */
 
       rwblock = startblock & ~mask;
-      nxfrd   = ftl_mtd_bread(dev, rwblock, dev->blkper, dev->eblock);
+      nxfrd   = MTD_BREAD(dev->mtd, rwblock, dev->blkper, dev->eblock);
       if (nxfrd != dev->blkper)
         {
+          ferr("ERROR: Read erase block %" PRIdOFF " failed: %zd\n",
+               rwblock, nxfrd);
           return -EIO;
         }
 
       /* Then erase the erase block */
 
       eraseblock = rwblock / dev->blkper;
-      ret        = ftl_mtd_erase(dev, eraseblock);
+      ret        = MTD_ERASE(dev->mtd, eraseblock, 1);
       if (ret < 0)
         {
+          ferr("ERROR: Erase block=%" PRIdOFF "failed: %d\n",
+               eraseblock, ret);
           return ret;
         }
 
@@ -547,9 +320,11 @@ static ssize_t ftl_flush(FAR void *priv, FAR const uint8_t *buffer,
 
       /* And write the erase block back to flash */
 
-      nxfrd = ftl_mtd_bwrite(dev, rwblock, dev->eblock);
+      nxfrd = MTD_BWRITE(dev->mtd, rwblock, dev->blkper, dev->eblock);
       if (nxfrd != dev->blkper)
         {
+          ferr("ERROR: Write erase block %" PRIdOFF " failed: %zu\n",
+               rwblock, nxfrd);
           return -EIO;
         }
 
@@ -574,9 +349,11 @@ static ssize_t ftl_flush(FAR void *priv, FAR const uint8_t *buffer,
       /* Erase the erase block */
 
       eraseblock = alignedblock / dev->blkper;
-      ret        = ftl_mtd_erase(dev, eraseblock);
+      ret        = MTD_ERASE(dev->mtd, eraseblock, 1);
       if (ret < 0)
         {
+          ferr("ERROR: Erase block=%" PRIdOFF " failed: %d\n",
+               eraseblock, ret);
           return ret;
         }
 
@@ -585,9 +362,11 @@ static ssize_t ftl_flush(FAR void *priv, FAR const uint8_t *buffer,
       finfo("Write %" PRId32 " bytes into erase block=%" PRIdOFF
             " at offset=0\n", dev->geo.erasesize, alignedblock);
 
-      nxfrd = ftl_mtd_bwrite(dev, alignedblock, buffer);
+      nxfrd = MTD_BWRITE(dev->mtd, alignedblock, dev->blkper, buffer);
       if (nxfrd != dev->blkper)
         {
+          ferr("ERROR: Write erase block %" PRIdOFF " failed: %zu\n",
+               alignedblock, nxfrd);
           return -EIO;
         }
 
@@ -611,18 +390,22 @@ static ssize_t ftl_flush(FAR void *priv, FAR const uint8_t *buffer,
 
       /* Read the full erase block into the buffer */
 
-      nxfrd = ftl_mtd_bread(dev, alignedblock, dev->blkper, dev->eblock);
+      nxfrd = MTD_BREAD(dev->mtd, alignedblock, dev->blkper, dev->eblock);
       if (nxfrd != dev->blkper)
         {
+          ferr("ERROR: Read erase block %" PRIdOFF " failed: %zu\n",
+               alignedblock, nxfrd);
           return -EIO;
         }
 
       /* Then erase the erase block */
 
       eraseblock = alignedblock / dev->blkper;
-      ret        = ftl_mtd_erase(dev, eraseblock);
+      ret        = MTD_ERASE(dev->mtd, eraseblock, 1);
       if (ret < 0)
         {
+          ferr("ERROR: Erase block=%" PRIdOFF "failed: %d\n",
+               eraseblock, ret);
           return ret;
         }
 
@@ -635,9 +418,11 @@ static ssize_t ftl_flush(FAR void *priv, FAR const uint8_t *buffer,
 
       /* And write the erase back to flash */
 
-      nxfrd = ftl_mtd_bwrite(dev, alignedblock, dev->eblock);
+      nxfrd = MTD_BWRITE(dev->mtd, alignedblock, dev->blkper, dev->eblock);
       if (nxfrd != dev->blkper)
         {
+          ferr("ERROR: Write erase block %" PRIdOFF " failed: %zu\n",
+               alignedblock, nxfrd);
           return -EIO;
         }
     }
@@ -660,8 +445,8 @@ static ssize_t ftl_write(FAR struct inode *inode,
 
   finfo("sector: %" PRIuOFF " nsectors: %u\n", start_sector, nsectors);
 
-  DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev = (struct ftl_struct_s *)inode->i_private;
 #ifdef FTL_HAVE_RWBUFFER
   return rwb_write(&dev->rwb, start_sector, nsectors, buffer);
 #else
@@ -683,9 +468,10 @@ static int ftl_geometry(FAR struct inode *inode,
 
   finfo("Entry\n");
 
+  DEBUGASSERT(inode);
   if (geometry)
     {
-      dev = inode->i_private;
+      dev = (struct ftl_struct_s *)inode->i_private;
       geometry->geo_available     = true;
       geometry->geo_mediachanged  = false;
       geometry->geo_writeenabled  = true;
@@ -719,9 +505,9 @@ static int ftl_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
   int ret;
 
   finfo("Entry\n");
-  DEBUGASSERT(inode->i_private);
+  DEBUGASSERT(inode && inode->i_private);
 
-  dev = inode->i_private;
+  dev = (struct ftl_struct_s *)inode->i_private;
 
   if (cmd == BIOC_FLUSH)
     {
@@ -756,8 +542,8 @@ static int ftl_unlink(FAR struct inode *inode)
 {
   FAR struct ftl_struct_s *dev;
 
-  DEBUGASSERT(inode->i_private);
-  dev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  dev = (FAR struct ftl_struct_s *)inode->i_private;
 
   dev->unlinked = true;
   if (dev->refs == 0)
@@ -809,7 +595,7 @@ int ftl_initialize_by_path(FAR const char *path, FAR struct mtd_dev_s *mtd)
 
   /* Allocate a FTL device structure */
 
-  dev = kmm_zalloc(sizeof(struct ftl_struct_s));
+  dev = (FAR struct ftl_struct_s *)kmm_zalloc(sizeof(struct ftl_struct_s));
   if (dev)
     {
       /* Initialize the FTL device structure */
@@ -862,23 +648,12 @@ int ftl_initialize_by_path(FAR const char *path, FAR struct mtd_dev_s *mtd)
         }
 #endif
 
-      if (MTD_ISBAD(dev->mtd, 0) != -ENOSYS)
-        {
-          ret = ftl_init_map(dev);
-          if (ret < 0)
-            {
-              goto out;
-            }
-        }
-
       /* Inode private data is a reference to the FTL device structure */
 
       ret = register_blockdriver(path, &g_bops, 0, dev);
       if (ret < 0)
         {
           ferr("ERROR: register_blockdriver failed: %d\n", -ret);
-          kmm_free(dev->lptable);
-out:
 #ifdef FTL_HAVE_RWBUFFER
           rwb_uninitialize(&dev->rwb);
 #endif

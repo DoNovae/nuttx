@@ -40,8 +40,9 @@
 #include <fixedmath.h>
 #include <debug.h>
 
-#include <nuttx/lib/lib.h>
+#include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
+#include <nuttx/fs/unionfs.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/mutex.h>
 
@@ -205,7 +206,7 @@ static int     unionfs_dobind(FAR const char *fspath1,
  * with any compiler.
  */
 
-const struct mountpt_operations g_unionfs_operations =
+const struct mountpt_operations unionfs_operations =
 {
   unionfs_open,        /* open */
   unionfs_close,       /* close */
@@ -215,7 +216,6 @@ const struct mountpt_operations g_unionfs_operations =
   unionfs_ioctl,       /* ioctl */
   NULL,                /* mmap */
   unionfs_truncate,    /* truncate */
-  NULL,                /* pool */
 
   unionfs_sync,        /* sync */
   unionfs_dup,         /* dup */
@@ -392,7 +392,7 @@ static int unionfs_tryopen(FAR struct file *filep, FAR const char *relpath,
 
   /* Yes.. try to open this directory */
 
-  DEBUGASSERT(filep->f_inode->u.i_mops != NULL);
+  DEBUGASSERT(filep->f_inode != NULL && filep->f_inode->u.i_mops != NULL);
   ops = filep->f_inode->u.i_mops;
 
   if (!ops->open)
@@ -825,12 +825,12 @@ static void unionfs_destroy(FAR struct unionfs_inode_s *ui)
 
   if (ui->ui_fs[0].um_prefix)
     {
-      lib_free(ui->ui_fs[0].um_prefix);
+      kmm_free(ui->ui_fs[0].um_prefix);
     }
 
   if (ui->ui_fs[1].um_prefix)
     {
-      lib_free(ui->ui_fs[1].um_prefix);
+      kmm_free(ui->ui_fs[1].um_prefix);
     }
 
   /* And finally free the allocated unionfs state structure as well */
@@ -853,7 +853,8 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   finfo("Opening: ui_nopen=%d\n", ui->ui_nopen);
 
@@ -868,7 +869,7 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
   /* Allocate a container to hold the open file system information */
 
   uf = (FAR struct unionfs_file_s *)
-    kmm_zalloc(sizeof(struct unionfs_file_s));
+    kmm_malloc(sizeof(struct unionfs_file_s));
   if (uf == NULL)
     {
       ret = -ENOMEM;
@@ -882,7 +883,9 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
               um->um_node->u.i_mops != NULL);
 
   uf->uf_file.f_oflags = filep->f_oflags;
+  uf->uf_file.f_pos    = 0;
   uf->uf_file.f_inode  = um->um_node;
+  uf->uf_file.f_priv   = NULL;
 
   ret = unionfs_tryopen(&uf->uf_file, relpath, um->um_prefix, oflags, mode);
   if (ret >= 0)
@@ -898,7 +901,9 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
       um  = &ui->ui_fs[1];
 
       uf->uf_file.f_oflags = filep->f_oflags;
+      uf->uf_file.f_pos    = 0;
       uf->uf_file.f_inode  = um->um_node;
+      uf->uf_file.f_priv   = NULL;
 
       ret = unionfs_tryopen(&uf->uf_file, relpath, um->um_prefix, oflags,
                             mode);
@@ -941,7 +946,8 @@ static int unionfs_close(FAR struct file *filep)
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   /* Get exclusive access to the file system data structures */
 
@@ -1007,7 +1013,8 @@ static ssize_t unionfs_read(FAR struct file *filep, FAR char *buffer,
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1040,7 +1047,8 @@ static ssize_t unionfs_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1072,7 +1080,8 @@ static off_t unionfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1150,7 +1159,8 @@ static int unionfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1182,7 +1192,8 @@ static int unionfs_sync(FAR struct file *filep)
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1217,7 +1228,7 @@ static int unionfs_dup(FAR const struct file *oldp, FAR struct file *newp)
   /* Recover the open file data from the struct file instance */
 
   DEBUGASSERT(oldp != NULL && oldp->f_inode != NULL);
-  ui = oldp->f_inode->i_private;
+  ui = (FAR struct unionfs_inode_s *)oldp->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && oldp->f_priv != NULL);
   oldpriv = (FAR struct unionfs_file_s *)oldp->f_priv;
@@ -1283,7 +1294,8 @@ static int unionfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1321,7 +1333,8 @@ static int unionfs_fchstat(FAR const struct file *filep,
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1357,7 +1370,8 @@ static int unionfs_truncate(FAR struct file *filep, off_t length)
 
   /* Recover the open file data from the struct file instance */
 
-  ui = filep->f_inode->i_private;
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
+  ui = (FAR struct unionfs_inode_s *)filep->f_inode->i_private;
 
   DEBUGASSERT(ui != NULL && filep->f_priv != NULL);
   uf = (FAR struct unionfs_file_s *)filep->f_priv;
@@ -1397,7 +1411,7 @@ static int unionfs_opendir(FAR struct inode *mountpt,
   /* Recover the filesystem data from the struct inode instance */
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   udir = kmm_zalloc(sizeof(*udir));
   if (udir == NULL)
@@ -1507,7 +1521,7 @@ static int unionfs_opendir(FAR struct inode *mountpt,
 errout_with_relpath:
   if (udir->fu_relpath != NULL)
     {
-      lib_free(udir->fu_relpath);
+      kmm_free(udir->fu_relpath);
     }
 
 errout_with_lock:
@@ -1537,7 +1551,7 @@ static int unionfs_closedir(FAR struct inode *mountpt,
   /* Recover the union file system data from the struct inode instance */
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   /* Get exclusive access to the file system data structures */
 
@@ -1620,7 +1634,7 @@ static int unionfs_readdir(FAR struct inode *mountpt,
   /* Recover the union file system data from the struct inode instance */
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   DEBUGASSERT(dir);
   udir = (FAR struct unionfs_dir_s *)dir;
@@ -1761,7 +1775,7 @@ static int unionfs_readdir(FAR struct inode *mountpt,
 
                       /* Free the allocated relpath */
 
-                      lib_free(relpath);
+                      kmm_free(relpath);
 
                       /* Check for a duplicate */
 
@@ -1848,7 +1862,7 @@ static int unionfs_readdir(FAR struct inode *mountpt,
 
                   /* Free the allocated relpath */
 
-                  lib_free(relpath);
+                  kmm_free(relpath);
                 }
             }
         }
@@ -1875,7 +1889,7 @@ static int unionfs_rewinddir(struct inode *mountpt, struct fs_dirent_s *dir)
   /* Recover the union file system data from the struct inode instance */
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   DEBUGASSERT(dir);
   udir = (FAR struct unionfs_dir_s *)dir;
@@ -1959,7 +1973,7 @@ static int unionfs_bind(FAR struct inode *blkdriver, FAR const void *data,
   /* Call unionfs_dobind to do the real work. */
 
   ret = unionfs_dobind(fspath1, prefix1, fspath2, prefix2, handle);
-  lib_free(dup);
+  kmm_free(dup);
 
   return ret;
 }
@@ -2033,7 +2047,9 @@ static int unionfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
   /* Recover the union file system data from the struct inode instance */
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL && buf != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
+
+  memset(buf, 0, sizeof(struct statfs));
 
   /* Get statfs info from file system 1.
    *
@@ -2052,8 +2068,6 @@ static int unionfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
               um2->um_node->u.i_mops != NULL);
   ops2 = um2->um_node->u.i_mops;
 
-  memset(&buf1, 0, sizeof(struct statfs));
-  memset(&buf2, 0, sizeof(struct statfs));
   if (ops1->statfs != NULL && ops2->statfs != NULL)
     {
       ret = ops1->statfs(um1->um_node, &buf1);
@@ -2159,7 +2173,7 @@ static int unionfs_unlink(FAR struct inode *mountpt,
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL &&
               relpath != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   /* Check if some exists at this path on file system 1.  This might be
    * a file or a directory
@@ -2223,7 +2237,7 @@ static int unionfs_mkdir(FAR struct inode *mountpt, FAR const char *relpath,
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL &&
               relpath != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   /* Is there anything with this name on either file system? */
 
@@ -2274,7 +2288,7 @@ static int unionfs_rmdir(FAR struct inode *mountpt, FAR const char *relpath)
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL &&
               relpath != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   /* We really don't know any better so we will try to remove the directory
    * from both file systems.
@@ -2337,7 +2351,7 @@ static int unionfs_rename(FAR struct inode *mountpt,
   /* Recover the union file system data from the struct inode instance */
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   DEBUGASSERT(oldrelpath != NULL && oldrelpath != NULL);
 
@@ -2402,7 +2416,7 @@ static int unionfs_stat(FAR struct inode *mountpt, FAR const char *relpath,
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL &&
               relpath != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   /* stat this path on file system 1 */
 
@@ -2479,7 +2493,7 @@ static int unionfs_chstat(FAR struct inode *mountpt, FAR const char *relpath,
 
   DEBUGASSERT(mountpt != NULL && mountpt->i_private != NULL &&
               relpath != NULL);
-  ui = mountpt->i_private;
+  ui = (FAR struct unionfs_inode_s *)mountpt->i_private;
 
   /* chstat this path on file system 1 */
 
@@ -2645,7 +2659,7 @@ static int unionfs_dobind(FAR const char *fspath1, FAR const char *prefix1,
 errout_with_prefix1:
   if (ui->ui_fs[0].um_prefix != NULL)
     {
-      lib_free(ui->ui_fs[0].um_prefix);
+      kmm_free(ui->ui_fs[0].um_prefix);
     }
 
 errout_with_fs2:
@@ -2664,4 +2678,76 @@ errout_with_uinode:
  * Public Functions
  ****************************************************************************/
 
+/****************************************************************************
+ * Name: unionfs_mount
+ *
+ * Description:
+ *   Create and mount a union file system
+ *
+ * Input Parameters:
+ *   fspath1 - The full path to the first file system mountpoint
+ *   prefix1 - An optiona prefix that may be applied to make the first
+ *             file system appear a some path below the unionfs mountpoint,
+ *   fspath2 - The full path to the second file system mountpoint
+ *   prefix2 - An optiona prefix that may be applied to make the first
+ *             file system appear a some path below the unionfs mountpoint,
+ *   mountpt - The full path to the mountpoint for the union file system
+ *
+ * Returned Value:
+ *   Zero (OK) is returned if the union file system was correctly created and
+ *   mounted.  On any failure, a negated error value will be returned to
+ *   indicate the nature of the failure.
+ *
+ ****************************************************************************/
+
+int unionfs_mount(FAR const char *fspath1, FAR const char *prefix1,
+                  FAR const char *fspath2, FAR const char *prefix2,
+                  FAR const char *mountpt)
+{
+  FAR struct inode *mpinode;
+  int ret;
+
+  DEBUGASSERT(mountpt != NULL);
+
+  /* Mount the union FS.  We should adapt the standard mount to do
+   * this using optional parameters.  This custom mount should do the job
+   * for now, however.
+   */
+
+  ret = inode_reserve(mountpt, 0777, &mpinode);
+  if (ret < 0)
+    {
+      /* inode_reserve can fail for a couple of reasons, but the most likely
+       * one is that the inode already exists. inode_reserve may return:
+       *
+       *  -EINVAL - 'path' is invalid for this operation
+       *  -EEXIST - An inode already exists at 'path'
+       *  -ENOMEM - Failed to allocate in-memory resources for the operation
+       */
+
+      ferr("ERROR: Failed to reserve inode\n");
+      return ret;
+    }
+
+  /* Populate the inode with driver specific information. */
+
+  INODE_SET_MOUNTPT(mpinode);
+
+  mpinode->u.i_mops = &unionfs_operations;
+
+  /* Call unionfs_dobind to do the real work. */
+
+  ret = unionfs_dobind(fspath1, prefix1, fspath2, prefix2,
+                       &mpinode->i_private);
+  if (ret < 0)
+    {
+      goto errout_with_mountpt;
+    }
+
+  return OK;
+
+errout_with_mountpt:
+  inode_release(mpinode);
+  return ret;
+}
 #endif /* !CONFIG_DISABLE_MOUNTPOINT && CONFIG_FS_UNIONFS */

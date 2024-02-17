@@ -46,16 +46,16 @@ endif
 
 ifeq ($(CONFIG_HOST_X86_64),y)
 ifeq ($(CONFIG_SIM_M32),y)
-  ASRCS += sim_fork_x86.S
+  ASRCS += sim_vfork_x86.S
 else
-  ASRCS += sim_fork_x86_64.S
+  ASRCS += sim_vfork_x86_64.S
 endif
 else ifeq ($(CONFIG_HOST_X86),y)
-  ASRCS += sim_fork_x86.S
+  ASRCS += sim_vfork_x86.S
 else ifeq ($(CONFIG_HOST_ARM),y)
-  ASRCS += sim_fork_arm.S
+  ASRCS += sim_vfork_arm.S
 else ifeq ($(CONFIG_HOST_ARM64),y)
-  ASRCS += sim_fork_arm64.S
+  ASRCS += sim_vfork_arm64.S
 endif
 
 AOBJS = $(ASRCS:.S=$(OBJEXT))
@@ -63,16 +63,17 @@ AOBJS = $(ASRCS:.S=$(OBJEXT))
 CSRCS  = sim_initialize.c sim_idle.c sim_doirq.c sim_initialstate.c
 CSRCS += sim_createstack.c sim_usestack.c sim_releasestack.c sim_stackframe.c
 CSRCS += sim_exit.c sim_schedulesigaction.c sim_switchcontext.c sim_heap.c
-CSRCS += sim_uart.c sim_copyfullstate.c sim_sigdeliver.c sim_tcbinfo.c sim_cpuinfo.c
-CSRCS += sim_registerdump.c sim_saveusercontext.c sim_textheap.c
-CSRCS += sim_checkhostfstypes.c
+CSRCS += sim_uart.c sim_copyfullstate.c sim_sigdeliver.c
+CSRCS += sim_registerdump.c sim_saveusercontext.c
 
 ifeq ($(CONFIG_SCHED_BACKTRACE),y)
 CSRCS += sim_backtrace.c
 endif
 
-ifeq ($(CONFIG_ARCH_HAVE_FORK),y)
-CSRCS += sim_fork.c
+ifeq ($(CONFIG_ARCH_HAVE_VFORK),y)
+ifeq ($(CONFIG_SCHED_WAITPID),y)
+CSRCS += sim_vfork.c
+endif
 endif
 
 VPATH = :sim
@@ -94,19 +95,7 @@ ifeq ($(CONFIG_HOST_MACOS),y)
   HOSTCFLAGS += -Wno-deprecated-declarations
 endif
 
-ifeq ($(CONFIG_FS_LARGEFILE),y)
-  HOSTCFLAGS += -D_FILE_OFFSET_BITS=64
-endif
-
-HOSTSRCS  = sim_hostirq.c sim_hostmemory.c sim_hostmisc.c sim_hosttime.c sim_hostuart.c
-HOSTSRCS += sim_hostfs.c
-
-hostfs.h: $(TOPDIR)/include/nuttx/fs/hostfs.h
-	@echo "CP:  $<"
-	$(Q) cp $< $@
-
-sim_hostfs.c: hostfs.h
-
+HOSTSRCS = sim_hostirq.c sim_hostmemory.c sim_hostmisc.c sim_hosttime.c sim_hostuart.c
 STDLIBS += -lpthread
 ifeq ($(CONFIG_HOST_MACOS),y)
 ifeq ($(CONFIG_HAVE_CXXINITIALIZE),y)
@@ -121,10 +110,6 @@ endif
 
 ifeq ($(CONFIG_LIBM_TOOLCHAIN),y)
   STDLIBS += -lm
-endif
-
-ifeq ($(CONFIG_ARCH_COVERAGE),y)
-  STDLIBS += -lgcov
 endif
 
 ifeq ($(CONFIG_STACK_COLORATION),y)
@@ -178,10 +163,6 @@ endif
 ifeq ($(CONFIG_FS_FAT),y)
   CSRCS += sim_blockdevice.c sim_deviceimage.c
   STDLIBS += -lz
-endif
-
-ifneq ($(CONFIG_SIM_WIFIDEV_NUMBER),0)
-  CFLAGS += -DTOPDIR=\"$(TOPDIR)\"
 endif
 
 ifeq ($(CONFIG_SIM_NETDEV_TAP),y)
@@ -244,10 +225,20 @@ ifeq ($(CONFIG_SIM_SOUND_ALSA),y)
   STDLIBS += -lmp3lame
 endif
 
-ifeq ($(CONFIG_SIM_CAMERA_V4L2),y)
+ifeq ($(CONFIG_SIM_VIDEO_V4L2),y)
   HOSTSRCS += sim_host_v4l2.c
-  CSRCS += sim_camera.c
+  CSRCS += sim_video.c
   STDLIBS += -lv4l2
+endif
+
+ifeq ($(CONFIG_SIM_HOSTFS),y)
+  HOSTSRCS += sim_hostfs.c
+
+hostfs.h: $(TOPDIR)/include/nuttx/fs/hostfs.h
+	@echo "CP:  $<"
+	$(Q) cp $< $@
+
+sim_hostfs.c: hostfs.h
 endif
 
 COBJS = $(CSRCS:.c=$(OBJEXT))
@@ -354,7 +345,7 @@ nuttx-names.dat: nuttx-names.in
 define LINK_ALLSYMS
 	$(if $(CONFIG_HOST_MACOS), \
 	$(Q) $(TOPDIR)/tools/mkallsyms.sh noconst $(NUTTX) $(CROSSDEV) > allsyms.tmp, \
-	$(Q) $(TOPDIR)/tools/mkallsyms.py $(NUTTX) allsyms.tmp --orderbyname $(CONFIG_SYMTAB_ORDEREDBYNAME))
+	$(Q) $(TOPDIR)/tools/mkallsyms.py $(NUTTX) allsyms.tmp)
 	$(Q) $(call COMPILE, allsyms.tmp, allsyms$(OBJEXT), -x c)
 	$(if $(CONFIG_HAVE_CXX),\
 	$(Q) "$(CXX)" $(CFLAGS) $(LDFLAGS) -o $(NUTTX) \

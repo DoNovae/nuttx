@@ -65,7 +65,7 @@ static int     dsi_dev_ioctl(FAR struct file *filep, int cmd,
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations g_dsi_dev_fops =
+static const struct file_operations dsi_dev_fops =
 {
   NULL,            /* open */
   NULL,            /* close */
@@ -111,9 +111,10 @@ static int dsi_dev_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Get our private data structure */
 
+  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   inode = filep->f_inode;
 
-  priv = inode->i_private;
+  priv = (FAR struct mipi_dsi_device_driver_s *)inode->i_private;
   DEBUGASSERT(priv);
 
   /* Get exclusive access to the DSI device driver state structure */
@@ -222,7 +223,7 @@ int mipi_dsi_device_driver_register(FAR struct mipi_dsi_device *device)
   snprintf(devpath, sizeof(devpath), MIPI_DSI_DEVNAME_FMT, host->bus,
            device->channel, device->name);
 
-  ret = register_driver(devpath, &g_dsi_dev_fops, 0666, priv);
+  ret = register_driver(devpath, &dsi_dev_fops, 0666, priv);
   if (ret < 0)
     {
       nxmutex_destroy(&priv->lock);

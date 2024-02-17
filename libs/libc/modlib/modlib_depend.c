@@ -31,8 +31,6 @@
 
 #include <nuttx/lib/modlib.h>
 
-#if CONFIG_MODLIB_MAXDEPEND > 0
-
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -57,7 +55,8 @@
 int modlib_depend(FAR struct module_s *importer,
                   FAR struct module_s *exporter)
 {
-  int freendx = -1;
+#if CONFIG_MODLIB_MAXDEPEND > 0
+  int freendx;
   int i;
 
   DEBUGASSERT(importer != NULL && exporter != NULL);
@@ -72,7 +71,7 @@ int modlib_depend(FAR struct module_s *importer,
    * is small.  Otherwise, a more dynamic data structure would be in order.
    */
 
-  for (i = 0; i < CONFIG_MODLIB_MAXDEPEND; i++)
+  for (i = 0, freendx = -1; i < CONFIG_MODLIB_MAXDEPEND; i++)
     {
       FAR const struct module_s *modp;
 
@@ -128,6 +127,10 @@ int modlib_depend(FAR struct module_s *importer,
 
   DEBUGPANIC();
   return -ENFILE;
+
+#else
+  return OK;
+#endif
 }
 
 /****************************************************************************
@@ -149,6 +152,7 @@ int modlib_depend(FAR struct module_s *importer,
 
 int modlib_undepend(FAR struct module_s *importer)
 {
+#if CONFIG_MODLIB_MAXDEPEND > 0
   FAR struct module_s *exporter;
   int i;
 
@@ -174,8 +178,7 @@ int modlib_undepend(FAR struct module_s *importer)
           importer->dependencies[i] = NULL;
         }
     }
+#endif
 
   return OK;
 }
-
-#endif

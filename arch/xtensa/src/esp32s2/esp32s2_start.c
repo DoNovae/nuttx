@@ -35,14 +35,12 @@
 
 #include "hardware/esp32s2_cache_memory.h"
 #include "hardware/esp32s2_extmem.h"
-#include "rom/esp32s2_libc_stubs.h"
 #include "esp32s2_clockconfig.h"
 #include "esp32s2_region.h"
 #include "esp32s2_spiram.h"
 #include "esp32s2_start.h"
 #include "esp32s2_lowputc.h"
 #include "esp32s2_wdt.h"
-#include "esp32s2_rtc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -339,11 +337,6 @@ static void noreturn_function IRAM_ATTR __esp32s2_start(void)
 
   esp32s2_wdt_early_deinit();
 
-  /* Initialize RTC parameters */
-
-  esp32s2_rtc_init();
-  esp32s2_rtc_clk_set();
-
   /* Set CPU frequency configured in board.h */
 
   esp32s2_clockconfig();
@@ -377,10 +370,6 @@ static void noreturn_function IRAM_ATTR __esp32s2_start(void)
       esp_spiram_test();
     }
 #endif
-
-  /* Setup the syscall table needed by the ROM code */
-
-  esp_setup_syscall_table();
 
   /* Initialize onboard resources */
 

@@ -61,7 +61,7 @@
  * Input Parameters:
  *   pid - The task ID of the thread to waid for
  *   stat_loc - The location to return the exit status
- *   options - Modifiable behavior, see sys/wait.h.
+ *   options - ignored
  *
  * Returned Value:
  *   If nxsched_waitpid() returns because the status of a child process is
@@ -388,11 +388,8 @@ pid_t nxsched_waitpid(pid_t pid, int *stat_loc, int options)
 
               /* Discard the child entry and break out of the loop */
 
-              if ((options & WNOWAIT) == 0)
-                {
-                  group_remove_child(rtcb->group, pid);
-                  group_free_child(child);
-                }
+              group_remove_child(rtcb->group, pid);
+              group_free_child(child);
               break;
             }
         }
@@ -478,7 +475,7 @@ pid_t nxsched_waitpid(pid_t pid, int *stat_loc, int options)
 
               /* Discard the child entry, if we have one */
 
-              if (child != NULL && (options & WNOWAIT) == 0)
+              if (child != NULL)
                 {
                   group_remove_child(rtcb->group, child->ch_pid);
                   group_free_child(child);
@@ -594,7 +591,7 @@ errout:
  * Input Parameters:
  *   pid - The task ID of the thread to waid for
  *   stat_loc - The location to return the exit status
- *   options - Modifiable behavior, see sys/wait.h.
+ *   options - ignored
  *
  * Returned Value:
  *   If waitpid() returns because the status of a child process is available,

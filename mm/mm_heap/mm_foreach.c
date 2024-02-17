@@ -52,7 +52,7 @@ void mm_foreach(FAR struct mm_heap_s *heap, mm_node_handler_t handler,
 #if CONFIG_MM_REGIONS > 1
   int region;
 #else
-#  define region 0
+# define region 0
 #endif
 
   DEBUGASSERT(handler);
@@ -78,23 +78,22 @@ void mm_foreach(FAR struct mm_heap_s *heap, mm_node_handler_t handler,
            node < heap->mm_heapend[region];
            node = (FAR struct mm_allocnode_s *)((FAR char *)node + nodesize))
         {
-          nodesize = MM_SIZEOF_NODE(node);
+          nodesize = SIZEOF_MM_NODE(node);
           minfo("region=%d node=%p size=%zu preceding=%u (%c %c)\n",
                 region, node, nodesize, (unsigned int)node->preceding,
-                MM_PREVNODE_IS_FREE(node) ? 'F' : 'A',
-                MM_NODE_IS_ALLOC(node) ? 'A' : 'F');
+                (node->size & MM_PREVFREE_BIT) ? 'F' : 'A',
+                (node->size & MM_ALLOC_BIT) ? 'A' : 'F');
 
           handler(node, arg);
 
-          DEBUGASSERT(MM_PREVNODE_IS_ALLOC(node) ||
-                      MM_SIZEOF_NODE(prev) == node->preceding);
+          DEBUGASSERT((node->size & MM_PREVFREE_BIT) == 0 ||
+                      SIZEOF_MM_NODE(prev) == node->preceding);
           prev = node;
         }
 
       minfo("region=%d node=%p heapend=%p\n",
             region, node, heap->mm_heapend[region]);
       DEBUGASSERT(node == heap->mm_heapend[region]);
-      handler(node, arg);
 
       mm_unlock(heap);
     }

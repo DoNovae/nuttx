@@ -41,7 +41,6 @@
 
 __start:
 
-  /* Preserve a1 as it contains the pointer to DTB */
   /* Load mhartid (cpuid) */
 
   csrr a0, mhartid

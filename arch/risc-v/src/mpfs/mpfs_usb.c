@@ -50,8 +50,6 @@
 #include <arch/board/board.h>
 
 #include "hardware/mpfs_usb.h"
-#include "hardware/mpfs_mpucfg.h"
-#include "mpfs_gpio.h"
 #include "riscv_internal.h"
 #include "chip.h"
 
@@ -108,6 +106,13 @@
 #define MPFS_TRACEINTID_DISPATCH           0x0013
 #define MPFS_TRACEINTID_EP0_STALLSENT      0x0014
 #define MPFS_TRACEINTID_DATA_END           0x0015
+
+/* USB PMP configuration registers */
+
+#define MPFS_PMPCFG_USB_0    (MPFS_MPUCFG_BASE + 0x600)
+#define MPFS_PMPCFG_USB_1    (MPFS_MPUCFG_BASE + 0x608)
+#define MPFS_PMPCFG_USB_2    (MPFS_MPUCFG_BASE + 0x610)
+#define MPFS_PMPCFG_USB_3    (MPFS_MPUCFG_BASE + 0x618)
 
 /* Reset and clock control registers */
 
@@ -223,7 +228,6 @@ static void   mpfs_epset_reset(struct mpfs_usbdev_s *priv, uint16_t epset);
  ****************************************************************************/
 
 static struct mpfs_usbdev_s g_usbd;
-static uint8_t g_clkrefs;
 
 static const struct usbdev_epops_s g_epops =
 {
@@ -321,7 +325,7 @@ static void mpfs_modifyreg16(uintptr_t addr, uint16_t clearbits,
  ****************************************************************************/
 
 static void mpfs_modifyreg8(uintptr_t addr, uint8_t clearbits,
-                            uint8_t setbits)
+                             uint8_t setbits)
 {
   irqstate_t flags;
   uint8_t    regval;
@@ -429,18 +433,7 @@ static inline void mpfs_putreg8(uint8_t regval, uintptr_t regaddr)
 
 static void mpfs_enableclk(void)
 {
-  /* Handle the counter atomically */
-
-  irqstate_t flags = enter_critical_section();
-
-  if (g_clkrefs == 0)
-    {
-      modifyreg32(MPFS_SYSREG_SUBBLK_CLOCK_CR, 0,
-                  SYSREG_SUBBLK_CLOCK_CR_USB);
-    }
-
-  g_clkrefs++;
-  leave_critical_section(flags);
+  modifyreg32(MPFS_SYSREG_SUBBLK_CLOCK_CR, 0, SYSREG_SUBBLK_CLOCK_CR_USB);
 }
 
 /****************************************************************************
@@ -459,18 +452,7 @@ static void mpfs_enableclk(void)
 
 static void mpfs_disableclk(void)
 {
-  /* Handle the counter atomically */
-
-  irqstate_t flags = enter_critical_section();
-
-  g_clkrefs--;
-  if (g_clkrefs == 0)
-    {
-      modifyreg32(MPFS_SYSREG_SUBBLK_CLOCK_CR, SYSREG_SUBBLK_CLOCK_CR_USB,
-                  0);
-    }
-
-  leave_critical_section(flags);
+  modifyreg32(MPFS_SYSREG_SUBBLK_CLOCK_CR, SYSREG_SUBBLK_CLOCK_CR_USB, 0);
 }
 
 /****************************************************************************
@@ -1334,7 +1316,7 @@ static int mpfs_ep_configure_internal(struct mpfs_ep_s *privep,
                        TXCSRL_REG_EPN_STALL_SENT_MASK,
                         0);
 
-      mpfs_ep_set_fifo_size(epno, dirin, maxpacket);
+      mpfs_ep_set_fifo_size(epno, 0, maxpacket);
 
       /* Give EP0 64 bytes (8*8) and configure 512 bytes for TX fifo.
        * This is a pointer to internal RAM where the data should be
@@ -1655,7 +1637,7 @@ static struct usbdev_req_s *mpfs_ep_allocreq(struct usbdev_ep_s *ep)
 {
   struct mpfs_req_s *privreq;
 
-  privreq = kmm_malloc(sizeof(struct mpfs_req_s));
+  privreq = (struct mpfs_req_s *)kmm_malloc(sizeof(struct mpfs_req_s));
   if (privreq == NULL)
     {
       usbtrace(TRACE_DEVERROR(MPFS_TRACEERR_ALLOCFAIL), 0);
@@ -1712,7 +1694,7 @@ static void *mpfs_ep_allocbuffer(struct usbdev_ep_s *ep, uint16_t nbytes)
 {
   /* There is not special buffer allocation requirement */
 
-  return kmm_malloc(nbytes);
+  return kumm_malloc(nbytes);
 }
 #endif
 
@@ -1739,7 +1721,7 @@ static void mpfs_ep_freebuffer(struct usbdev_ep_s *ep, void *buf)
 {
   /* There is not special buffer allocation requirement */
 
-  kmm_free(buf);
+  kumm_free(buf);
 }
 #endif
 
@@ -3613,7 +3595,7 @@ static void mpfs_usb_iomux(void)
 
 #ifdef CONFIG_USBDEV_DMA
   /* DMA operations need to open the USB PMP registers for proper
-   * operation.
+   * operation. If not configured, apply default settings.
    */
 
   uint64_t pmpcfg_usb_x;
@@ -3622,24 +3604,28 @@ static void mpfs_usb_iomux(void)
   if ((pmpcfg_usb_x & 0x1ffffff000000000llu) != 0x1f00000000000000llu)
     {
       uerr("Please check the MPFS_PMPCFG_USB_0 register.\n");
+      putreg64(0x1f00000fffffffffllu, MPFS_PMPCFG_USB_0);
     }
 
   pmpcfg_usb_x = getreg64(MPFS_PMPCFG_USB_1);
   if ((pmpcfg_usb_x & 0x1ffffff000000000llu) != 0x1f00000000000000llu)
     {
       uerr("Please check the MPFS_PMPCFG_USB_1 register.\n");
+      putreg64(0x1f00000fffffffffllu, MPFS_PMPCFG_USB_1);
     }
 
   pmpcfg_usb_x = getreg64(MPFS_PMPCFG_USB_2);
   if ((pmpcfg_usb_x & 0x1ffffff000000000llu) != 0x1f00000000000000llu)
     {
       uerr("Please check the MPFS_PMPCFG_USB_2 register.\n");
+      putreg64(0x1f00000fffffffffllu, MPFS_PMPCFG_USB_2);
     }
 
   pmpcfg_usb_x = getreg64(MPFS_PMPCFG_USB_3);
   if ((pmpcfg_usb_x & 0x1ffffff000000000llu) != 0x1f00000000000000llu)
     {
       uerr("Please check the MPFS_PMPCFG_USB_3 register.\n");
+      putreg64(0x1f00000fffffffffllu, MPFS_PMPCFG_USB_3);
     }
 #endif
 }
@@ -4015,29 +4001,3 @@ errout:
   mpfs_usbuninitialize();
 }
 
-/****************************************************************************
- * Name: mpfs_vbus_detect
- *
- * Description:
- *   Read the VBUS state from the USB OTG controller.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   true if VBUS is valid; false otherwise
- *
- ****************************************************************************/
-
-bool mpfs_vbus_detect(void)
-{
-  uint8_t vbus;
-
-  /* Accessing the peripheral needs the clock */
-
-  mpfs_enableclk();
-  vbus = getreg8(MPFS_USB_DEV_CTRL) & DEV_CTRL_VBUS_MASK;
-  mpfs_disableclk();
-
-  return vbus == VBUS_ABOVE_VBUS_VALID;
-}

@@ -76,7 +76,7 @@
 #include "stm32_bmp180.h"
 #endif
 
-#ifdef CONFIG_SENSORS_MS56XX
+#ifdef CONFIG_SENSORS_MS5611
 #include "stm32_ms5611.h"
 #endif
 
@@ -217,7 +217,7 @@ int stm32_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_SENSORS_MS56XX
+#ifdef CONFIG_SENSORS_MS5611
   /* Initialize the MS5611 pressure sensor. */
 
   ret = board_ms5611_initialize(0, 1);
@@ -573,7 +573,7 @@ int stm32_bringup(void)
     }
 #endif
 
-#if defined(CONFIG_RNDIS) && !defined(CONFIG_RNDIS_COMPOSITE)
+#if defined(CONFIG_RNDIS)
   uint8_t mac[6];
   mac[0] = 0xa0; /* TODO */
   mac[1] = (CONFIG_NETINIT_MACADDR_2 >> (8 * 0)) & 0xff;

@@ -55,12 +55,6 @@
 #  elif defined(CONFIG_CONSOLE_SYSLOG)
 #    undef  USE_SERIALDRIVER
 #    undef  USE_EARLYSERIALINIT
-#  elif defined(CONFIG_SERIAL_RTT_CONSOLE)
-#    undef  USE_SERIALDRIVER
-#    undef  USE_EARLYSERIALINIT
-#  elif defined(CONFIG_RPMSG_UART_CONSOLE)
-#    undef  USE_SERIALDRIVER
-#    undef  USE_EARLYSERIALINIT
 #  else
 #    define USE_SERIALDRIVER 1
 #    define USE_EARLYSERIALINIT 1
@@ -97,25 +91,6 @@
 #define STACK_COLOR    0xdeaddead
 #define HEAP_COLOR     'h'
 
-/* AArch64 the stack-pointer must be 128-bit aligned */
-
-#define STACK_ALIGNMENT     16
-
-/* Stack alignment macros */
-
-#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
-#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
-#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
-
-#ifdef CONFIG_SMP
-/* The size of interrupt and idle stack.  This is the configured
- * value aligned the 8-bytes as required by the ARM EABI.
- */
-
-#  define SMP_STACK_SIZE    STACK_ALIGN_UP(CONFIG_IDLETHREAD_STACKSIZE)
-#  define SMP_STACK_WORDS   (SMP_STACK_SIZE >> 2)
-#endif
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -136,6 +111,16 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
+
+/* AArch64 the stack-pointer must be 128-bit aligned */
+
+#define STACK_ALIGNMENT     16
+
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
 
 #define INIT_STACK_DEFINE(sym, size) \
     char locate_data(".initstack") \
@@ -158,16 +143,16 @@ extern "C"
 
 #ifdef CONFIG_SMP
 
+/* The size of interrupt and idle stack.  This is the configured
+ * value aligned the 8-bytes as required by the ARM EABI.
+ */
+
+#define SMP_STACK_SIZE       STACK_ALIGN_UP(CONFIG_IDLETHREAD_STACKSIZE)
+
 INIT_STACK_ARRAY_DEFINE_EXTERN(g_cpu_idlestackalloc, CONFIG_SMP_NCPUS,
                           SMP_STACK_SIZE);
 INIT_STACK_ARRAY_DEFINE_EXTERN(g_interrupt_stacks, CONFIG_SMP_NCPUS,
                           INTSTACK_SIZE);
-
-#ifdef CONFIG_ARM64_DECODEFIQ
-INIT_STACK_ARRAY_DEFINE_EXTERN(g_interrupt_fiq_stacks, CONFIG_SMP_NCPUS,
-                          INTSTACK_SIZE);
-#endif
-
 uintptr_t arm64_intstack_alloc(void);
 uintptr_t arm64_intstack_top(void);
 #else
@@ -175,11 +160,6 @@ uintptr_t arm64_intstack_top(void);
 
 INIT_STACK_DEFINE_EXTERN(g_idle_stack, CONFIG_IDLETHREAD_STACKSIZE);
 INIT_STACK_DEFINE_EXTERN(g_interrupt_stack, INTSTACK_SIZE);
-
-#ifdef CONFIG_ARM64_DECODEFIQ
-INIT_STACK_DEFINE_EXTERN(g_interrupt_fiq_stack, INTSTACK_SIZE);
-#endif
-
 #endif
 
 /* This is the beginning of heap as provided from arm64_head.S.
@@ -274,6 +254,7 @@ void arm64_secondary_start(void);
 
 void arm64_fullcontextrestore(uint64_t *restoreregs) noreturn_function;
 void arm64_switchcontext(uint64_t **saveregs, uint64_t *restoreregs);
+void arm64_context_snapshot(void *savereg);
 
 /* Signal handling **********************************************************/
 
@@ -302,7 +283,7 @@ uint64_t *arm64_doirq(int irq, uint64_t *regs);
 #ifdef CONFIG_PAGING
 void arm64_pginitialize(void);
 #else /* CONFIG_PAGING */
-#  define arm64_pginitialize()
+# define arm64_pginitialize()
 #endif /* CONFIG_PAGING */
 
 uint64_t * arm64_syscall_switch(uint64_t *regs);
@@ -341,6 +322,8 @@ void arm64_serialinit(void);
 void arm64_earlyserialinit(void);
 #endif
 
+void arm64_lowputc(char c);
+
 /* DMA */
 
 #ifdef CONFIG_ARCH_DMA
@@ -352,7 +335,7 @@ void weak_function arm64_dma_initialize(void);
 #if CONFIG_MM_REGIONS > 1
 void arm64_addregion(void);
 #else
-#  define arm64_addregion()
+# define arm64_addregion()
 #endif
 
 /* Networking */
@@ -371,7 +354,7 @@ void arm64_addregion(void);
 #if defined(CONFIG_NET) && !defined(CONFIG_NETDEV_LATEINIT)
 void arm64_netinitialize(void);
 #else
-#  define arm64_netinitialize()
+# define arm64_netinitialize()
 #endif
 
 /* USB */
@@ -380,8 +363,8 @@ void arm64_netinitialize(void);
 void arm64_usbinitialize(void);
 void arm64_usbuninitialize(void);
 #else
-#  define arm64_usbinitialize()
-#  define arm64_usbuninitialize()
+# define arm64_usbinitialize()
+# define arm64_usbuninitialize()
 #endif
 
 /* Debug */

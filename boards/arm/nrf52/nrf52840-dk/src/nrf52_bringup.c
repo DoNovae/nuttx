@@ -45,20 +45,8 @@
 #  include <nuttx/usb/rndis.h>
 #endif
 
-#ifdef CONFIG_TIMER
-#  include "nrf52_timer.h"
-#endif
-
-#ifdef CONFIG_NRF52_PROGMEM
-#  include "nrf52_progmem.h"
-#endif
-
 #ifdef CONFIG_NRF52_SOFTDEVICE_CONTROLLER
 #  include "nrf52_sdc.h"
-#endif
-
-#ifdef CONFIG_SENSORS_LSM9DS1
-#  include "nrf52_lsm9ds1.h"
 #endif
 
 #include "nrf52840-dk.h"
@@ -67,8 +55,7 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define NRF52_TIMER    (1)
-#define LMS9DS1_I2CBUS (0)
+#define NRF52_TIMER (0)
 
 /****************************************************************************
  * Public Functions
@@ -274,40 +261,14 @@ int nrf52_bringup(void)
   usbdev_rndis_initialize(mac);
 #endif
 
-#ifdef CONFIG_NRF52_QSPI
-  /* Initialize the MX25 QSPU memory */
-
-  ret = nrf52_mx25_initialize();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: nrf52_mx25_initialize() failed: %d\n", ret);
-    }
-#endif
-
 #ifdef CONFIG_NRF52_SOFTDEVICE_CONTROLLER
   ret = nrf52_sdc_initialize();
+
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: nrf52_sdc_initialize() failed: %d\n", ret);
     }
 #endif
-
-#ifdef CONFIG_NRF52_PROGMEM
-  ret = nrf52_progmem_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize MTD progmem: %d\n", ret);
-    }
-#endif /* CONFIG_MTD */
-
-#ifdef CONFIG_SENSORS_LSM9DS1
-  ret = nrf52_lsm9ds1_initialize(LMS9DS1_I2CBUS);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize LSM9DS1 driver: %d\n",
-             ret);
-    }
-#endif /* CONFIG_SENSORS_LSM6DSL */
 
   UNUSED(ret);
   return OK;

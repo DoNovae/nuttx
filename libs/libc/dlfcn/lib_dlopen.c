@@ -31,15 +31,12 @@
 #include <assert.h>
 #include <debug.h>
 #include <errno.h>
-#include <unistd.h>
-#include <sys/param.h>
 
 #include <nuttx/envpath.h>
 #include <nuttx/module.h>
 #include <nuttx/lib/modlib.h>
 
 #include "libc.h"
-#include "debug.h"
 
 /****************************************************************************
  * Private Functions
@@ -50,7 +47,7 @@
  ****************************************************************************/
 
 #ifdef CONFIG_BUILD_PROTECTED
-#  if defined(CONFIG_DEBUG_INFO) && defined(CONFIG_DEBUG_BINFMT)
+#if defined(CONFIG_DEBUG_INFO) && defined(CONFIG_DEBUG_BINFMT)
 static void dldump_loadinfo(FAR struct mod_loadinfo_s *loadinfo)
 {
   int i;
@@ -101,34 +98,18 @@ static void dldump_loadinfo(FAR struct mod_loadinfo_s *loadinfo)
           binfo("  sh_entsize:   %d\n",   shdr->sh_entsize);
         }
     }
-
-  if (loadinfo->phdr && loadinfo->ehdr.e_phnum > 0)
-    {
-      for (i = 0; i < loadinfo->ehdr.e_phnum; i++)
-        {
-          FAR Elf32_Phdr *phdr = &loadinfo->phdr[i];
-          binfo("Program Header %d:\n", i);
-          binfo("  p_type:       %08x\n", phdr->p_type);
-          binfo("  p_offset:     %08x\n", phdr->p_offset);
-          binfo("  p_vaddr:      %08x\n", phdr->p_vaddr);
-          binfo("  p_paddr:      %08x\n", phdr->p_paddr);
-          binfo("  p_filesz:     %08x\n", phdr->p_filesz);
-          binfo("  p_memsz:      %08x\n", phdr->p_memsz);
-          binfo("  p_flags:      %08x\n", phdr->p_flags);
-          binfo("  p_align:      %08x\n", phdr->p_align);
-        }
-    }
 }
-#  else
-#    define dldump_loadinfo(i)
-#  endif
+#else
+# define dldump_loadinfo(i)
+#endif
 #endif
 
 /****************************************************************************
  * Name: dldump_initializer
  ****************************************************************************/
 
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MODLIB_DUMPBUFFER)
+#ifdef CONFIG_BUILD_PROTECTED
+#ifdef CONFIG_MODLIB_DUMPBUFFER
 static void dldump_initializer(mod_initializer_t initializer,
                                FAR struct mod_loadinfo_s *loadinfo)
 {
@@ -136,7 +117,8 @@ static void dldump_initializer(mod_initializer_t initializer,
                     MIN(loadinfo->textsize - loadinfo->ehdr.e_entry, 512));
 }
 #else
-#  define dldump_initializer(b,l)
+# define dldump_initializer(b,l)
+#endif
 #endif
 
 /****************************************************************************
@@ -179,9 +161,7 @@ static inline FAR void *dlinsert(FAR const char *filename)
   struct mod_loadinfo_s loadinfo;
   FAR struct module_s *modp;
   mod_initializer_t initializer;
-  void (**array)(void);
   int ret;
-  int i;
 
   binfo("Loading file: %s\n", filename);
 
@@ -196,15 +176,14 @@ static inline FAR void *dlinsert(FAR const char *filename)
   if (ret != 0)
     {
       serr("ERROR: Failed to initialize to load module: %d\n", ret);
-      goto errout_with_loadinfo;
+      goto errout_with_lock;
     }
 
   /* Allocate a module registry entry to hold the module data */
 
   modp = (FAR struct module_s *)lib_zalloc(sizeof(struct module_s));
-  if (modp == NULL)
+  if (ret != 0)
     {
-      ret = -ENOMEM;
       binfo("Failed to initialize for load of ELF program: %d\n", ret);
       goto errout_with_loadinfo;
     }
@@ -230,12 +209,11 @@ static inline FAR void *dlinsert(FAR const char *filename)
 
   /* Save the load information */
 
-  modp->textalloc = (FAR void *)loadinfo.textalloc;
-  modp->dataalloc = (FAR void *)loadinfo.datastart;
-  modp->dynamic   = (loadinfo.ehdr.e_type == ET_DYN);
+  modp->textalloc       = (FAR void *)loadinfo.textalloc;
+  modp->dataalloc       = (FAR void *)loadinfo.datastart;
 #if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MODULE)
-  modp->textsize  = loadinfo.textsize;
-  modp->datasize  = loadinfo.datasize;
+  modp->textsize    = loadinfo.textsize;
+  modp->datasize    = loadinfo.datasize;
 #endif
 
   /* Get the module initializer entry point */
@@ -249,37 +227,11 @@ static inline FAR void *dlinsert(FAR const char *filename)
 
   /* Call the module initializer */
 
-  switch (loadinfo.ehdr.e_type)
+  ret = initializer(&modp->modinfo);
+  if (ret < 0)
     {
-      case ET_REL :
-          ret = initializer(&modp->modinfo);
-          if (ret < 0)
-            {
-              binfo("Failed to initialize the module: %d\n", ret);
-              goto errout_with_load;
-            }
-          break;
-      case ET_DYN :
-
-          /* Process any preinit_array entries */
-
-          array = (void (**)(void)) loadinfo.preiarr;
-          for (i = 0; i < loadinfo.nprei; i++)
-            {
-              array[i]();
-            }
-
-          /* Process any init_array entries */
-
-          array = (void (**)(void)) loadinfo.initarr;
-          for (i = 0; i < loadinfo.ninit; i++)
-            {
-              array[i]();
-            }
-
-          modp->finiarr = loadinfo.finiarr;
-          modp->nfini = loadinfo.nfini;
-          break;
+      binfo("Failed to initialize the module: %d\n", ret);
+      goto errout_with_load;
     }
 
   /* Add the new module entry to the registry */
@@ -288,7 +240,7 @@ static inline FAR void *dlinsert(FAR const char *filename)
 
   modlib_uninitialize(&loadinfo);
   modlib_registry_unlock();
-  return modp;
+  return (FAR void *)modp;
 
 errout_with_load:
   modlib_unload(&loadinfo);
@@ -297,6 +249,7 @@ errout_with_registry_entry:
   lib_free(modp);
 errout_with_loadinfo:
   modlib_uninitialize(&loadinfo);
+errout_with_lock:
   modlib_registry_unlock();
   set_errno(-ret);
   return NULL;
@@ -344,8 +297,7 @@ static inline FAR void *dlinsert(FAR const char *filename)
 
 static inline FAR void *dlinsert(FAR const char *filename)
 {
-  /* #warning Missing logic */
-
+#warning Missing logic
   return NULL;
 }
 #endif

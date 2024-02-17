@@ -29,13 +29,10 @@
 #include <nuttx/compiler.h>
 
 #ifdef CONFIG_ARCH_DEBUG_H
-#  include <arch/debug.h>
+# include <arch/debug.h>
 #endif
 #ifdef CONFIG_ARCH_CHIP_DEBUG_H
-#  include <arch/chip/debug.h>
-#endif
-#ifdef CONFIG_ARCH_BOARD_DEBUG_H
-#  include <arch/board/debug.h>
+# include <arch/chip/debug.h>
 #endif
 
 #include <syslog.h>
@@ -81,8 +78,7 @@
  *    really intended only for crash error reporting.
  */
 
-#if !defined(EXTRA_FMT) && !defined(EXTRA_ARG) && \
-    defined(CONFIG_HAVE_FUNCTIONNAME) && !defined(CONFIG_DEFAULT_SMALL)
+#if !defined(EXTRA_FMT) && !defined(EXTRA_ARG) && defined(CONFIG_HAVE_FUNCTIONNAME)
 #  define EXTRA_FMT "%s: "
 #  define EXTRA_ARG ,__FUNCTION__
 #endif
@@ -614,24 +610,6 @@
 #  define pwminfo     _none
 #endif
 
-#ifdef CONFIG_DEBUG_CAPTURE_ERROR
-#  define cperr       _err
-#else
-#  define cperr      _none
-#endif
-
-#ifdef CONFIG_DEBUG_CAPTURE_WARN
-#  define cpwarn     _warn
-#else
-#  define cpwarn     _none
-#endif
-
-#ifdef CONFIG_DEBUG_CAPTURE_INFO
-#  define cpinfo     _info
-#else
-#  define cpinfo     _none
-#endif
-
 #ifdef CONFIG_DEBUG_RC_ERROR
 #  define rcerr        _err
 #else
@@ -648,42 +626,6 @@
 #  define rcinfo      _info
 #else
 #  define rcinfo      _none
-#endif
-
-#ifdef CONFIG_DEBUG_REGMAP_ERROR
-#  define regmaperr       _err
-#else
-#  define regmaperr      _none
-#endif
-
-#ifdef CONFIG_DEBUG_REGMAP_WARN
-#  define regmapwarn     _warn
-#else
-#  define regmapwarn     _none
-#endif
-
-#ifdef CONFIG_DEBUG_REGMAP_INFO
-#  define regmapinfo     _info
-#else
-#  define regmapinfo     _none
-#endif
-
-#ifdef CONFIG_DEBUG_RMT_ERROR
-#  define rmterr        _err
-#else
-#  define rmterr       _none
-#endif
-
-#ifdef CONFIG_DEBUG_RMT_WARN
-#  define rmtwarn      _warn
-#else
-#  define rmtwarn      _none
-#endif
-
-#ifdef CONFIG_DEBUG_RMT_INFO
-#  define rmtinfo      _info
-#else
-#  define rmtinfo      _none
 #endif
 
 #ifdef CONFIG_DEBUG_RTC_ERROR
@@ -830,24 +772,6 @@
 #  define mtrinfo     _none
 #endif
 
-#ifdef CONFIG_DEBUG_STEPPER_ERROR
-#  define stperr      _err
-#else
-#  define stperr      _none
-#endif
-
-#ifdef CONFIG_DEBUG_STEPPER_WARN
-#  define stpwarn     _warn
-#else
-#  define stpwarn     _none
-#endif
-
-#ifdef CONFIG_DEBUG_STEPPER_INFO
-#  define stpinfo     _info
-#else
-#  define stpinfo     _none
-#endif
-
 #ifdef CONFIG_DEBUG_VIDEO_ERROR
 #  define verr        _err
 #else
@@ -884,78 +808,6 @@
 #  define vrtinfo     _none
 #endif
 
-#ifdef CONFIG_DEBUG_RESET_ERROR
-#  define rsterr       _err
-#else
-#  define rsterr      _none
-#endif
-
-#ifdef CONFIG_DEBUG_RESET_WARN
-#  define rstwarn     _warn
-#else
-#  define rstwarn     _none
-#endif
-
-#ifdef CONFIG_DEBUG_RESET_INFO
-#  define rstinfo     _info
-#else
-#  define rstinfo     _none
-#endif
-
-#ifdef CONFIG_DEBUG_IPC_ERROR
-#  define ipcerr       _err
-#else
-#  define ipcerr      _none
-#endif
-
-#ifdef CONFIG_DEBUG_IPC_WARN
-#  define ipcwarn     _warn
-#else
-#  define ipcwarn     _none
-#endif
-
-#ifdef CONFIG_DEBUG_IPC_INFO
-#  define ipcinfo     _info
-#else
-#  define ipcinfo     _none
-#endif
-
-#ifdef CONFIG_DEBUG_PCI_ERROR
-#  define pcierr       _err
-#else
-#  define pcierr      _none
-#endif
-
-#ifdef CONFIG_DEBUG_PCI_WARN
-#  define pciwarn     _warn
-#else
-#  define pciwarn     _none
-#endif
-
-#ifdef CONFIG_DEBUG_PCI_INFO
-#  define pciinfo     _info
-#else
-#  define pciinfo     _none
-#endif
-
-#ifdef CONFIG_DEBUG_RPMSG_ERROR
-#  define rpmsgerr       _err
-#else
-#  define rpmsgerr      _none
-#endif
-
-#ifdef CONFIG_DEBUG_RPMSG_WARN
-#  define rpmsgwarn     _warn
-#else
-#  define rpmsgwarn     _none
-#endif
-
-#ifdef CONFIG_DEBUG_RPMSG_INFO
-#  define rpmsginfo     _info
-#else
-#  define rpmsginfo     _none
-#endif
-
 /* Buffer dumping macros do not depend on varargs */
 
 #ifdef CONFIG_DEBUG_ERROR
@@ -963,12 +815,12 @@
 #  ifdef CONFIG_DEBUG_INFO
 #    define infodumpbuffer(m,b,n) lib_dumpbuffer(m,b,n)
 #  else
-#    define infodumpbuffer(m,b,n)
+#   define infodumpbuffer(m,b,n)
 #  endif
 #else
-#    define errdumpbuffer(m,b,n)
-#    define infodumpbuffer(m,b,n)
-#  endif
+#  define errdumpbuffer(m,b,n)
+#  define infodumpbuffer(m,b,n)
+# endif
 
 /* Subsystem specific debug */
 
@@ -1226,14 +1078,6 @@
 #else
 #  define mtrerrdumpbuffer(m,b,n)
 #  define mtrinfodumpbuffer(m,b,n)
-#endif
-
-#ifdef CONFIG_DEBUG_RESET
-#  define reseterrdumpbuffer(m,b,n)  errdumpbuffer(m,b,n)
-#  define resetinfodumpbuffer(m,b,n) infodumpbuffer(m,b,n)
-#else
-#  define reseterrdumpbuffer(m,b,n)
-#  define resetinfodumpbuffer(m,b,n)
 #endif
 
 /****************************************************************************

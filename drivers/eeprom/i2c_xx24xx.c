@@ -232,7 +232,7 @@ static const struct ee24xx_geom_s g_ee24xx_devices[] =
 
 /* Driver operations */
 
-static const struct file_operations g_ee24xx_fops =
+static const struct file_operations ee24xx_fops =
 {
   ee24xx_open,  /* open */
   ee24xx_close, /* close */
@@ -243,7 +243,7 @@ static const struct file_operations g_ee24xx_fops =
 };
 
 #ifdef CONFIG_AT24CS_UUID
-static const struct file_operations g_at24cs_uuid_fops =
+static const struct file_operations at24cs_uuid_fops =
 {
   ee24xx_open,      /* piggyback on the ee24xx_open */
   ee24xx_close,     /* piggyback on the ee24xx_close */
@@ -345,8 +345,8 @@ static int ee24xx_open(FAR struct file *filep)
   FAR struct ee24xx_dev_s *eedev;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee24xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -382,8 +382,8 @@ static int ee24xx_close(FAR struct file *filep)
   FAR struct ee24xx_dev_s *eedev;
   int ret = OK;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee24xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -422,8 +422,8 @@ static off_t ee24xx_seek(FAR struct file *filep, off_t offset, int whence)
   int                     ret;
   FAR struct inode        *inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee24xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -498,8 +498,8 @@ static ssize_t ee24xx_read(FAR struct file *filep, FAR char *buffer,
   uint32_t                 addr_hi;
   int                      ret;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee24xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -577,8 +577,8 @@ static ssize_t at24cs_read_uuid(FAR struct file *filep, FAR char *buffer,
   uint8_t                  regindx;
   int                      ret;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee24xx_dev_s *)inode->i_private;
 
   ret = nxmutex_lock(&eedev->lock);
   if (ret < 0)
@@ -653,8 +653,8 @@ static ssize_t ee24xx_write(FAR struct file *filep, FAR const char *buffer,
   int                      ret   = -EACCES;
   int                      savelen;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee24xx_dev_s *)inode->i_private;
 
   if (eedev->readonly)
     {
@@ -779,8 +779,8 @@ static int ee24xx_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct inode        *inode = filep->f_inode;
   int                      ret   = 0;
 
-  DEBUGASSERT(inode->i_private);
-  eedev = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  eedev = (FAR struct ee24xx_dev_s *)inode->i_private;
   UNUSED(eedev);
 
   switch (cmd)
@@ -891,7 +891,7 @@ int ee24xx_initialize(FAR struct i2c_master_s *bus, uint8_t devaddr,
 
   strlcpy(uuidname, devname, size);
   strlcat(uuidname, ".uuid", size);
-  ret = register_driver(uuidname, &g_at24cs_uuid_fops, 0444, eedev);
+  ret = register_driver(uuidname, &at24cs_uuid_fops, 0444, eedev);
 
   kmm_free(uuidname);
 
@@ -902,5 +902,5 @@ int ee24xx_initialize(FAR struct i2c_master_s *bus, uint8_t devaddr,
     }
 #endif
 
-  return register_driver(devname, &g_ee24xx_fops, 0666, eedev);
+  return register_driver(devname, &ee24xx_fops, 0666, eedev);
 }

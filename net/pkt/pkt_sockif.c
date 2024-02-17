@@ -190,7 +190,8 @@ static void pkt_addref(FAR struct socket *psock)
 {
   FAR struct pkt_conn_s *conn;
 
-  DEBUGASSERT(psock->s_type == SOCK_RAW || psock->s_type == SOCK_CTRL);
+  DEBUGASSERT(psock != NULL && psock->s_conn != NULL &&
+              (psock->s_type == SOCK_RAW || psock->s_type == SOCK_CTRL));
 
   conn = psock->s_conn;
   DEBUGASSERT(conn->crefs > 0 && conn->crefs < 255);
@@ -235,7 +236,7 @@ static int pkt_bind(FAR struct socket *psock,
 
   if (psock->s_type == SOCK_RAW || psock->s_type == SOCK_CTRL)
     {
-      FAR struct pkt_conn_s *conn = psock->s_conn;
+      FAR struct pkt_conn_s *conn = (FAR struct pkt_conn_s *)psock->s_conn;
       FAR struct net_driver_s *dev;
 
       /* Look at the addr and identify the network interface */

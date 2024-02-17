@@ -55,11 +55,19 @@ extern "C"
 #define PERIPHS_SPI_FLASH_C7                  SPI_W7_REG(1)
 #define PERIPHS_SPI_FLASH_TX_CRC              SPI_TX_CRC_REG(1)
 
-#define SPI1_R_QIO_DUMMY_CYCLELEN             5
-#define SPI1_R_QIO_ADDR_BITSLEN               23
+#define SPI0_R_QIO_DUMMY_CYCLELEN             3
+#define SPI0_R_QIO_ADDR_BITSLEN               31
+#define SPI0_R_FAST_DUMMY_CYCLELEN            7
+#define SPI0_R_DIO_DUMMY_CYCLELEN             1
+#define SPI0_R_DIO_ADDR_BITSLEN               27
+#define SPI0_R_FAST_ADDR_BITSLEN              23
+#define SPI0_R_SIO_ADDR_BITSLEN               23
+
+#define SPI1_R_QIO_DUMMY_CYCLELEN             3
+#define SPI1_R_QIO_ADDR_BITSLEN               31
 #define SPI1_R_FAST_DUMMY_CYCLELEN            7
 #define SPI1_R_DIO_DUMMY_CYCLELEN             3
-#define SPI1_R_DIO_ADDR_BITSLEN               23
+#define SPI1_R_DIO_ADDR_BITSLEN               31
 #define SPI1_R_FAST_ADDR_BITSLEN              23
 #define SPI1_R_SIO_ADDR_BITSLEN               23
 
@@ -81,8 +89,8 @@ extern "C"
 #define ESP_ROM_SPIFLASH_BP0                  BIT2
 #define ESP_ROM_SPIFLASH_BP1                  BIT3
 #define ESP_ROM_SPIFLASH_BP2                  BIT4
-#define ESP_ROM_SPIFLASH_WR_PROTECT           (ESP_ROM_SPIFLASH_BP0 | \
-                                               ESP_ROM_SPIFLASH_BP1 | \
+#define ESP_ROM_SPIFLASH_WR_PROTECT           (ESP_ROM_SPIFLASH_BP0|\
+                                               ESP_ROM_SPIFLASH_BP1|\
                                                ESP_ROM_SPIFLASH_BP2)
 #define ESP_ROM_SPIFLASH_QE                   BIT9
 
@@ -105,12 +113,7 @@ typedef enum
     ESP_ROM_SPIFLASH_DIO_MODE,
     ESP_ROM_SPIFLASH_DOUT_MODE,
     ESP_ROM_SPIFLASH_FASTRD_MODE,
-    ESP_ROM_SPIFLASH_SLOWRD_MODE,
-    ESP_ROM_SPIFLASH_OPI_STR_MODE,
-    ESP_ROM_SPIFLASH_OPI_DTR_MODE,
-    ESP_ROM_SPIFLASH_OOUT_MODE,
-    ESP_ROM_SPIFLASH_OIO_STR_MODE,
-    ESP_ROM_SPIFLASH_OIO_DTR_MODE,
+    ESP_ROM_SPIFLASH_SLOWRD_MODE
 } esp_rom_spiflash_read_mode_t;
 
 typedef enum
@@ -140,7 +143,9 @@ typedef struct
     uint16_t data;
 } esp_rom_spiflash_common_cmd_t;
 
-/* Global ROM spiflash data, as used by legacy SPI flash functions */
+/**
+ * Global ROM spiflash data, as used by legacy SPI flash functions
+ */
 
 struct spiflash_legacy_data_s
 {
@@ -149,7 +154,8 @@ struct spiflash_legacy_data_s
   uint8_t sig_matrix;
 };
 
-/* Structure holding SPI flash access critical sections management functions.
+/**
+ * Structure holding SPI flash access critical sections management functions.
  *
  * Flash API uses two types of functions for flash access management:
  * 1) Functions which prepare/restore flash cache and interrupts before
@@ -180,9 +186,9 @@ struct spiflash_legacy_data_s
  * use OS primitives or even does not need them (multithreaded access is
  * not possible).
  *
- * Note Structure and corresponding guard functions should not reside
- *      in flash. For example structure can be placed in DRAM and functions
- *      in IRAM sections.
+ * @note Structure and corresponding guard functions should not reside
+ *       in flash. For example structure can be placed in DRAM and functions
+ *       in IRAM sections.
  */
 
 struct spiflash_guard_funcs
@@ -1005,7 +1011,7 @@ void spi_flash_enable_cache(uint32_t cpuid);
  * Public Data
  *****************************************************************************/
 
-extern struct spiflash_legacy_data_s *rom_spiflash_legacy_data;
+extern const struct spiflash_legacy_data_s *rom_spiflash_legacy_data;
 
 #ifdef __cplusplus
 }

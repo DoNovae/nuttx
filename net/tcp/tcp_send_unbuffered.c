@@ -126,7 +126,6 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
 {
   FAR struct send_s *pstate = pvpriv;
   FAR struct tcp_conn_s *conn;
-  int ret;
 
   DEBUGASSERT(pstate != NULL);
 
@@ -284,12 +283,8 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
        * happen until the polling cycle completes).
        */
 
-      ret = devif_send(dev, &pstate->snd_buffer[pstate->snd_acked],
-                       sndlen, tcpip_hdrsize(conn));
-      if (ret <= 0)
-        {
-          goto end_wait;
-        }
+      devif_send(dev, &pstate->snd_buffer[pstate->snd_acked],
+                 sndlen, tcpip_hdrsize(conn));
 
       /* Continue waiting */
 
@@ -370,11 +365,11 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
            * happen until the polling cycle completes).
            */
 
-          ret = devif_send(dev, &pstate->snd_buffer[pstate->snd_sent],
-                           sndlen, tcpip_hdrsize(conn));
-          if (ret <= 0)
+          devif_send(dev, &pstate->snd_buffer[pstate->snd_sent],
+                     sndlen, tcpip_hdrsize(conn));
+          if (dev->d_sndlen == 0)
             {
-              goto end_wait;
+              return flags;
             }
 
           /* Update the amount of data sent (but not necessarily ACKed) */
@@ -490,7 +485,7 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
       goto errout;
     }
 
-  conn = psock->s_conn;
+  conn = (FAR struct tcp_conn_s *)psock->s_conn;
 
   /* Check early if this is an un-connected socket, if so, then
    * return -ENOTCONN. Note, we will have to check this again, as we can't
@@ -508,7 +503,9 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
 
 #if defined(CONFIG_NET_ARP_SEND) || defined(CONFIG_NET_ICMPv6_NEIGHBOR)
 #ifdef CONFIG_NET_ARP_SEND
+#ifdef CONFIG_NET_ICMPv6_NEIGHBOR
   if (psock->s_domain == PF_INET)
+#endif
     {
       /* Make sure that the IP address mapping is in the ARP table */
 
@@ -517,11 +514,13 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
 #endif /* CONFIG_NET_ARP_SEND */
 
 #ifdef CONFIG_NET_ICMPv6_NEIGHBOR
-  if (psock->s_domain == PF_INET6)
+#ifdef CONFIG_NET_ARP_SEND
+  else
+#endif
     {
       /* Make sure that the IP address mapping is in the Neighbor Table */
 
-      ret = icmpv6_neighbor(NULL, conn->u.ipv6.raddr);
+      ret = icmpv6_neighbor(conn->u.ipv6.raddr);
     }
 #endif /* CONFIG_NET_ICMPv6_NEIGHBOR */
 

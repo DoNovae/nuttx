@@ -201,7 +201,7 @@ static int tsc2007_poll(FAR struct file *filep, struct pollfd *fds,
 
 /* This the vtable that supports the character driver interface */
 
-static const struct file_operations g_tsc2007_fops =
+static const struct file_operations tsc2007_fops =
 {
   tsc2007_open,    /* open */
   tsc2007_close,   /* close */
@@ -269,7 +269,7 @@ static int tsc2007_sample(FAR struct tsc2007_dev_s *priv,
   irqstate_t flags;
   int ret = -EAGAIN;
 
-  /* Interrupts must be disabled when this is called to (1) prevent posting
+  /* Interrupts me be disabled when this is called to (1) prevent posting
    * of semaphores from interrupt handlers, and (2) to prevent sampled data
    * from changing until it has been reported.
    */
@@ -323,7 +323,7 @@ static int tsc2007_waitsample(FAR struct tsc2007_dev_s *priv,
   irqstate_t flags;
   int ret;
 
-  /* Interrupts must be disabled when this is called to (1) prevent posting
+  /* Interrupts me be disabled when this is called to (1) prevent posting
    * of semaphores from interrupt handlers, and (2) to prevent sampled data
    * from changing until it has been reported.
    *
@@ -331,6 +331,7 @@ static int tsc2007_waitsample(FAR struct tsc2007_dev_s *priv,
    * from getting control while we muck with the semaphores.
    */
 
+  sched_lock();
   flags = enter_critical_section();
 
   /* Now release the semaphore that manages mutually exclusive access to
@@ -373,6 +374,14 @@ errout:
    */
 
   leave_critical_section(flags);
+
+  /* Restore pre-emption.  We might get suspended here but that is okay
+   * because we already have our sample.  Note:  this means that if there
+   * were two threads reading from the TSC2007 for some reason, the data
+   * might be read out of order.
+   */
+
+  sched_unlock();
   return ret;
 }
 
@@ -531,10 +540,6 @@ static void tsc2007_worker(FAR void *arg)
   uint32_t                     pressure; /* Measured pressure */
 
   DEBUGASSERT(priv != NULL);
-
-  /* Get exclusive access to the driver data structure */
-
-  nxmutex_lock(&priv->devlock);
 
   /* Get a pointer the callbacks for convenience (and so the code is not so
    * ugly).
@@ -710,7 +715,6 @@ static void tsc2007_worker(FAR void *arg)
 
 errout:
   config->enable(config, true);
-  nxmutex_unlock(&priv->devlock);
 }
 
 /****************************************************************************
@@ -776,10 +780,11 @@ static int tsc2007_open(FAR struct file *filep)
   uint8_t                   tmp;
   int                       ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct tsc2007_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -828,10 +833,11 @@ static int tsc2007_close(FAR struct file *filep)
   FAR struct tsc2007_dev_s *priv;
   int                       ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct tsc2007_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -870,10 +876,11 @@ static ssize_t tsc2007_read(FAR struct file *filep, FAR char *buffer,
   struct tsc2007_sample_s    sample;
   int                        ret;
 
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct tsc2007_dev_s *)inode->i_private;
 
   /* Verify that the caller has provided a buffer large enough to receive
    * the touch data.
@@ -1000,10 +1007,11 @@ static int tsc2007_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   int                       ret;
 
   iinfo("cmd: %d arg: %ld\n", cmd, arg);
+  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct tsc2007_dev_s *)inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
@@ -1018,7 +1026,7 @@ static int tsc2007_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   switch (cmd)
     {
-      case TSIOC_SETXRCAL:  /* arg: Pointer to int calibration value */
+      case TSIOC_SETCALIB:  /* arg: Pointer to int calibration value */
         {
           FAR int *ptr = (FAR int *)((uintptr_t)arg);
           DEBUGASSERT(priv->config != NULL && ptr != NULL);
@@ -1026,7 +1034,7 @@ static int tsc2007_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         }
         break;
 
-      case TSIOC_GETXRCAL:  /* arg: Pointer to int calibration value */
+      case TSIOC_GETCALIB:  /* arg: Pointer to int calibration value */
         {
           FAR int *ptr = (FAR int *)((uintptr_t)arg);
           DEBUGASSERT(priv->config != NULL && ptr != NULL);
@@ -1072,11 +1080,11 @@ static int tsc2007_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int                       i;
 
   iinfo("setup: %d\n", (int)setup);
-  DEBUGASSERT(fds);
+  DEBUGASSERT(filep && fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode->i_private);
-  priv  = inode->i_private;
+  DEBUGASSERT(inode && inode->i_private);
+  priv  = (FAR struct tsc2007_dev_s *)inode->i_private;
 
   /* Are we setting up the poll?  Or tearing it down? */
 
@@ -1120,8 +1128,8 @@ static int tsc2007_poll(FAR struct file *filep, FAR struct pollfd *fds,
       if (i >= CONFIG_TSC2007_NPOLLWAITERS)
         {
           ierr("ERROR: No available slot found: %d\n", i);
-          fds->priv = NULL;
-          ret       = -EBUSY;
+          fds->priv    = NULL;
+          ret          = -EBUSY;
           goto errout;
         }
 
@@ -1129,7 +1137,7 @@ static int tsc2007_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (priv->penchange)
         {
-          poll_notify(&fds, 1, POLLIN);
+          tsc2007_notify(priv);
         }
     }
   else if (fds->priv)
@@ -1141,8 +1149,8 @@ static int tsc2007_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       /* Remove all memory of the poll setup */
 
-      *slot     = NULL;
-      fds->priv = NULL;
+      *slot                = NULL;
+      fds->priv            = NULL;
     }
 
 errout:
@@ -1245,7 +1253,7 @@ int tsc2007_register(FAR struct i2c_master_s *dev,
   snprintf(devname, sizeof(devname), DEV_FORMAT, minor);
   iinfo("Registering %s\n", devname);
 
-  ret = register_driver(devname, &g_tsc2007_fops, 0666, priv);
+  ret = register_driver(devname, &tsc2007_fops, 0666, priv);
   if (ret < 0)
     {
       ierr("ERROR: register_driver() failed: %d\n", ret);

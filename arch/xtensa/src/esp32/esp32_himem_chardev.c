@@ -70,9 +70,9 @@ static struct file *g_mapped_filep; /* for multi device */
 
 static int himem_chardev_open(struct file *filep)
 {
-  struct himem_chardev_priv_s *priv =
-    kmm_malloc(sizeof(struct himem_chardev_priv_s));
+  struct himem_chardev_priv_s *priv;
 
+  priv = kmm_malloc(sizeof(struct himem_chardev_priv_s));
   if (priv == NULL)
     {
        merr("Failed to malloc.\n");
@@ -233,7 +233,7 @@ static int himem_chardev_ioctl(struct file *filep,
   return 0;
 }
 
-static const struct file_operations g_fops =
+static const struct file_operations fops =
 {
   .open = himem_chardev_open,
   .close = himem_chardev_close,
@@ -296,8 +296,8 @@ int himem_chardev_exit(void)
 int himem_chardev_register(char *name, size_t size)
 {
   int ret = 0;
-  struct himem_chardev_s *dev =
-    kmm_malloc(sizeof(struct himem_chardev_s));
+  struct himem_chardev_s *dev;
+  dev = (struct himem_chardev_s *)kmm_malloc(sizeof(struct himem_chardev_s));
   if (dev == NULL)
     {
       merr("Failed to malloc.\n");
@@ -314,7 +314,7 @@ int himem_chardev_register(char *name, size_t size)
 
   dev->size = size;
 
-  strlcpy(dev->name, name, 32);
+  strncpy(dev->name, name, 32);
   ret = esp_himem_alloc(dev->size, &dev->mem_handle);
   if (ret != 0)
     {
@@ -323,7 +323,7 @@ int himem_chardev_register(char *name, size_t size)
       return ret;
     }
 
-  ret = register_driver(dev->name, &g_fops, 0666, dev);
+  ret = register_driver(dev->name, &fops, 0666, dev);
   if (ret != 0)
     {
       merr("Failed to register driver. dev=%s\n", dev->name);

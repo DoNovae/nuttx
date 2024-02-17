@@ -50,7 +50,6 @@
 #include <nuttx/clock.h>
 #include <nuttx/net/enc28j60.h>
 #include <nuttx/net/net.h>
-#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
@@ -1898,9 +1897,11 @@ static int enc_ifup(struct net_driver_s *dev)
   FAR struct enc_driver_s *priv = (FAR struct enc_driver_s *)dev->d_private;
   int ret;
 
-  ninfo("Bringing up: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Bringing up: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 
   /* Lock the SPI bus so that we have exclusive access */
 
@@ -1965,9 +1966,11 @@ static int enc_ifdown(struct net_driver_s *dev)
   irqstate_t flags;
   int ret;
 
-  ninfo("Taking down: %u.%u.%u.%u\n",
-        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
-        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
+  ninfo("Taking down: %d.%d.%d.%d\n",
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 
   /* Lock the SPI bus so that we have exclusive access */
 
@@ -2081,12 +2084,12 @@ static int enc_addmac(struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
-  /* #warning "Multicast MAC support not implemented" */
+#warning "Multicast MAC support not implemented"
 
   /* Un-lock the SPI bus */
 
   enc_unlock(priv);
-  return -ENOSYS;
+  return OK;
 }
 #endif
 
@@ -2119,12 +2122,12 @@ static int enc_rmmac(struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
-  /* #warning "Multicast MAC support not implemented" */
+#warning "Multicast MAC support not implemented"
 
   /* Un-lock the SPI bus */
 
   enc_unlock(priv);
-  return -ENOSYS;
+  return OK;
 }
 #endif
 

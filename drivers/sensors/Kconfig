@@ -18,18 +18,11 @@ config USENSOR
 		Allow application to register user sensor by /dev/usensor.
 
 config SENSORS_RPMSG
-	bool "Sensor RPMSG Support"
+	bool "Sensor rpmsg Support"
 	default n
 	depends on RPTUN
 	---help---
-		Allow application to read or control remote sensor device by RPMSG.
-
-config SENSORS_GPS
-	bool "GPS Support"
-	default n
-	depends on GPSUTILS_MINMEA_LIB
-	---help---
-		Allow application to use gps by /dev/uorb/gps or /dev/ttyGPS
+		Allow application to read or control remote sensor device by rpmsg.
 
 config SENSORS_WTGAHRS2
 	bool "Wtgahrs2 Sensor Support"
@@ -41,7 +34,6 @@ config SENSORS_WTGAHRS2
 
 config SENSORS_FAKESENSOR
 	bool "Fake Sensor Support"
-	depends on SENSORS_GPS
 	default n
 	---help---
 		Simulate physical sensor by reading data from csv file.
@@ -56,15 +48,6 @@ config SENSORS_FAKESENSOR
 		2.1234,3.23443,2.23456
 		...
 
-config SENSORS_GOLDFISH_GPS
-	bool "Goldfish GPS Support"
-	depends on SENSORS_GPS
-	default n
-
-config SENSORS_GOLDFISH_SENSOR
-	bool "Goldfish SENSORS Support"
-	default n
-
 config SENSORS_APDS9960
 	bool "Avago APDS-9960 Gesture Sensor support"
 	default n
@@ -76,32 +59,6 @@ config APDS9960_I2C_FREQUENCY
 	int "APDS-9960 I2C frequency"
 	default 400000
 	depends on SENSORS_APDS9960
-
-config SENSORS_APDS9922
-	bool "Broadcom APDS-9922 Proximity and Ambient Light Sensor"
-	default n
-	select I2C
-	---help---
-		Enable driver support for the Broadcom APDS-9922 proximity and ambient light sensor.
-
-config APDS9922_I2C_FREQUENCY
-	int "APDS-9922 I2C frequency"
-	default 400000
-	depends on SENSORS_APDS9922
-
-config APDS9922_ALS_NPOLLWAITERS
-	int "APDS-9922 - number of ALS poll waiters"
-	default 2
-	depends on SENSORS_APDS9922
-	---help---
-		Sets the number of poll waiters for the ambient light sensor
-
-config APDS9922_PS_NPOLLWAITERS
-	int "APDS-9922 - number of PS poll waiters"
-	default 2
-	depends on SENSORS_APDS9922
-	---help---
-		Sets the number of poll waiters for the proximity sensor
 
 config SENSORS_AK09912
 	bool "Asahi AK09911/AK09912 Compass Sensor"
@@ -134,13 +91,6 @@ config SENSORS_AS726X
 	---help---
 		Enable driver support for the AS726X Spectral Sensor.
 
-config SENSORS_BH1749NUC
-	bool "Rohm BH1749NUC Color Sensor support"
-	default n
-	select I2C
-	---help---
-		Enable driver support for the Rohm BH1749NUC color sensor.
-
 config SENSORS_BH1750FVI
 	bool "Rohm BH1750FVI Ambient Light Sensor support"
 	default n
@@ -170,13 +120,6 @@ config SENSORS_BMI160
 
 if SENSORS_BMI160
 
-config SENSORS_BMI160_UORB
-	bool "BMI160 UORB Interface"
-	default n
-	---help---
-		Enables Work with the UORB or Character Device interface.
-		If not set, the Character Device is used by default.
-
 choice
 	prompt "BMI160 Interface"
 	default SENSORS_BMI160_SPI
@@ -193,7 +136,7 @@ config SENSORS_BMI160_SPI
 	---help---
 		Enables support for the SPI interface
 
-endchoice # BMI160 Interface
+endchoice
 
 choice
 	prompt "I2C Address"
@@ -203,53 +146,15 @@ config BMI160_I2C_ADDR_68
 	bool "0x68"
 	---help---
 		Default address.
-		If SDO pin is pulled to GND, use 0x68
+		If SDO pin is pulled to VDDIO, use 0x69
 
 config BMI160_I2C_ADDR_69
 	bool "0x69"
 	---help---
 		If SDO pin is pulled to VDDIO, use 0x69
 
-endchoice # I2C Address
-
-endif # SENSORS_BMI160
-
-config SENSORS_BMI270
-	bool "Bosch BMI270 Inertial Measurement Sensor support"
-	default n
-	---help---
-		Enable driver support for the Bosch BMI270 Inertial
-		Measurement sensor
-
-if SENSORS_BMI270
-
-choice
-	prompt "BMI270 Interface"
-	default SENSORS_BMI270_SPI
-
-config SENSORS_BMI270_I2C
-	bool "BMI270 I2C Interface"
-	select I2C
-	---help---
-		Enables support for the I2C interface
-
-config SENSORS_BMI270_SPI
-	bool "BMI270 SPI Interface"
-	select SPI
-	---help---
-		Enables support for the SPI interface
-
-endchoice # BMI270 Interface
-
-config SENSORS_BMI270_LOAD_FROM_HEAP
-	bool "BMI270 config loading from heap memory"
-	default ARCH_DMA_NO_FLASH_TRANSFER
-	---help---
-		Enable support to load the configuration data from heap memory.
-		Some chips can not do DMA transfer from FLASH and therefore
-		it is necessary to transfer the configuration file to RAM.
-
-endif # SENSORS_BMI270
+endchoice
+endif
 
 config SENSORS_BMP180
 	bool "Bosch BMP180 Barometer Sensor support"
@@ -258,22 +163,12 @@ config SENSORS_BMP180
 	---help---
 		Enable driver support for the Bosch BMP180 barometer sensor.
 
-if SENSORS_BMP180
-
-config SENSORS_BMP180_UORB
-	bool "BMP180 UORB Interface"
-	---help---
-		Enables work with the UORB or Character Device interface.
-		If not set, the Character Device is used by default.
-
-endif #SENSORS_BMP180
-
 config SENSORS_BMP280
-	bool "Bosch BMP280 Barometric Pressure Sensor"
+	bool "Bosch BMP280 Barometic Pressure Sensor"
 	default n
 	select I2C
 	---help---
-		Enable driver for the Bosch BMP280 barometric pressure sensor.
+		Enable driver for the Bosch BMP280 barometic pressure sensor.
 
 if SENSORS_BMP280
 
@@ -282,62 +177,6 @@ config BMP280_I2C_FREQUENCY
 	default 400000
 
 endif # SENSORS_BMP280
-
-config SENSORS_BME680
-	bool "Bosch BME680 Temperature, Gas, Humidity and Pressure Sensor"
-	default n
-	select I2C
-	---help---
-		Enable driver for the Bosch BME680 sensor.
-
-config BME680_I2C_FREQUENCY
-	int "BME680 I2C frequency"
-	depends on SENSORS_BME680
-	default 400000
-
-config BME680_DISABLE_PRESS_MEAS
-	bool "Disable Pressure Measurement"
-	depends on SENSORS_BME680
-	default n
-	---help---
-		If enabled, the sensor will not measure pressure.
-
-config BME680_DISABLE_HUM_MEAS
-	bool "Disable Humidity Measurement"
-	depends on SENSORS_BME680
-	default n
-	---help---
-		If enabled, the sensor will not measure humidity.
-
-config BME680_DISABLE_GAS_MEAS
-	bool "Disable Gas Measurement"
-	depends on SENSORS_BME680
-	default n
-	---help---
-		If enabled, the sensor will not measure gas.
-
-config BME680_ENABLE_IIR_FILTER
-	bool "Enable IIR Filter"
-	depends on SENSORS_BME680
-	default n
-	---help---
-		Enable IIR filtering for temperature and pressure
-		measurements.
-
-config SENSORS_BME680_POLL_INTERVAL
-	int "Polling interval in microseconds, default 3 sec"
-	depends on SENSORS_BME680
-	default 3000000
-	range 0 4294967295
-	---help---
-		The interval until a new sensor measurement will be triggered.
-
-config SENSORS_BME680_THREAD_STACKSIZE
-	int "Worker thread stack size"
-	depends on SENSORS_BME680
-	default 1024
-	---help---
-		The stack size for the worker thread.
 
 config SENSORS_DHTXX
 	bool "DHTxx humidity/temperature Sensor support"
@@ -582,7 +421,7 @@ config LSM303AGR_I2C_FREQUENCY
 	int "LSM303AGR I2C frequency"
 	default 400000
 	range 1 400000
-	depends on SENSORS_LSM303AGR
+	depends on SN_LSM303AGR
 
 config SENSORS_LSM6DSL
 	bool "STMicro LSM6DSL support"
@@ -596,7 +435,7 @@ config LSM6DSL_I2C_FREQUENCY
 	int "LSM6DSL I2C frequency"
 	default 400000
 	range 1 400000
-	depends on SENSORS_LSM6DSL
+	depends on SN_LSM6DSL
 
 config SENSORS_LSM9DS1
 	bool "STMicro LSM9DS1 support"
@@ -616,7 +455,7 @@ config LSM9DS1_I2C_FREQUENCY
 	int "LSM9DS1 I2C frequency"
 	default 400000
 	range 1 400000
-	depends on SENSORS_LSM9DS1
+	depends on SN_LSM9DS1
 
 config SENSORS_LPS25H
 	bool "STMicro LPS25H pressure sensor"
@@ -722,8 +561,7 @@ config MLX90614_CRC
 	---help---
 		Enable checking of CRC-8 (PEC field) checking to guarantee that
 		read data is valid.
-
-endif # SENSORS_MLX90614
+endif
 
 config SENSORS_MCP9844
 	bool "MCP9844 Temperature Sensor"
@@ -738,54 +576,45 @@ config MCP9844_I2C_FREQUENCY
 	range 1 400000
 	depends on SENSORS_MCP9844
 
-config SENSORS_MS56XX
-	bool "MS56XX Barometric Pressure Sensor support"
+config SENSORS_MS5611
+	bool "MS5611 Barometric Pressure Sensor support"
 	default n
 	---help---
-		Enable driver support for MS5611 Barometric Pressure Sensor.
+		Enable driver support for MEAS MS5511 barometer.
 
-if SENSORS_MS56XX
+if SENSORS_MS5611
 
 choice
-	prompt "MS56XX Interface"
-	default MS56XX_I2C
+	prompt "MS5611 Interface"
+	default MS5611_I2C
 
-config MS56XX_I2C
-	bool "MS56XX I2C Interface"
+config MS5611_I2C
+	bool "MS5611 I2C Interface"
 	select I2C
 	---help---
 		Enables support for the I2C interface
 
-config MS56XX_SPI
-	bool "MS56XX SPI Interface"
+config MS5611_SPI
+	bool "MS5611 SPI Interface"
 	select SPI
 	---help---
 		Enables support for the SPI interface.
 
-endchoice # MS5611 Interface
+endchoice
 
-config MS56XX_SECOND_ORDER_COMPENSATE
-	bool "MS56XX second order compensation support"
-	default n
-	---help---
-		Enables second order compensation.
-		In order to obtain best accuracy over temperature range,
-		particularly in low temperature, it is recommended to
-		compensate the non-linearity over the temperature.
-
-config MS56XX_THREAD_STACKSIZE
+config MS5611_THREAD_STACKSIZE
 	int "Worker thread stack size"
 	default 1024
 	---help---
 		The stack size for the worker thread
 
-config MS56XX_I2C_FREQUENCY
-	int "MS56XX I2C frequency"
+config MS5611_I2C_FREQUENCY
+	int "MS5611 I2C frequency"
 	default 400000
 	range 1 400000
-	depends on MS56XX_I2C
+	depends on MS5611_I2C
 
-endif # SENSORS_MS56XX
+endif # SENSORS_MS5611
 
 config SENSORS_MS58XX
 	bool "MEAS MS58XX Altimeter support"
@@ -843,7 +672,7 @@ config ADXL345_I2C
 	---help---
 		Enables support for the I2C interface
 
-endchoice # ADXL345 Interface
+endchoice
 
 config ADXL345_ACTIVELOW
 	bool "Active Low Interrupt"
@@ -894,7 +723,7 @@ config MPU60X0_I2C
 		Enables support for the I2C interface (MPU6000
 		or MPU6050, autodetected during driver initialization)
 
-endchoice # MPU60x0 Interface
+endchoice
 
 config MPU60X0_I2C_FREQ
 	int "MPU60x0 I2C Frequency"
@@ -962,110 +791,6 @@ config MPU60X0_ACCEL_AFS_SEL
 
 endif # SENSORS_MPU60X0
 
-config SENSORS_MPU9250
-	bool "Invensense MPU9250 Sensor support"
-	default n
-	---help---
-		Enable driver support for Invensense MPU9250 MotionTracker device.
-
-if SENSORS_MPU9250
-
-choice
-	prompt "MPU9250 Interface"
-	default MPU9250_SPI
-
-config MPU9250_SPI
-	bool "MPU9250 SPI Interface"
-	select SPI
-	---help---
-		Enables support for the SPI interface
-
-config MPU9250_I2C
-	bool "MPU9250 I2C Interface"
-	select I2C
-	---help---
-		Enables support for the I2C interface
-
-endchoice # MPU9250 Interface
-
-config MPU9250_I2C_FREQ
-	int "MPU9250 I2C Frequency"
-	depends on MPU9250_I2C
-	default 400000
-
-config MPU9250_MEASURE_FREQ
-	int "Default data output rate in Hz"
-	default 1000
-	---help---
-		Default data output rate in Hz
-
-config MPU9250_THREAD_STACKSIZE
-	int "Worker thread stack size"
-	default 1024
-	---help---
-		The stack size for the worker thread
-
-config MPU9250_EXT_SYNC_SET
-	int "MPU9250 frame sync bit position"
-	default 0
-	---help---
-		EXT_SYNC_SET[2..0]
-		EXT_SYNC_SET: frame sync bit position
-
-config MPU9250_DLPF_CFG
-	int "MPU9250 gyroscope and temperature low-pass filter setting"
-	default 1
-	---help---
-		DLPF_CFG[2..0]
-		DLPF_CFG: digital low-pass filter bandwidth
-
-config MPU9250_ACCEL_FCHOICE_B
-	int "Inverted version of accel_fchoice"
-	default 0
-	---help---
-		The data output rate of the DLPF filter block can be further
-		reduced by a factor of 1/(1+SMPLRT_DIV).
-		where SMPLRT_DIV is an 8-bit integer
-
-config MPU9250_A_DLPF_CFG
-	int "MPU9250 Accelerometer low pass filter setting"
-	default 1
-	---help---
-		A_DLPF_CFG[2..0]
-		A_DLPF_CFG: Accelerometer digital low-pass filter bandwidth
-
-config MPU9250_GYRO_FS_SEL
-	int "MPU9250 Gyro FS_SEL"
-	default 2
-	---help---
-		Sets the @fs_sel bit in GYRO_CONFIG to the value provided. Per
-		the datasheet, the meaning of @fs_sel is as follows:
-		GYRO_CONFIG(0x1b) :   XG_ST YG_ST ZG_ST FS_SEL1 FS_SEL0 x  x  x
-		XG_ST, YG_ST, ZG_ST  :  self-test (unsupported in this driver)
-				1 -> activate self-test on X, Y, and/or Z gyros
-		FS_SEL[10] : full-scale range select
-				0 -> ±  250 deg/sec
-				1 -> ±  500 deg/sec
-				2 -> ± 1000 deg/sec
-				3 -> ± 2000 deg/sec
-
-config MPU9250_ACCEL_AFS_SEL
-	int "MPU9250 Accelerometer AFS_SEL"
-	default 2
-	---help---
-		Sets the @afs_sel bit in ACCEL_CONFIG to the value provided. Per
-		the datasheet, the meaning of @afs_sel is as follows:
-		ACCEL_CONFIG(0x1c) :   XA_ST YA_ST ZA_ST AFS_SEL1 AFS_SEL0 x  x  x
-		XA_ST, YA_ST, ZA_ST  :  self-test (unsupported in this driver)
-				1 -> activate self-test on X, Y, and/or Z accelerometers
-		AFS_SEL[10] : full-scale range select
-				0 -> ±  2 g
-				1 -> ±  4 g
-				2 -> ±  8 g
-				3 -> ± 16 g
-
-endif # SENSORS_MPU9250
-
 config SENSORS_MAX44009
 	bool "Maxim MAX44009 ALS sensor"
 	default n
@@ -1101,13 +826,6 @@ config SENSORS_MAX31855
 	---help---
 		Enables support for the MAX31855 driver
 
-config SENSORS_MAX31865
-	bool "Maxim MAX31865 Driver"
-	default n
-	select SPI
-	---help---
-		Enables support for the MAX31865 driver
-
 config SENSORS_MAX6675
 	bool "Maxim MAX6675 Driver"
 	default n
@@ -1124,7 +842,7 @@ config SENSORS_LIS3MDL
 
 config LM75_I2C
 	bool
-	default LM75
+	default y if LM75
 
 config SENSORS_LM75
 	bool "STMicro LM-75 Temperature Sensor support"
@@ -1251,7 +969,6 @@ config AHT10_I2C_FREQUENCY
 	int "AHT10 I2C frequency"
 	default 400000
 	range 1 400000
-
 endif # SENSORS_AHT10
 
 config SENSORS_SHT21
@@ -1431,7 +1148,7 @@ endif # SENSORS_HDC1008
 config SENSORS_LTR308
 	bool "LTR308 Lite-On ambient light sensor"
 	default n
-	select I2C
+  select I2C
 	---help---
 		Enable driver support for the LTR308 Lite-on ambient light sensor.
 

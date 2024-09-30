@@ -42,6 +42,24 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/himem/himem.h>
 
+#include "esp32_partition.h"
+
+#include <arch/board/board.h>
+
+#include <nuttx/i2c/i2c_master.h>
+#include "esp32_board_i2c.h"
+#include "esp32_i2c.h"
+#include "esp32_gpio.h"
+
+#include <nuttx/audio/audio.h>
+#include <nuttx/audio/audio_i2s.h>
+#include <nuttx/audio/i2s.h>
+#include <nuttx/audio/pcm.h>
+
+#ifdef CONFIG_ESP32_I2S
+#  include "esp32_i2s.h"
+#endif
+
 #if defined(CONFIG_ESP32_EFUSE)
 #include "esp32_efuse.h"
 #endif
@@ -49,6 +67,10 @@
 
 #ifdef CONFIG_USERLED
 #  include <nuttx/leds/userled.h>
+#endif
+
+#ifdef CONFIG_TIMER
+#include <esp32_tim_lowerhalf.h>
 #endif
 
 #ifdef CONFIG_CAN_MCP2515
@@ -117,6 +139,16 @@
 
 #ifdef CONFIG_LCD_HT16K33
 #  include "esp32_ht16k33.h"
+#endif
+
+#ifdef CONFIG_LCD_DEV
+#  include <nuttx/board.h>
+#  include <nuttx/lcd/lcd_dev.h>
+#endif
+
+#ifdef CONFIG_INPUT_M5TOUGH_CHSC6540
+/* I2C Address of CHSC6540 Touch Controller */
+#include <nuttx/input/chsc6540.h>
 #endif
 
 #ifdef CONFIG_ESP32_AES_ACCELERATOR
@@ -375,13 +407,14 @@ int esp32_bringup(void)
 #endif /* CONFIG_ONESHOT */
 
 #ifdef CONFIG_USERLED
-  /* Register the LED driver */
-
+	/* Register the LED driver */
+	/*
   ret = userled_lower_initialize("/dev/userleds");
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: userled_lower_initialize() failed: %d\n", ret);
-    }
+  n  }
+	 */
 #endif
 
 #ifdef CONFIG_CAN_MCP2515
@@ -493,6 +526,68 @@ int esp32_bringup(void)
   bool i2s_enable_tx;
   bool i2s_enable_rx;
 #endif
+
+
+#ifdef CONFIG_LCD_DEV
+	ret = board_lcd_initialize();
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: board_lcd_initialize() failed: %d\n", ret);
+	}
+
+	ret = lcddev_register(0);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", ret);
+	}
+#endif/*CONFIG_LCD_DEV*/
+
+#ifdef CONFIG_INPUT_M5TOUGH_CHSC6540
+	/*
+	 * Touch switched on in board_lcd_initialize()
+	 */
+	struct i2c_master_s *i2c_bus;
+	struct i2c_config_s config;
+	int16_t irq_i16;
+	uint8_t cmd_a8[2]={0x5a,0x5a};
+
+	iinfo("CONFIG_INPUT_M5TOUGH_CHSC6540: esp32_i2cbus_initialize I2C%d\n",CHSC6540_I2C_NUM);
+
+	i2c_bus=esp32_i2cbus_initialize(CHSC6540_I2C_NUM);
+
+	if (i2c_bus == NULL)
+	{
+		ierr("ERROR: Failed to initialize I2C%d\n",CHSC6540_I2C_NUM);
+	}
+	/*
+	 * Touch pressed when low
+	 */
+	//i2c_register(i2c_bus, 0);
+	irq_i16=ESP32_PIN2IRQ(CHSC6540_INT_PIN);
+	esp32_gpioirqdisable(irq_i16);
+	esp32_configgpio(CHSC6540_INT_PIN,INPUT_FUNCTION_3|PULLUP);
+
+	/* Register the CHSC6540 driver */
+	ret=chsc6540_register("/dev/input0",i2c_bus,CHSC6540_I2C_ADDR,irq_i16);
+	if (ret < 0)
+	{
+		_err("ERROR: Failed to register CHSC6540\n");
+	}
+	/* Configure the interrupt for falling edges */
+	esp32_gpioirqenable(irq_i16,FALLING);
+
+	// Set up the I2C configuration
+	config.frequency = CHSC6540_I2C_FREQ;
+	config.address   = CHSC6540_I2C_ADDR;
+	config.addrlen   = 7;
+
+	iinfo("i2c_write %#x\n",cmd_a8[0]);
+	ret=i2c_write(i2c_bus,&config,cmd_a8,2); // INT mode change
+	if (ret < 0){
+		ierr("i2c_read failed: %d\n", ret);
+		return -ENODEV;
+	}
+#endif /*CONFIG_INPUT_M5TOUGH_CHSC6540*/
 
 #ifdef CONFIG_ESP32_I2S0
 

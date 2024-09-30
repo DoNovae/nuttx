@@ -41,6 +41,20 @@
 #  define BOARD_CLOCK_FREQUENCY 80000000
 #endif
 
+/* GPIO definitions *********************************************************/
+
+/* Display */
+// To get CONFIG_ESP32_SPI2 or CONFIG_ESP32_SPI3 configuration
+#define DISPLAY_SPI       2
+#define DISPLAY_DC        15
+#define ILI9341_AXP_I2C_FREQ 400000
+
+/*
+ * Touch
+ */
+#define CHSC6540_INT_PIN 39
+#define CHSC6540_I2C_NUM 1
+
 /* LED definitions **********************************************************/
 
 /* Define how many LEDs this board has (needed by userleds) */

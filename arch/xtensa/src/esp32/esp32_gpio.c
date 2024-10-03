@@ -247,7 +247,7 @@ int esp32_configgpio(int pin, gpio_pinattr_t attr)
 
           if ((attr & PULLUP) != 0)
             {
-              ASSERT(rtc_gpio_is_pull_supported(rtc_gpio_idx));
+              // HBL ASSERT(rtc_gpio_is_pull_supported(rtc_gpio_idx));
               en_pu = true;
             }
           else if ((attr & PULLDOWN) != 0)

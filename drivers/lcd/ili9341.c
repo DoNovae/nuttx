@@ -952,7 +952,8 @@ static int ili9341_setpower(FAR struct lcd_dev_s *dev, int power)
 
   if (dev)
     {
-      lcdinfo("%d\n", power);
+      //lcdinfo("%d\n", power);
+      lcdwarn("%d\n", power);
 
       lcd->select(lcd);
 

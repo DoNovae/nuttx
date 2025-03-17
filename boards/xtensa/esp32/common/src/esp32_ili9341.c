@@ -224,8 +224,7 @@ static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
 }
 */
 
-static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
-		int level)
+static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,int level)
 {
 	struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 	struct i2c_config_s config;
@@ -236,19 +235,20 @@ static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
 	config.address   = ILI9341_AXP_I2C_ADDR;
 	config.addrlen   = 7;
 
+	level=(uint8_t)level;
+	//lcdwarn("level(%d)\n",level);
+
 	if (level)
 	{
-		if (level > 4)
-		{
-			level = (level / 24) + 5;
-		}
+		//lcdwarn("bitOn - level(%d)\n",level);
 		// LDO3 enable
 		ret=bitOn(priv->i2c,&config,0x12,0x08);
 		if (ret<0) {
 			lcderr("LDO3 enable: %d\n",ret);
 		}
-	}else
+	} else
 	{
+		//lcdwarn("bitOff - level(%d)\n",level);
 		// LDO3 disable
 		ret=bitOff(priv->i2c,&config,0x12,0x08);
 		if (ret<0) {
@@ -256,7 +256,7 @@ static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
 		}
 	}
 	// Brightness
-	ret=writeRegister8(priv->i2c,&config,0x28,level,0xF0);
+	ret=writeRegister8(priv->i2c,&config,0x28,(uint8_t)level,0xF0);
 	if (ret<0) {
 		lcderr("Brightness: %d\n",ret);
 	}
@@ -264,7 +264,7 @@ static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
 	return OK;
 }
 
-/*
+/* HBL M5GFX.cpp l167 - struct Light_M5Tough : public lgfx::ILight
 void setBrightness(std::uint8_t brightness) override
   {
     if (brightness)
@@ -605,9 +605,9 @@ int board_lcd_initialize(void)
 		if (g_lcd != NULL)
 		{
 			/* Turn the LCD on at 100% power */
-			g_lcd->setpower(g_lcd, CONFIG_LCD_MAXPOWER);
-
-			esp32_ili93414ws_backlight(&priv->dev,200);//HBL
+			/* HBL CONFIG_LCD_MAXPOWER=15 */
+			//g_lcd->setpower(g_lcd, CONFIG_LCD_MAXPOWER);
+			g_lcd->setpower(g_lcd, 15);
 		}
 	}
 

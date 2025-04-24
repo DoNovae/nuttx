@@ -179,6 +179,10 @@
 #  include "esp32_max6675.h"
 #endif
 
+#ifdef CONFIG_RF_SI4X6X_DRIVER
+#include <nuttx/rf/si4x6x_driver.h>
+#endif /* CONFIG_RF_SI4X6X_DRIVER */
+
 #include "esp32-devkitc.h"
 
 /****************************************************************************
@@ -721,6 +725,26 @@ int esp32_bringup(void)
     }
 #  endif
 #endif
+
+#ifdef CONFIG_RF_SI4X6X_DRIVER
+  /* Init SPI bus again */
+  struct spi_dev_s *si4x6x_p = esp32_spibus_initialize(ESP32_SPI2);
+  if (!si4x6x_p)
+    {
+      syslog(LOG_ERR, "Failed to initialize SPI%d driver: %d\n",
+             ESP32_SPI2, ret);
+    }
+
+  /* Register the SI4X6X Driver */
+  ret = si4x6x_driver_register("/dev/si4x6x0",si4x6x_p,0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,"ERROR: Failed to register SPI Test Driver\n");
+    }
+#endif /* CONFIG_RF_SI4X6X_DRIVER */
+
+
+
 
   /* If we got here then perhaps not all initialization was successful, but
    * at least enough succeeded to bring-up NSH with perhaps reduced

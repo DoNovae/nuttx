@@ -63,6 +63,10 @@ ifeq ($(CONFIG_WL_NRF24L01),y)
 CSRCS += nrf24l01.c
 endif
 
+ifeq ($(CONFIG_RF_SI4X6X_DRIVER),y)
+include wireless/rf/Make.defs
+endif
+
 # Include wireless devices build support
 
 DEPPATH += --dep-path wireless

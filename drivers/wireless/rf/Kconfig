@@ -1,0 +1,129 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig DRIVERS_RF
+	bool "RF Device Support"
+	default n
+	---help---
+		Drivers for various RF devices
+
+if DRIVERS_RF
+
+
+config RF_SI4X6X_DRIVER
+	bool "SPI SI4X6X DRIVER"
+	default n
+	select SPI
+	select GPIO
+	select DAC
+	---help---
+		Enable SPI SI4X6X Driver.
+
+if RF_SI4X6X_DRIVER
+config RF_SI4263_DRIVER
+	bool "RF_SI4263"
+
+##############
+### SI4263
+##############	
+if RF_SI4263_DRIVER
+### SI4263_CH1
+config RF_SI4263_CH1
+	bool "RF_SI4263_CH1"
+	default n
+
+if RF_SI4263_CH1
+config RF_SI4263_CH1_SDN
+	int "RF_SI4263_CH1_SDN"
+	default 26
+	range 0 39
+
+config RF_SI4263_CH1_IRQ
+	int "RF_SI4263_CH1_IRQ"
+	default 32
+	range 0 39
+
+config RF_SI4263_CH1_NSEL
+	int "RF_SI4263_CH1_NSEL"
+	default 27
+	range 0 39
+endif # RF_SI4263_CH1
+
+### SI4263_CH2
+config RF_SI4263_CH2
+	bool "RF_SI4263_CH2"
+	default n
+	
+if RF_SI4263_CH2
+config RF_SI4263_CH2_SDN
+	int "RF_SI4263_CH2_SDN"
+	default 25
+	range 0 39
+
+config RF_SI4263_CH2_IRQ
+	int "RF_SI4263_CH2_IRQ"
+	default 32
+	range 0 39
+
+config RF_SI4263_CH2_NSEL
+	int "RF_SI4263_CH2_NSEL"
+	default 33
+	range 0 39
+endif # RF_SI4263_CH2
+endif # RF_SI4X6X_DRIVER
+
+##############
+### SI4364
+##############	
+config RF_SI4364_DRIVER
+	bool "RF_SI4364"
+
+if RF_SI4364_DRIVER
+### SI4364_CH1
+config RF_SI4364_CH1
+	bool "RF_SI4364_CH1"
+	default n
+	
+if RF_SI4364_CH1
+config RF_SI4364_CH1_SDN
+	int "RF_SI4364_CH1_SDN"
+	default 26
+	range 0 39
+
+config RF_SI4364_CH1_IRQ
+	int "RF_SI4364_CH1_IRQ"
+	default 32
+	range 0 39
+
+config RF_SI4364_CH1_NSEL
+	int "RF_SI4364_CH1_NSEL"
+	default 27
+	range 0 39
+endif # RF_SI4364_CH1
+
+### SI4364_CH2
+config RF_SI4364_CH2
+	bool "RF_SI4364_CH2"
+	default n
+	
+if RF_SI4364_CH2
+config RF_SI4364_CH2_SDN
+	int "RF_SI4364_CH2_SDN"
+	default 26
+	range 0 39
+
+config RF_SI4364_CH2_IRQ
+	int "RF_SI4364_CH2_IRQ"
+	default 32
+	range 0 39
+
+config RF_SI4364_CH2_NSEL
+	int "RF_SI4364_CH2_NSEL"
+	default 27
+	range 0 39
+endif # RF_SI4364_CH1
+endif # RF_SI4364_DRIVER
+endif # RF_SI4X6X_DRIVER
+endif # DRIVERS_RF

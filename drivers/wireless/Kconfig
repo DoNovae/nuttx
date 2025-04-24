@@ -11,6 +11,15 @@ menuconfig DRIVERS_WIRELESS
 
 if DRIVERS_WIRELESS
 
+menuconfig DRIVERS_GENERICRADIO
+	bool "Generic Radio Device Support"
+	default n
+	depends on EXPERIMENTAL
+	---help---
+		This directory holds implementations of generic radio device drivers.
+		
+source drivers/wireless/generic/Kconfig
+
 config WL_CC1101
 	bool "CC1101 RF transceiver support"
 	default n
@@ -155,5 +164,10 @@ config WL_NRF24L01_RXFIFO_LEN
 
 endif # WL_NRF24L01_RXSUPPORT
 endif # WL_NRF24L01
+
+# -----------
+# si4x6x
+# -----------
+source "drivers/wireless/rf/Kconfig"
 
 endif # DRIVERS_WIRELESS

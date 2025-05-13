@@ -11,9 +11,7 @@
 #define BSP_H
 
 #include <stdint.h>
-//#include <driver/gpio.h>
-//#include <SPI.h>
-//#include <Bus_SPI.h>
+#include <debug.h>
 
 
 
@@ -47,6 +45,7 @@
 #define VSPI_SCLK GPIO_NUM_18
 #define VSPI_MISO   GPIO_NUM_38
 #define VSPI_MOSI   GPIO_NUM_23
+
 /*extern int8_t SI4463_IRQ_PIN;
 extern int8_t SI4463_SDN_PIN;
 extern int8_t  SI4463_SEL_PIN;
@@ -97,9 +96,39 @@ void si446x_nirq_process(void);
 #define SEGMENT_VARIABLE(name,type,seg) type name
 #define SEGMENT_VARIABLE_SEGMENT_POINTER(name,type,seg1,seg2) type name
 
-#define SPI_SELECT(nSELPin)(digitalWrite(nSELPin,LOW))
-#define SPI_DESELECT(nSELPin)(digitalWrite(nSELPin,HIGH))
+//HBL050525 #define SPI_SELECT(nSELPin)(digitalWrite(nSELPin,LOW))
+//HBL050525 #define SPI_DESELECT(nSELPin)(digitalWrite(nSELPin,HIGH))
 
+/*****************************************************************************
+ *  Global Macros & Definitions
+ *****************************************************************************/
+/*! Maximal packet length definition (FIFO size) */
+#define RADIO_MAX_PACKET_LENGTH     64u
+
+/*****************************************************************************
+ *  Global Typedefs & Enums
+ *****************************************************************************/
+typedef struct
+{
+    uint8_t   *Radio_ConfigurationArray;
+
+    uint8_t   Radio_ChannelNumber;
+    uint8_t   Radio_PacketLength;
+    uint8_t   Radio_State_After_Power_Up;
+
+    uint16_t  Radio_Delay_Cnt_After_Reset;
+
+    uint8_t   Radio_CustomPayload[RADIO_MAX_PACKET_LENGTH];
+} tRadioConfiguration;
+
+/*****************************************************************************
+ *  Global Variable Declarations
+ *****************************************************************************/
+//HBL040525 extern const SEGMENT_VARIABLE_SEGMENT_POINTER(pRadioConfiguration, tRadioConfiguration*, SEG_CODE, SEG_CODE);
+//HBL040525 extern SEGMENT_VARIABLE(customRadioPacket[RADIO_MAX_PACKET_LENGTH], uint8_t, SEG_XDATA);
+
+/*! Si446x configuration array */
+extern const SEGMENT_VARIABLE(Radio_Configuration_Data_Array[], uint8_t, SEG_CODE);
 
 
 

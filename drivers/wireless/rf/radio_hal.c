@@ -91,127 +91,21 @@ BIT radio_hal_NirqLevel(void)
 
 void radio_hal_SpiWriteByte(U8 byteToWrite)
 {
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB) || (defined SILABS_PLATFORM_WMB)
-  bSpi_ReadWriteSpi1(byteToWrite);
-#else
   SpiReadWrite(byteToWrite);
-#endif
 }
 
 U8 radio_hal_SpiReadByte(void)
 {
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB) || (defined SILABS_PLATFORM_WMB)
-  return bSpi_ReadWriteSpi1(0xFF);
-#else
   return SpiReadWrite(0xFF);
-#endif
 }
 
 void radio_hal_SpiWriteData(U8 byteCount, U8* pData)
 {
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB) || (defined SILABS_PLATFORM_WMB)
-  vSpi_WriteDataSpi1(byteCount, pData);
-#else
   SpiWriteData(byteCount, pData);
-#endif
 }
 
 void radio_hal_SpiReadData(U8 byteCount, U8* pData)
 {
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB) || (defined SILABS_PLATFORM_WMB)
-  vSpi_ReadDataSpi1(byteCount, pData);
-#else
   SpiReadData(byteCount, pData);
-#endif
 }
 
-#ifdef RADIO_DRIVER_EXTENDED_SUPPORT
-BIT radio_hal_Gpio0Level(void)
-{
-  BIT retVal = FALSE;
-
-#ifdef SILABS_PLATFORM_DKMB
-  retVal = FALSE;
-#endif
-#ifdef SILABS_PLATFORM_UDP
-  retVal = EZRP_RX_DOUT;
-#endif
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB)
-  retVal = RF_GPIO0;
-#endif
-#if (defined SILABS_PLATFORM_WMB930)
-  retVal = FALSE;
-#endif
-#if defined (SILABS_PLATFORM_WMB912)
-  #ifdef SILABS_IO_WITH_EXTENDER
-    //TODO
-    retVal = FALSE;
-  #endif
-#endif
-
-  return retVal;
-}
-
-BIT radio_hal_Gpio1Level(void)
-{
-  BIT retVal = FALSE;
-
-#ifdef SILABS_PLATFORM_DKMB
-  retVal = FSK_CLK_OUT;
-#endif
-#ifdef SILABS_PLATFORM_UDP
-  retVal = FALSE; //No Pop
-#endif
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB) || (defined SILABS_PLATFORM_WMB930)
-  retVal = RF_GPIO1;
-#endif
-#if defined (SILABS_PLATFORM_WMB912)
-  #ifdef SILABS_IO_WITH_EXTENDER
-    //TODO
-    retVal = FALSE;
-  #endif
-#endif
-
-  return retVal;
-}
-
-BIT radio_hal_Gpio2Level(void)
-{
-  BIT retVal = FALSE;
-
-#ifdef SILABS_PLATFORM_DKMB
-  retVal = DATA_NFFS;
-#endif
-#ifdef SILABS_PLATFORM_UDP
-  retVal = FALSE; //No Pop
-#endif
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB) || (defined SILABS_PLATFORM_WMB930)
-  retVal = RF_GPIO2;
-#endif
-#if defined (SILABS_PLATFORM_WMB912)
-  #ifdef SILABS_IO_WITH_EXTENDER
-    //TODO
-    retVal = FALSE;
-  #endif
-#endif
-
-  return retVal;
-}
-
-BIT radio_hal_Gpio3Level(void)
-{
-  BIT retVal = FALSE;
-
-#if (defined SILABS_PLATFORM_RFSTICK) || (defined SILABS_PLATFORM_LCDBB) || (defined SILABS_PLATFORM_WMB930)
-  retVal = RF_GPIO3;
-#elif defined (SILABS_PLATFORM_WMB912)
-  #ifdef SILABS_IO_WITH_EXTENDER
-    //TODO
-    retVal = FALSE;
-  #endif
-#endif
-
-  return retVal;
-}
-
-#endif

@@ -10,7 +10,9 @@
  */
 
 #include <stdarg.h>
+#include <syslog.h>
 #include "si446x_api_lib.h"
+
 
 SEGMENT_VARIABLE( Si446xCmd, union si446x_cmd_reply_union, SEG_XDATA );
 SEGMENT_VARIABLE( Pro2Cmd[16], U8, SEG_XDATA );
@@ -28,7 +30,7 @@ SEGMENT_VARIABLE( Si446xPatchCommands[][8] = { SI446X_PATCH_CMDS }, U8, SEG_CODE
  */
 void si446x_reset(void)
 {
-    //U8 loopCount;
+    U8 loopCount;
     /* Put radio in shutdown, wait then release */
     radio_hal_AssertShutdown();
     //! @todo this needs to be a better delay function.
@@ -79,7 +81,7 @@ U8 si446x_configuration_init(const U8* pSetPropCmd)
     if (numOfBytes>16u)
     {
       /* Number of command bytes exceeds maximal allowable length */
-    	log_d("si446x_configuration_init: SI446X_COMMAND_ERROR");
+    	_warn("si446x_configuration_init: SI446X_COMMAND_ERROR");
       return SI446X_COMMAND_ERROR;
     }
 
@@ -89,22 +91,22 @@ U8 si446x_configuration_init(const U8* pSetPropCmd)
       pSetPropCmd++;
     }
 
-    log_d("si446x_configuration_init: numOfBytes(%d) - Pro2Cmd(%0#2x,%0#2x)",numOfBytes,Pro2Cmd[0],Pro2Cmd[1]);
+    _warn("si446x_configuration_init: numOfBytes(%d) - Pro2Cmd(%0#2x,%0#2x)",numOfBytes,Pro2Cmd[0],Pro2Cmd[1]);
     if (radio_comm_SendCmdGetResp(numOfBytes, Pro2Cmd, 0, 0) != 0xFF)
     {
       /* Timeout occured */
-    	log_d("si446x_configuration_init: SI446X_CTS_TIMEOUT");
+    	_warn("si446x_configuration_init: SI446X_CTS_TIMEOUT");
       return SI446X_CTS_TIMEOUT;
     }
 
     //if (radio_hal_NirqLevel()==0)
-    if(false)
+    if(0)
     {
       /* Get and clear all interrupts.  An error has occured... */
       si446x_get_int_status(0, 0, 0);
       if (Si446xCmd.GET_INT_STATUS.CHIP_PEND & SI446X_CMD_GET_CHIP_STATUS_REP_CHIP_PEND_CMD_ERROR_PEND_MASK)
       {
-    	  log_w("si446x_configuration_init: An error has occured.");
+    	  _warn("si446x_configuration_init: An error has occured.");
     	  return SI446X_COMMAND_ERROR;
       }
     }
@@ -209,14 +211,14 @@ void si446x_get_int_status(U8 PH_CLR_PEND, U8 MODEM_CLR_PEND, U8 CHIP_CLR_PEND)
     Si446xCmd.GET_INT_STATUS.CHIP_PEND      = Pro2Cmd[6];
     Si446xCmd.GET_INT_STATUS.CHIP_STATUS    = Pro2Cmd[7];
 
-    log_v("INT_PEND=%02x",Si446xCmd.GET_INT_STATUS.INT_PEND);
-    log_v("INT_STATUS=%02x",Si446xCmd.GET_INT_STATUS.CHIP_STATUS);
-    log_v("PH_PEND=%02x",Si446xCmd.GET_INT_STATUS.PH_PEND);
-    log_v("PH_STATUS=%02x",Si446xCmd.GET_INT_STATUS.PH_STATUS);
-    log_v("MODEM_PEND=%02x",Si446xCmd.GET_INT_STATUS.MODEM_PEND);
-    log_v("MODEM_STATUS=%02x",Si446xCmd.GET_INT_STATUS.MODEM_STATUS);
-    log_v("CHIP_PEND=%02x",Si446xCmd.GET_INT_STATUS.CHIP_PEND);
-    log_v("CHIP_STATUS=%02x",Si446xCmd.GET_INT_STATUS.CHIP_STATUS);
+    _info("INT_PEND=%02x",Si446xCmd.GET_INT_STATUS.INT_PEND);
+    _info("INT_STATUS=%02x",Si446xCmd.GET_INT_STATUS.CHIP_STATUS);
+    _info("PH_PEND=%02x",Si446xCmd.GET_INT_STATUS.PH_PEND);
+    _info("PH_STATUS=%02x",Si446xCmd.GET_INT_STATUS.PH_STATUS);
+    _info("MODEM_PEND=%02x",Si446xCmd.GET_INT_STATUS.MODEM_PEND);
+    _info("MODEM_STATUS=%02x",Si446xCmd.GET_INT_STATUS.MODEM_STATUS);
+    _info("CHIP_PEND=%02x",Si446xCmd.GET_INT_STATUS.CHIP_PEND);
+    _info("CHIP_STATUS=%02x",Si446xCmd.GET_INT_STATUS.CHIP_STATUS);
 }
 
 /*!
@@ -335,8 +337,8 @@ void si446x_fifo_info(U8 FIFO)
     Si446xCmd.FIFO_INFO.RX_FIFO_COUNT   = Pro2Cmd[0];
     // HBL030522
     //Si446xCmd.FIFO_INFO.TX_FIFO_SPACE   = Pro2Cmd[1];
-    //isr_log_d("RX_FIFO_COUNT=%d - TX_FIFO_SPACE=%d",Si446xCmd.FIFO_INFO.RX_FIFO_COUNT,Si446xCmd.FIFO_INFO.TX_FIFO_SPACE);
-    log_d("RX_FIFO_COUNT=%d",Si446xCmd.FIFO_INFO.RX_FIFO_COUNT);
+    //isr__info("RX_FIFO_COUNT=%d - TX_FIFO_SPACE=%d",Si446xCmd.FIFO_INFO.RX_FIFO_COUNT,Si446xCmd.FIFO_INFO.TX_FIFO_SPACE);
+    _warn("RX_FIFO_COUNT=%d",Si446xCmd.FIFO_INFO.RX_FIFO_COUNT);
 
 }
 

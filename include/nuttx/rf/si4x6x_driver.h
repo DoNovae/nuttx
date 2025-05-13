@@ -29,6 +29,10 @@
 #include <nuttx/spi/spi.h>
 
 /****************************************************************************
+ * Defines
+ ****************************************************************************/
+
+/****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
@@ -57,9 +61,7 @@ extern "C"
  *
  ****************************************************************************/
 
-int si4x6x_driver_register(FAR const char *devpath,
-                       FAR struct spi_dev_s *spi,
-                       int spidev);
+int si4x6x_driver_register(FAR const char *devpath,FAR struct spi_dev_s *spi,int spidev);
 
 #undef EXTERN
 #ifdef __cplusplus

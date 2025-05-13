@@ -13,7 +13,6 @@
                  *              I N C L U D E              *
                  * ======================================= */
 
-//#include "..\..\bsp.h"
 #include "bsp.h"
 
                 /* ======================================= *
@@ -67,7 +66,7 @@ U8 radio_comm_GetResp(U8 byteCount, U8* pData)
       break;
     }
     radio_hal_SetNsel();
-    //log_d("radio_comm_GetResp: ctsVal(%0#2x) - errCnt(%d)",ctsVal,errCnt);
+    //_info("radio_comm_GetResp: ctsVal(%0#2x) - errCnt(%d)",ctsVal,errCnt);
     errCnt--;
   }
 
@@ -79,7 +78,7 @@ U8 radio_comm_GetResp(U8 byteCount, U8* pData)
       #ifdef RADIO_COMM_ERROR_CALLBACK
         RADIO_COMM_ERROR_CALLBACK();
       #endif
-        log_d("radio_comm_GetResp: ctsVal(%0#2x) - errCnt(%d)",ctsVal,errCnt);
+        _info("radio_comm_GetResp: ctsVal(%0#2x) - errCnt(%d)",ctsVal,errCnt);
     }
   }
 
@@ -87,7 +86,7 @@ U8 radio_comm_GetResp(U8 byteCount, U8* pData)
   {
     ctsWentHigh = 1;
   }
-  log_v("radio_comm_GetResp: ctsVal(%0#2x) - errCnt(%d)",ctsVal,errCnt);
+  _none("radio_comm_GetResp: ctsVal(%0#2x) - errCnt(%d)",ctsVal,errCnt);
   return ctsVal;
 }
 

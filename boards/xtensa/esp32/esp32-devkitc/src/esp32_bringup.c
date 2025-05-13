@@ -600,7 +600,6 @@ int esp32_bringup(void)
 #ifdef CONFIG_AUDIO_CS4344
 
   /* Configure CS4344 audio on I2S0 */
-
   ret = esp32_cs4344_initialize(ESP32_I2S0);
   if (ret != OK)
     {
@@ -621,7 +620,6 @@ int esp32_bringup(void)
 #endif /* CONFIG_ESP32_I2S0_RX */
 
   /* Configure I2S generic audio on I2S0 */
-
   ret = board_i2sdev_initialize(ESP32_I2S0, i2s_enable_tx, i2s_enable_rx);
   if (ret < 0)
     {
@@ -648,7 +646,6 @@ int esp32_bringup(void)
 #endif /* CONFIG_ESP32_I2S1_RX */
 
   /* Configure I2S generic audio on I2S1 */
-
   ret = board_i2sdev_initialize(ESP32_I2S1, i2s_enable_tx, i2s_enable_rx);
   if (ret < 0)
     {
@@ -736,7 +733,7 @@ int esp32_bringup(void)
     }
 
   /* Register the SI4X6X Driver */
-  ret = si4x6x_driver_register("/dev/si4x6x0",si4x6x_p,0);
+  ret = si4x6x_driver_register("/dev/si4x6x",si4x6x_p,0);
   if (ret < 0)
     {
       syslog(LOG_ERR,"ERROR: Failed to register SPI Test Driver\n");

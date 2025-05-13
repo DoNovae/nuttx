@@ -6,54 +6,19 @@
  * @n Copyright 2012 Silicon Laboratories, Inc.
  * @n http://www.silabs.com
  */
+#include "bsp.h"
 
-#ifndef RADIO_H_0
-#define RADIO_H_0
+#ifndef SI4362_NSTDPREAMBLE_NOFLAG
+#define SI4362_NSTDPREAMBLE_NOFLAG
 
-//HBL230425 namespace SI4362_NSTDPREAMBLE_NOFLAG
-//HBL230425 {
-
-/*****************************************************************************
- *  Global Macros & Definitions
- *****************************************************************************/
-/*! Maximal packet length definition (FIFO size) */
-#define RADIO_MAX_PACKET_LENGTH     64u
-
-/*****************************************************************************
- *  Global Typedefs & Enums
- *****************************************************************************/
-typedef struct
-{
-    U8   *Radio_ConfigurationArray;
-
-    U8   Radio_ChannelNumber;
-    U8   Radio_PacketLength;
-    U8   Radio_State_After_Power_Up;
-
-    U16  Radio_Delay_Cnt_After_Reset;
-
-    U8   Radio_CustomPayload[RADIO_MAX_PACKET_LENGTH];
-} tRadioConfiguration;
-
-/*****************************************************************************
- *  Global Variable Declarations
- *****************************************************************************/
-//extern const SEGMENT_VARIABLE_SEGMENT_POINTER(pRadioConfiguration, tRadioConfiguration, SEG_CODE, SEG_CODE);
-extern const SEGMENT_VARIABLE_SEGMENT_POINTER(pRadioConfiguration, tRadioConfiguration*, SEG_CODE, SEG_CODE);
-extern SEGMENT_VARIABLE(customRadioPacket[RADIO_MAX_PACKET_LENGTH], U8, SEG_XDATA);
-
-/*! Si446x configuration array */
-extern const SEGMENT_VARIABLE(Radio_Configuration_Data_Array[], U8, SEG_CODE);
 
 /*****************************************************************************
  *  Global Function Declarations
  *****************************************************************************/
-void  vRadio_Init(void);
-void vRadio_Version();
-U8 bRadio_Check_Tx_RX(void);
-void  vRadio_StartRX(U8,U8);
-U8    bRadio_Check_Ezconfig(U16);
-void  vRadio_StartTx_Variable_Packet(U8, U8*, U8);
+void  si4362_vRadio_Init(void);
+void si4362_vRadio_Version(void);
+uint8_t si4362_bRadio_Check_Tx_RX(void);
+void si4362_vRadio_StartRX(uint8_t,uint8_t);
+void si4362_vRadio_StartTx_Variable_Packet(uint8_t, uint8_t*, uint8_t);
 
-//HBL230425 }
-#endif /* RADIO_H_ */
+#endif /* SI4362_NSTDPREAMBLE_NOFLAG */

@@ -12,6 +12,10 @@ menuconfig DRIVERS_RF
 if DRIVERS_RF
 
 
+
+##=================
+### RF_SI4X6X_DRIVER
+##=================
 config RF_SI4X6X_DRIVER
 	bool "SPI SI4X6X DRIVER"
 	default n
@@ -25,9 +29,9 @@ if RF_SI4X6X_DRIVER
 config RF_SI4263_DRIVER
 	bool "RF_SI4263"
 
-##############
+##-------------
 ### SI4263
-##############	
+##-------------
 if RF_SI4263_DRIVER
 ### SI4263_CH1
 config RF_SI4263_CH1
@@ -74,9 +78,9 @@ config RF_SI4263_CH2_NSEL
 endif # RF_SI4263_CH2
 endif # RF_SI4X6X_DRIVER
 
-##############
+##-------------
 ### SI4364
-##############	
+##-------------
 config RF_SI4364_DRIVER
 	bool "RF_SI4364"
 

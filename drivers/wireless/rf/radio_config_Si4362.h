@@ -1034,7 +1034,7 @@
 #endif
 
 #define RADIO_CONFIGURATION_DATA { \
-							(U8*)Radio_Configuration_Data_Array,\
+							(U8*)si4362_Radio_Configuration_Data_Array,\
                             RADIO_CONFIGURATION_DATA_CHANNEL_NUMBER,                   \
                             RADIO_CONFIGURATION_DATA_RADIO_PACKET_LENGTH,              \
                             RADIO_CONFIGURATION_DATA_RADIO_STATE_AFTER_POWER_UP,       \

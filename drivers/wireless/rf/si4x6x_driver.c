@@ -34,6 +34,8 @@
 #include <nuttx/spi/spi.h>
 #include <nuttx/rf/ioctl.h>
 #include <nuttx/rf/si4x6x_driver.h>
+#include "radio_Si4362.h"
+#include "radio_Si4463.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -45,11 +47,27 @@
 /****************************************************************************
  * Private Types
  ****************************************************************************/
+/*
+ * radio_config_t
+ */
+typedef struct
+{
+	void(*radio_init)(void);
+	void (*radio_version)(void);
+	uint8_t (*radio_check_tx_rX)(void);
+	void (*radio_startrx)(uint8_t,uint8_t);
+	void (*radio_starttx_variable_packet)(uint8_t,uint8_t*,uint8_t);
+} radio_config_t;
+
 
 struct si4x6x_driver_dev_s
 {
+	radio_config_t radio_config_s;
 	FAR struct spi_dev_s *spi;    /* Saved SPI driver instance */
 	int spidev;
+	int8_t NSEL;
+	int8_t IRQ;
+	int8_t SDN;
 };
 
 /****************************************************************************
@@ -86,6 +104,8 @@ static char recv_buffer[256];  /* Buffer for SPI response */
 
 static int recv_buffer_len = 0;  /* Length of SPI response */
 
+
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -100,16 +120,16 @@ static int recv_buffer_len = 0;  /* Length of SPI response */
 
 static inline void si4x6x_driver_configspi(FAR struct spi_dev_s *spi)
 {
-	spiinfo("\n");
+	_info("\n");
 	DEBUGASSERT(spi != NULL);
 
-//	/* Set SPI Mode (Polarity and Phase) and Transfer Size (8 bits) */
-//	SPI_SETMODE(spi,SPI_TEST_DRIVER_SPI_MODE);
-//	SPI_SETBITS(spi,8);
-//
-//	/* Set SPI Hardware Features and Frequency */
-//	SPI_HWFEATURES(spi,0);
-//	SPI_SETFREQUENCY(spi, CONFIG_SPI_TEST_DRIVER_SPI_FREQUENCY);
+	//	/* Set SPI Mode (Polarity and Phase) and Transfer Size (8 bits) */
+	//	SPI_SETMODE(spi,SPI_TEST_DRIVER_SPI_MODE);
+	//	SPI_SETBITS(spi,8);
+	//
+	//	/* Set SPI Hardware Features and Frequency */
+	//	SPI_HWFEATURES(spi,0);
+	//	SPI_SETFREQUENCY(spi, CONFIG_SPI_TEST_DRIVER_SPI_FREQUENCY);
 }
 
 /****************************************************************************
@@ -122,7 +142,7 @@ static inline void si4x6x_driver_configspi(FAR struct spi_dev_s *spi)
 
 static int si4x6x_driver_open(FAR struct file *filep)
 {
-	spiinfo("\n");
+	_info("\n");
 	DEBUGASSERT(filep != NULL);
 	return OK;
 }
@@ -137,7 +157,7 @@ static int si4x6x_driver_open(FAR struct file *filep)
 
 static int si4x6x_driver_close(FAR struct file *filep)
 {
-	spiinfo("\n");
+	_info("\n");
 	DEBUGASSERT(filep != NULL);
 	return OK;
 }
@@ -151,7 +171,7 @@ static int si4x6x_driver_close(FAR struct file *filep)
 
 static ssize_t si4x6x_driver_write(FAR struct file *filep,FAR const char *buffer,size_t buflen)
 {
-	spiinfo("buflen=%u\n", buflen);
+	_info("buflen=%u\n", buflen);
 	DEBUGASSERT(buflen <= sizeof(recv_buffer));  /* TODO: Range eheck */
 	DEBUGASSERT(buffer != NULL);
 	DEBUGASSERT(filep  != NULL);
@@ -192,7 +212,7 @@ static ssize_t si4x6x_driver_write(FAR struct file *filep,FAR const char *buffer
 
 static ssize_t si4x6x_driver_read(FAR struct file *filep, FAR char *buffer,size_t buflen)
 {
-	spiinfo("buflen=%u\n", buflen);
+	_info("buflen=%u\n", buflen);
 	DEBUGASSERT(filep  != NULL);
 	DEBUGASSERT(buffer != NULL);
 
@@ -216,7 +236,7 @@ static int si4x6x_driver_ioctl(FAR struct file *filep,
 		int cmd,
 		unsigned long arg)
 {
-	spiinfo("cmd=0x%x, arg=0x%lx\n", cmd, arg);
+	_info("cmd=0x%x, arg=0x%lx\n", cmd, arg);
 	DEBUGASSERT(filep != NULL);
 
 	int ret = OK;
@@ -226,7 +246,7 @@ static int si4x6x_driver_ioctl(FAR struct file *filep,
 	/* TODO: Handle ioctl commands */
 
 	default:
-		sninfo("Unrecognized cmd: %d\n", cmd);
+		_info("Unrecognized cmd: %d\n", cmd);
 		ret = -ENOTTY;
 		break;
 	}
@@ -249,35 +269,102 @@ static int si4x6x_driver_ioctl(FAR struct file *filep,
 
 int si4x6x_driver_register(FAR const char *devpath,FAR struct spi_dev_s *spi,int spidev)
 {
-	//HBL spiinfo("devpath=%s, spidev=%d\n", devpath, spidev);
-	spiinfo("devpath=%s, si4x6x=%d\n", devpath, spidev);
-	FAR struct si4x6x_driver_dev_s *priv;
 	int ret;
+
+	//HBL spiinfo("devpath=%s, spidev=%d\n", devpath, spidev);
+	_info("devpath=%s, si4x6x=%d\n", devpath, spidev);
+	FAR struct si4x6x_driver_dev_s *priv;
 
 	/* Sanity check */
 	DEBUGASSERT(devpath != NULL);
 	DEBUGASSERT(spi != NULL);
 
 	/* Initialize the device structure */
-	priv = (FAR struct si4x6x_driver_dev_s *)
-    		  kmm_malloc(sizeof(struct si4x6x_driver_dev_s));
+	priv=(FAR struct si4x6x_driver_dev_s *)kmm_malloc(sizeof(struct si4x6x_driver_dev_s));
 	if (priv == NULL)
 	{
-		snerr("ERROR: Failed to allocate instance\n");
+		_err("ERROR: Failed to allocate instance\n");
 		return -ENOMEM;
 	}
 
 	priv->spi    = spi;
 	priv->spidev = spidev;
-
 	/* Clear the LE pin */
 	SPI_SELECT(priv->spi, priv->spidev, false);
 
+	/*
+	 * Init radio_config_s
+	 * CONFIG_DRIVERS_RF=y
+	 * CONFIG_RF_SI4X6X_DRIVER=y
+	 * CONFIG_RF_SI4263_DRIVER=y
+	 * CONFIG_RF_SI4263_CH1=y
+	 * CONFIG_RF_SI4263_CH1_SDN=26
+	 * CONFIG_RF_SI4263_CH1_IRQ=32
+	 * CONFIG_RF_SI4263_CH1_NSEL=27
+	 * CONFIG_RF_SI4263_CH2=y
+	 * CONFIG_RF_SI4263_CH2_SDN=25
+	 * CONFIG_RF_SI4263_CH2_IRQ=32
+	 * CONFIG_RF_SI4263_CH2_NSEL=33
+	 */
+	switch(spidev)
+	{
+	case 0:
+#ifdef CONFIG_RF_SI4263_CH1
+		priv->radio_config_s.radio_init=si4362_vRadio_Init;
+		priv->radio_config_s.radio_version=si4463_vRadio_Version;
+		priv->radio_config_s.radio_check_tx_rX=si4463_bRadio_Check_Tx_RX;
+		priv->radio_config_s.radio_startrx=si4362_vRadio_StartRX;
+		priv->radio_config_s.radio_starttx_variable_packet=si4362_vRadio_StartTx_Variable_Packet;
+		priv->NSEL=CONFIG_RF_SI4263_CH1_NSEL;
+		priv->IRQ=CONFIG_RF_SI4263_CH1_IRQ;
+		priv->SDN=CONFIG_RF_SI4263_CH1_SDN;
+#elif CONFIG_RF_SI4364_CH1
+		priv->radio_config_s.radio_init=si4463_vRadio_Init;
+		priv->radio_config_s.radio_version=si4463_vRadio_Version;
+		priv->radio_config_s.radio_check_tx_rX=si4463_bRadio_Check_Tx_RX;
+		priv->radio_config_s.radio_startrx=si4463_vRadio_StartRX;
+		priv->radio_config_s.radio_starttx_variable_packet=si4463_vRadio_StartTx_Variable_Packet;
+		priv->NSEL=CONFIG_RF_SI4364_CH1_NSEL;
+		priv->IRQ=CONFIG_RF_SI4364_CH1_IRQ;
+		priv->SDN=CONFIG_RF_SI4364_CH1_SDN;
+#else
+#error No SI4X6X channel 0 configutation
+#endif
+		break;
+	case 1:
+#ifdef CONFIG_RF_SI4263_CH2
+		priv->radio_config_s.radio_init=si4362_vRadio_Init;
+		priv->radio_config_s.radio_version=si4463_vRadio_Version;
+		priv->radio_config_s.radio_check_tx_rX=si4463_bRadio_Check_Tx_RX;
+		priv->radio_config_s.radio_startrx=si4362_vRadio_StartRX;
+		priv->radio_config_s.radio_starttx_variable_packet=si4362_vRadio_StartTx_Variable_Packet;
+		priv->NSEL=CONFIG_RF_SI4263_CH2_NSEL;
+		priv->IRQ=CONFIG_RF_SI4263_CH2_IRQ;
+		priv->SDN=CONFIG_RF_SI4263_CH2_SDN;
+#elif CONFIG_RF_SI4364_CH2
+		priv->radio_config_s.radio_init=si4463_vRadio_Init;
+		priv->radio_config_s.radio_version=si4463_vRadio_Version;
+		priv->radio_config_s.radio_check_tx_rX=si4463_bRadio_Check_Tx_RX;
+		priv->radio_config_s.radio_startrx=si4463_vRadio_StartRX;
+		priv->radio_config_s.radio_starttx_variable_packet=si4463_vRadio_StartTx_Variable_Packet;
+		priv->NSEL=CONFIG_RF_SI4364_CH2_NSEL;
+		priv->IRQ=CONFIG_RF_SI4364_CH2_IRQ;
+		priv->SDN=CONFIG_RF_SI4364_CH2_SDN;
+#else
+#error No SI4X6X channel 1 configutation
+#endif
+		break;
+	default:
+		_err("ERROR: unknown spidev(%d)\n",spidev);
+	}
+
+
+
 	/* Register the character driver */
-	ret = register_driver(devpath, &g_si4x6x_driver_fops, 0666, priv);
+	ret = register_driver(devpath,&g_si4x6x_driver_fops,0666,priv);
 	if (ret < 0)
 	{
-		snerr("ERROR: Failed to register driver: %d\n", ret);
+		_err("ERROR: Failed to register driver: %d\n", ret);
 		kmm_free(priv);
 	}
 

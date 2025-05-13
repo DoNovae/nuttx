@@ -21,22 +21,18 @@
 /*****************************************************************************
  *  Global Variables
  *****************************************************************************/
-const SEGMENT_VARIABLE(Radio_Configuration_Data_Array[], U8, SEG_CODE) = \
-		RADIO_CONFIGURATION_DATA_ARRAY;
+const SEGMENT_VARIABLE(si4362_Radio_Configuration_Data_Array[], uint8_t, SEG_CODE) = RADIO_CONFIGURATION_DATA_ARRAY;
 
-const SEGMENT_VARIABLE(RadioConfiguration, tRadioConfiguration, SEG_CODE) = \
-		RADIO_CONFIGURATION_DATA;
+static const SEGMENT_VARIABLE(RadioConfiguration, tRadioConfiguration, SEG_CODE) = RADIO_CONFIGURATION_DATA;
 
-const SEGMENT_VARIABLE_SEGMENT_POINTER(pRadioConfiguration, tRadioConfiguration*, SEG_CODE, SEG_CODE) = \
-		&RadioConfiguration;
+static const SEGMENT_VARIABLE_SEGMENT_POINTER(pRadioConfiguration, tRadioConfiguration*, SEG_CODE, SEG_CODE) = &RadioConfiguration;
 
-
-SEGMENT_VARIABLE(customRadioPacket[RADIO_MAX_PACKET_LENGTH], U8, SEG_XDATA);
+//HBL040525 SEGMENT_VARIABLE(customRadioPacket[RADIO_MAX_PACKET_LENGTH], uint8_t, SEG_XDATA);
 
 /*****************************************************************************
  *  Local Function Declarations
  *****************************************************************************/
-void vRadio_PowerUp(void);
+static void si4362_vRadio_PowerUp(void);
 
 /*!
  *  Power up the Radio.
@@ -44,22 +40,23 @@ void vRadio_PowerUp(void);
  *  @note
  *
  */
-void vRadio_PowerUp(void)
+void si4362_vRadio_PowerUp(void)
 {
-	//SEGMENT_VARIABLE(wDelay,  U16, SEG_XDATA) = 0u;
+	//SEGMENT_VARIABLE(wDelay,  uint16_t, SEG_XDATA) = 0u;
+	uint16_t wDelay=0;
 
 	/* Hardware reset the chip */
 	si446x_reset();
 
 	/* Wait until reset timeout or Reset IT signal */
-	//for (; wDelay < pRadioConfiguration->Radio_Delay_Cnt_After_Reset; wDelay++);
-	delay(100);
+	for (; wDelay < pRadioConfiguration->Radio_Delay_Cnt_After_Reset; wDelay++);
+	//HBL250425 delay(100);
 }
 
 /*
  * Configuration
  */
-void vRadio_Version()
+void si4362_vRadio_Version()
 {
 	log_i("NSTDPREAMBLE_NOFLAG");
 }
@@ -72,28 +69,23 @@ void vRadio_Version()
  *  @note
  *
  */
-void vRadio_Init(void)
+void si4362_vRadio_Init(void)
 {
-	//U16 wDelay;
+	uint16_t wDelay;
 
 	/* Power Up the radio chip */
-	vRadio_PowerUp();
+	si4362_vRadio_PowerUp();
 
-	log_d("vRadio_Init");
+	_info("si4362_vRadio_Init");
 	/* Load radio configuration */
 	while (SI446X_SUCCESS != si446x_configuration_init(pRadioConfiguration->Radio_ConfigurationArray))
 	{
 		/* Error hook */
-#if !(defined SILABS_PLATFORM_WMB912)
-		// HBL LED4 = !LED4;
-#else
-		vCio_ToggleLed(eHmi_Led4_c);
-#endif
-		//for (wDelay = 0x7FFF; wDelay--; )
-		log_d("vRadio_Init");
-		delay(100);
+		for (wDelay = 0x7FFF; wDelay--; )
+		_info("si4362_vRadio_Init");
+		//HBL250425 delay(100);
 		/* Power Up the radio chip */
-		vRadio_PowerUp();
+		si4362_vRadio_PowerUp();
 	}
 	return;
 	// Read ITs, clear pending ones
@@ -108,16 +100,16 @@ void vRadio_Init(void)
  *  @note
  *
  */
-U8 bRadio_Check_Tx_RX()
+uint8_t si4362_bRadio_Check_Tx_RX()
 {
-	U8 rtn_u8;
+	uint8_t rtn_u8;
 	rtn_u8=0;
 	//HBL if (radio_hal_NirqLevel()==LOW)
 	{
 		/* Read ITs, clear pending ones */
 		si446x_get_int_status(0u, 0u, 0u);
 		rtn_u8=Si446xCmd.GET_INT_STATUS.PH_PEND;
-		log_d("PH_PEND=%#01x - MODEM_PEND=%#01x - CHIP_PEND=%#01x",Si446xCmd.GET_INT_STATUS.PH_PEND,Si446xCmd.GET_INT_STATUS.MODEM_PEND,Si446xCmd.GET_INT_STATUS.CHIP_PEND);
+		_info("PH_PEND=%#01x - MODEM_PEND=%#01x - CHIP_PEND=%#01x",Si446xCmd.GET_INT_STATUS.PH_PEND,Si446xCmd.GET_INT_STATUS.MODEM_PEND,Si446xCmd.GET_INT_STATUS.CHIP_PEND);
 
 		/*
 		 * ***********************
@@ -130,7 +122,7 @@ U8 bRadio_Check_Tx_RX()
 		 */
 		if (Si446xCmd.GET_INT_STATUS.CHIP_PEND & SI446X_CMD_GET_CHIP_STATUS_REP_CHIP_PEND_CMD_ERROR_PEND_BIT)
 		{
-			log_d("CHIP_PEND_CMD_ERROR");
+			_info("CHIP_PEND_CMD_ERROR");
 			/* State change to */
 			si446x_change_state(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_SLEEP);
 
@@ -152,12 +144,12 @@ U8 bRadio_Check_Tx_RX()
 		 */
 		if (Si446xCmd.GET_INT_STATUS.MODEM_PEND & SI446X_CMD_GET_MODEM_STATUS_REP_MODEM_STATUS_PREAMBLE_DETECT_BIT)
 		{
-			log_d("MODEM_STATUS_PREAMBLE_DETECT");
+			_info("MODEM_STATUS_PREAMBLE_DETECT");
 		}
 
 		if (Si446xCmd.GET_INT_STATUS.MODEM_PEND & SI446X_CMD_GET_MODEM_STATUS_REP_MODEM_STATUS_INVALID_PREAMBLE_BIT)
 		{
-			log_d("MODEM_STATUS_INVALID_PREAMBLE");
+			_info("MODEM_STATUS_INVALID_PREAMBLE");
 		}
 
 		/*
@@ -165,12 +157,12 @@ U8 bRadio_Check_Tx_RX()
 		 */
 		if (Si446xCmd.GET_INT_STATUS.MODEM_PEND & SI446X_CMD_GET_MODEM_STATUS_REP_MODEM_STATUS_SYNC_DETECT_BIT)
 		{
-			log_d("MODEM_STATUS_SYNC_DETECT");
+			_info("MODEM_STATUS_SYNC_DETECT");
 		}
 
 		if (Si446xCmd.GET_INT_STATUS.MODEM_PEND & SI446X_CMD_GET_MODEM_STATUS_REP_MODEM_STATUS_INVALID_SYNC_BIT)
 		{
-			log_d("MODEM_STATUS_INVALID_SYNC");
+			_info("MODEM_STATUS_INVALID_SYNC");
 		}
 
 		/*
@@ -184,7 +176,7 @@ U8 bRadio_Check_Tx_RX()
 		 */
 		if (Si446xCmd.GET_INT_STATUS.PH_PEND & SI446X_CMD_GET_INT_STATUS_REP_PH_STATUS_CRC_ERROR_BIT)
 		{
-			log_d("PH_STATUS_CRC_ERROR");
+			_info("PH_STATUS_CRC_ERROR");
 			/* Reset FIFO */
 			si446x_fifo_info(SI446X_CMD_FIFO_INFO_ARG_FIFO_RX_BIT);
 		}
@@ -194,7 +186,7 @@ U8 bRadio_Check_Tx_RX()
 		 */
 		if(Si446xCmd.GET_INT_STATUS.PH_PEND & SI446X_CMD_GET_INT_STATUS_REP_PH_PEND_PACKET_SENT_PEND_BIT)
 		{
-			log_d("PH_PEND_PACKET_SENT");
+			_info("PH_PEND_PACKET_SENT");
 		}
 
 		/*
@@ -202,13 +194,13 @@ U8 bRadio_Check_Tx_RX()
 		 */
 		if(Si446xCmd.GET_INT_STATUS.PH_PEND & SI446X_CMD_GET_INT_STATUS_REP_PH_PEND_PACKET_RX_PEND_BIT)
 		{
-			log_d("PH_PEND_PACKET_RX");
+			_info("PH_PEND_PACKET_RX");
 			/* Packet RX */
 
 			/* Get payload length */
 			si446x_fifo_info(0x00);
 
-			log_d("RX_FIFO_COUNT: %d",Si446xCmd.FIFO_INFO.RX_FIFO_COUNT);
+			_info("RX_FIFO_COUNT: %d",Si446xCmd.FIFO_INFO.RX_FIFO_COUNT);
 
 			//HBL si446x_read_rx_fifo(Si446xCmd.FIFO_INFO.RX_FIFO_COUNT,&customRadioPacket[0]);
 		}
@@ -225,7 +217,7 @@ U8 bRadio_Check_Tx_RX()
  *  @note
  *
  */
-void vRadio_StartRX(U8 channel, U8 packetLenght )
+void si4362_vRadio_StartRX(uint8_t channel, uint8_t packetLenght )
 {
 	// Read ITs, clear pending ones
 	si446x_get_int_status(0u, 0u, 0u);
@@ -248,7 +240,7 @@ void vRadio_StartRX(U8 channel, U8 packetLenght )
  *  @note
  *
  */
-void vRadio_StartTx_Variable_Packet(U8 channel, U8 *pioRadioPacket, U8 length)
+void si4362_vRadio_StartTx_Variable_Packet(uint8_t channel, uint8_t *pioRadioPacket, uint8_t length)
 {
 
 	/* Leave RX state */

@@ -541,6 +541,13 @@ config STMPE811_REGDEBUG
 
 endif # INPUT_STMPE811
 
+config INPUT_M5TOUGH_CHSC6540
+	bool "Enable M5TOUGH CHSC6540 touch screen"
+	default n
+	select INPUT_TOUCHSCREEN
+	---help---
+		Enable M5TOUGH CHSC6540 touch screen
+		
 config INPUT_CYPRESS_MBR3108
 	bool "Enable Cypress MBR3108 CapSense driver"
 	default n

@@ -179,7 +179,7 @@
  * BGR:         0/1 Depending on endian mode of the mcu?
  * MH:          0
  */
-
+/*
 #define ILI9341_MADCTL_PORTRAIT_MY      0
 #define ILI9341_MADCTL_PORTRAIT_MX      ILI9341_MEMORY_ACCESS_CONTROL_MX
 #define ILI9341_MADCTL_PORTRAIT_MV      0
@@ -190,13 +190,33 @@
 #  define ILI9341_MADCTL_PORTRAIT_BGR   ILI9341_MEMORY_ACCESS_CONTROL_BGR
 #endif
 #define ILI9341_MADCTL_PORTRAIT_MH      0
+*/
 
+
+/*
+ * HBL ILI9342
+ * cf #define ILI9341_MEMORY_ACCESS_CONTROL          0x36
+ * lvgldemo wheel
+ * */
+
+/*
 #define ILI9341_MADCTL_PORTRAIT_PARAM1  (ILI9341_MADCTL_PORTRAIT_MY | \
                                         ILI9341_MADCTL_PORTRAIT_MX | \
                                         ILI9341_MADCTL_PORTRAIT_MV | \
                                         ILI9341_MADCTL_PORTRAIT_ML | \
                                         ILI9341_MADCTL_PORTRAIT_BGR | \
                                         ILI9341_MADCTL_PORTRAIT_MH)
+   */
+
+/*
+ * HBL
+ */
+#define ILI9341_MADCTL_PORTRAIT_PARAM1 ILI9341_MEMORY_ACCESS_CONTROL_ML|\
+	ILI9341_MEMORY_ACCESS_CONTROL_MH|ILI9341_MEMORY_ACCESS_CONTROL_BGR
+
+
+
+
 /* RLandscape:  01100000 / 01101000 / h68
  *
  * MY:          0
@@ -284,6 +304,18 @@
 
 #define ILI9341_PIXSET_18BITMCU_PARAM1  (ILI9341_PIXSET_18BITDPI | \
                                         ILI9341_PIXSET_18BITDBI)
+
+/* General fix display resolution */
+/*
+#define ILI9341_XRES           240
+#define ILI9341_YRES           320
+*/
+
+/*HBL ILI9342 */
+
+#define ILI9341_XRES           320
+#define ILI9341_YRES           240
+
 
 /* Validate configuration */
 

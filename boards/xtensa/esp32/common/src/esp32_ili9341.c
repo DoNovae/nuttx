@@ -44,6 +44,8 @@
 #include "esp32_spi.h"
 #include "hardware/esp32_gpio_sigmap.h"
 
+#include <nuttx/i2c/i2c_master.h>
+
 /****************************************************************************
  * Preprocessor Definitions
  ****************************************************************************/
@@ -206,7 +208,7 @@ static void esp32_ili93414ws_deselect(struct ili9341_lcd_s *lcd)
  *   OK - On Success
  *
  ****************************************************************************/
-
+/*
 static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
 		int level)
 {

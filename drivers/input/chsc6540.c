@@ -27,10 +27,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <poll.h>
 #include <assert.h>
 #include <errno.h>
-#include <debug.h>
+#include <debug.h> /* include/debug.h*/ 
 
 #include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
@@ -46,23 +45,15 @@
  * Pre-Processor Definitions
  ****************************************************************************/
 
-
-#ifdef CONFIG_INPUT_CHSC6540_DEBUG
-#  define chsc6540_dbg(x, ...)   _info(x, ##__VA_ARGS__)
-#else
-#  define chsc6540_dbg(x, ...)   iinfo(x, ##__VA_ARGS__)
-#endif
-
-#define CHSC6540_NPOLLWAITERS 10
-
 #define CHSC6540_REG_TOUCHDATA 0x02
 #define CHSC6540_REG_CHIPID    0xA7
 #define CHSC6540_I2C_RETRIES   2
 
-#define CHSC6540_EVENT_DOWN   0
-#define CHSC6540_EVENT_UP   1
+#define CHSC6540_EVENT_DOWN      0
+#define CHSC6540_EVENT_UP        1
 #define CHSC6540_EVENT_CONTACT   2
-#define CHSC6540_EVENT_NONE   3
+#define CHSC6540_EVENT_NONE      3
+
 
 /****************************************************************************
  * Private Types
@@ -74,12 +65,8 @@ struct chsc6540_dev_s
 	struct i2c_master_s *i2c;
 	uint8_t addr;
 
-	/* Configuration for device. */
-	sem_t devsem;
-	uint8_t cref;
-	bool int_pending;
-
-	struct pollfd *fds[CHSC6540_NPOLLWAITERS];
+	struct touch_lowerhalf_s lower;
+	char buffer[SIZEOF_TOUCH_SAMPLE_S(2)];
 };
 
 /* Last event, last ID and last valid touch coordinates */
@@ -89,33 +76,22 @@ static uint8_t  last_id    = 0xff;
 static uint16_t last_x     = 0xffff;
 static uint16_t last_y     = 0xffff;
 
+
+
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
-static int chsc6540_open(FAR struct file *filep);
-static int chsc6540_close(FAR struct file *filep);
-static ssize_t chsc6540_read(FAR struct file *filep, FAR char *buffer,size_t buflen);
-//static ssize_t chsc6540_write(FAR struct file *filep, FAR const char *buffer,size_t buflen);
-static int chsc6540_poll(FAR struct file *filep, FAR struct pollfd *fds,bool setup);
+static int chsc6540_i2c_read(FAR struct chsc6540_dev_s *dev, uint8_t reg, uint8_t *buf, size_t buflen);
+static int chsc6540_get_touch_data(FAR struct chsc6540_dev_s *dev, FAR void *buf);
+static int chsc6540_isr_handler(int irq,FAR void *context, FAR void *arg);
+
+
+
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-static const struct file_operations g_chsc6540_fileops =
-{
-		chsc6540_open,   /* open */
-		chsc6540_close,  /* close */
-		chsc6540_read,   /* read */
-		//chsc6540_write,  /* write */
-		NULL, /* write */
-		NULL,           /* seek */
-		NULL,           /* ioctl */
-		NULL,           /* mmap */
-		NULL,           /* truncate */
-		chsc6540_poll    /* poll */
-};
 
 
 /****************************************************************************
@@ -130,42 +106,44 @@ static const struct file_operations g_chsc6540_fileops =
  *
  ****************************************************************************/
 
-static int chsc6540_i2c_read(FAR struct chsc6540_dev_s *dev, uint8_t reg, uint8_t *buf, size_t buflen)
+static int chsc6540_i2c_read(FAR struct chsc6540_dev_s *dev,uint8_t reg,uint8_t *buf,size_t buflen)
 {
-	//int ret = -EIO;
 	int ret = 0;
 	int retries;
 	struct i2c_msg_s msgv[2] =
 	{
-			{
-					.frequency = CHSC6540_I2C_FREQ,
-					.addr      = dev->addr,
-					.flags     = 0,
-					.buffer    = &reg,
-					.length    = 1
-			},
-			{
-					.frequency = CHSC6540_I2C_FREQ,
-					.addr      = dev->addr,
-					.flags     = I2C_M_READ,
-					.buffer    = buf,
-					.length    = buflen
-			}
+		{
+			.frequency = CHSC6540_I2C_FREQ,
+			.addr      = dev->addr,
+			.flags     = 0,
+			.buffer    = &reg,
+			.length    = 1
+		},
+		{
+			.frequency = CHSC6540_I2C_FREQ,
+			.addr      = dev->addr,
+			.flags     = I2C_M_READ,
+			.buffer    = buf,
+			.length    = buflen
+		}
 	};
-	iinfo("\n");
-	for (retries = 0; retries < CHSC6540_I2C_RETRIES; retries++)
+	for (retries=0;retries<CHSC6540_I2C_RETRIES;retries++)
 	{
+		iwarn("I2C_TRANSFER\n");
 		ret=I2C_TRANSFER(dev->i2c,msgv,2);
-		if (ret == -ENXIO) {
+		if (ret == -ENXIO) 
+		{
 			/* -ENXIO is returned when getting NACK from response.
 			 * Keep trying.
 			 */
 			iwarn("I2C NACK\n");
 			continue;
-		} else if (ret >= 0) {
+		} else if (ret >= 0) 
+		{
 			/* Success! */
 			return 0;
-		} else {
+		} else 
+		{
 			/* Some other error. Try to reset I2C bus and keep trying. */
 			iwarn("I2C error\n");
 #ifdef CONFIG_I2C_RESET
@@ -188,8 +166,6 @@ static int chsc6540_i2c_read(FAR struct chsc6540_dev_s *dev, uint8_t reg, uint8_
 	return ret;
 }
 
-
-ssize_t chsc6540_write(FAR struct file *filep, FAR const char *buffer,size_t buflen);
 
 
 /****************************************************************************
@@ -345,12 +321,13 @@ static int chsc6540_get_touch_data(FAR struct chsc6540_dev_s *dev, FAR void *buf
 	}
 
 	/* Return the touch data. */
+	data->npoints=1;
 	memcpy(buf,data,SIZEOF_TOUCH_SAMPLE_S(1));
 
-	iinfo("  id:      %d\n",   data->point[0].id);
-	iinfo("  flags:   %02x\n", data->point[0].flags);
-	iinfo("  x:       %d\n",   data->point[0].x);
-	iinfo("  y:       %d\n",   data->point[0].y);
+	iwarn("  id:      %d\n",   data->point[0].id);
+	iwarn("  flags:   %02x\n", data->point[0].flags);
+	iwarn("  x:       %d\n",   data->point[0].x);
+	iwarn("  y:       %d\n",   data->point[0].y);
 
 	return sizeof(data);
 }
@@ -358,234 +335,6 @@ static int chsc6540_get_touch_data(FAR struct chsc6540_dev_s *dev, FAR void *buf
 
 
 
-/****************************************************************************
- * Name: chsc6540_read
- *
- * Description:
- *   Read Touch Data from the device.
- *
- ****************************************************************************/
-
-static ssize_t chsc6540_read(FAR struct file *filep, FAR char *buffer,size_t buflen)
-{
-	FAR struct inode *inode;
-	FAR struct chsc6540_dev_s *priv;
-	size_t outlen;
-	irqstate_t flags;
-	int ret;
-
-	DEBUGASSERT(buffer);
-	DEBUGASSERT(buflen>0);
-	DEBUGASSERT(filep);
-	inode = filep->f_inode;
-
-	DEBUGASSERT(inode && inode->i_private);
-	priv = inode->i_private;
-
-	iinfo("\n");
-
-	/* Wait for semaphore to prevent concurrent reads */
-	ret = nxsem_wait(&priv->devsem);
-	if (ret < 0)
-	{
-		iwarn("Semaphore failed\n");
-		return ret;
-	}
-
-	ret = -EINVAL;
-
-	/* Read the touch data, only if screen has been touched or if we're waiting for touch up */
-	//outlen = sizeof(struct touch_sample_s);
-	outlen=CHSC6540_OULEN;
-	if ((priv->int_pending||last_event==0)&&buflen>=outlen)
-	{
-		ret=chsc6540_get_touch_data(priv,buffer);
-	}
-
-	/* Clear pending flag with critical section */
-	flags = enter_critical_section();
-	priv->int_pending = false;
-	leave_critical_section(flags);
-
-	/* Release semaphore and allow next read */
-	nxsem_post(&priv->devsem);
-	return ret < 0 ? ret : outlen;
-}
-
-/****************************************************************************
- * Name: chsc6540_open
- *
- * Description:
- *   Open the device.
- *
- ****************************************************************************/
-
-static int chsc6540_open(FAR struct file *filep)
-{
-	FAR struct inode *inode;
-	FAR struct chsc6540_dev_s *priv;
-	unsigned int use_count;
-	int ret;
-
-	iinfo("\n");
-	DEBUGASSERT(filep);
-	inode = filep->f_inode;
-
-	DEBUGASSERT(inode && inode->i_private);
-	priv=inode->i_private;
-
-	/* Wait for semaphore */
-	ret=nxsem_wait_uninterruptible(&priv->devsem);
-	if (ret < 0)
-	{
-		ierr("Semaphore failed\n");
-		return ret;
-	}
-
-	use_count=priv->cref + 1;
-	DEBUGASSERT(use_count < UINT8_MAX && use_count > priv->cref);
-
-	priv->cref=use_count;
-	ret=0;
-
-	/* Release semaphore */
-	nxsem_post(&priv->devsem);
-	return ret;
-}
-
-/****************************************************************************
- * Name: chsc6540_close
- *
- * Description:
- *   Close the device.
- *
- ****************************************************************************/
-
-static int chsc6540_close(FAR struct file *filep)
-{
-	FAR struct inode *inode;
-	FAR struct chsc6540_dev_s *priv;
-	int use_count;
-	int ret;
-
-	iinfo("\n");
-	DEBUGASSERT(filep);
-	inode = filep->f_inode;
-
-	DEBUGASSERT(inode && inode->i_private);
-	priv = inode->i_private;
-
-	ret = nxsem_wait_uninterruptible(&priv->devsem);
-	if (ret < 0)
-	{
-		return ret;
-	}
-
-	use_count = priv->cref - 1;
-	if (use_count == 0)
-	{
-		priv->cref = use_count;
-	}
-	else
-	{
-		DEBUGASSERT(use_count > 0);
-
-		priv->cref = use_count;
-	}
-
-	nxsem_post(&priv->devsem);
-
-	return 0;
-}
-
-/****************************************************************************
- * Name: chsc6540_poll
- *
- * Description:
- *   Poll for updates.
- *
- ****************************************************************************/
-
-static int chsc6540_poll(FAR struct file *filep, FAR struct pollfd *fds,
-		bool setup)
-{
-	FAR struct chsc6540_dev_s *priv;
-	FAR struct inode *inode;
-	bool pending;
-	int ret = 0;
-	int i;
-
-	iinfo("\n");
-	DEBUGASSERT(filep && fds);
-	inode = filep->f_inode;
-
-	DEBUGASSERT(inode && inode->i_private);
-	priv=(FAR struct chsc6540_dev_s *)inode->i_private;
-
-	ret=nxsem_wait(&priv->devsem);
-	if (ret < 0)
-	{
-		return ret;
-	}
-
-	if (setup)
-	{
-		/* Ignore waits that do not include POLLIN */
-
-		if ((fds->events & POLLIN) == 0)
-		{
-			ret = -EDEADLK;
-			goto out;
-		}
-
-		/* This is a request to set up the poll.  Find an available slot for
-		 * the poll structure reference.
-		 */
-		for (i=0;i<CHSC6540_NPOLLWAITERS;i++)
-		{
-			/* Find an available slot */
-
-			if (!priv->fds[i])
-			{
-				/* Bind the poll structure and this slot */
-
-				priv->fds[i] = fds;
-				fds->priv = &priv->fds[i];
-				break;
-			}
-		}
-
-		if (i>=CHSC6540_NPOLLWAITERS)
-		{
-			fds->priv = NULL;
-			ret = -EBUSY;
-		}
-		else
-		{
-			pending=priv->int_pending;
-			if (pending)
-			{
-				poll_notify(priv->fds,CHSC6540_NPOLLWAITERS,POLLIN);
-			}
-		}
-	}
-	else if (fds->priv)
-	{
-		/* This is a request to tear down the poll. */
-
-		FAR struct pollfd **slot=(FAR struct pollfd **)fds->priv;
-		DEBUGASSERT(slot!=NULL);
-
-		/* Remove all memory of the poll setup */
-
-		*slot=NULL;
-		fds->priv=NULL;
-	}
-
-	out:
-	nxsem_post(&priv->devsem);
-	return ret;
-}
 
 /****************************************************************************
  * Name: chsc6540_isr_handler
@@ -597,17 +346,15 @@ static int chsc6540_poll(FAR struct file *filep, FAR struct pollfd *fds,
 static int chsc6540_isr_handler(int irq,FAR void *context, FAR void *arg)
 {
 	FAR struct chsc6540_dev_s *priv=(FAR struct chsc6540_dev_s *)arg;
-	irqstate_t flags;
 
-	DEBUGASSERT(priv!=NULL);
+	chsc6540_get_touch_data(priv,priv->buffer);
+	//	touch_event(priv->lower.priv,(FAR struct touch_sample_s *)priv->buffer);
 
-	flags = enter_critical_section();
-	priv->int_pending=true;
-	leave_critical_section(flags);
-
-	poll_notify(priv->fds,CHSC6540_NPOLLWAITERS,POLLIN);
 	return 0;
 }
+
+
+
 
 /****************************************************************************
  * Public Functions
@@ -628,38 +375,38 @@ static int chsc6540_isr_handler(int irq,FAR void *context, FAR void *arg)
 
 int chsc6540_register(FAR const char *devpath,FAR struct i2c_master_s *i2c_dev,uint8_t i2c_devaddr,int16_t irq_i16)
 {
-	struct chsc6540_dev_s *priv;
+	struct chsc6540_dev_s *priv;// Static create with kmm_zalloc
 	int ret = 0;
-	//etx_gpio gpio;
 
 	/*
 	 * Allocate device private structure.
 	 * Create once in heap, never destructed.
 	 * Parameter of the handler
 	 */
-	iinfo("path=%s, addr=%d\n", devpath, i2c_devaddr);
+	iinfo("path=%s, addr=%d\n",devpath,i2c_devaddr);
 	priv=kmm_zalloc(sizeof(struct chsc6540_dev_s));
 	if (!priv)
 	{
 		ierr("Memory allocation failed\n");
 		return -ENOMEM;
 	}
-
-	/* Setup device structure. */
-	priv->addr=i2c_devaddr;
-	priv->i2c=i2c_dev;
-
-	nxsem_init(&priv->devsem, 0, 1);
-
-	ret=register_driver(devpath,&g_chsc6540_fileops,0666,priv);
-	if (ret<0)
+	
+	if (i2c_dev==NULL)
 	{
-		kmm_free(priv);
-		ierr("Driver registration failed\n");
-		return ret;
+		ierr("ERROR: i2c_dev NULL\n");
+		return -ENOMEM;
 	}
 
-	/* Attach GPIO interrupt handler. */
+	/* Setup device structure. */
+	memset((void*)priv,0,sizeof(struct chsc6540_dev_s));
+	priv->addr=i2c_devaddr;
+	priv->i2c=i2c_dev;
+	priv->lower.maxpoint = CHSC6540_MAXPOINT; /* Maximal point supported by the touchscreen */
+
+	/* 
+	 * Attach GPIO interrupt handler. 
+	 *    priv : will be the argument for handler
+	 */
 	ret=irq_attach(irq_i16,chsc6540_isr_handler,priv);
 	if (ret<0)
 	{
@@ -668,6 +415,12 @@ int chsc6540_register(FAR const char *devpath,FAR struct i2c_master_s *i2c_dev,u
 		return -EIO;
 	}
 
+	/*
+	 *   lower     - A pointer of lower half instance.
+	 *   path      - The path of touchscreen device. such as "/dev/input0"
+	 *   nums      - Number of the touch points structure.
+	 */
+	touch_register(&(priv->lower),devpath,CHSC6540_MAXPOINT);
 
 	iinfo("Driver registered\n");
 	return 0;

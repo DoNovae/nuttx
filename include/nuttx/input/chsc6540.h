@@ -33,7 +33,10 @@
 #define CHSC6540_I2C_FREQ 400000
 #define CHSC6540_W 320
 #define CHSC6540_H 280
-#define CHSC6540_OULEN SIZEOF_TOUCH_SAMPLE_S(1)
+#define CHSC6540_MAXPOINT 1
+#define CHSC6540_OULEN SIZEOF_TOUCH_SAMPLE_S(CHSC6540_MAXPOINT)
+#define CHS6540_TOUCH_POINT_NB 2
+#define CHSC6540_PATH "/dev/input0"
 
 
 /****************************************************************************
@@ -44,8 +47,21 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-/* Device registration */
+/****************************************************************************
+ * Name: chsc6540_initialize
+ *
+ * Description:
+ *   Initialized the chsc6540 touchscreen device
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Zero is returned on success. Otherwise, a negated errno value is
+ *   returned to indicate the nature of the failure.
+ *
+ ****************************************************************************/
+int chsc6540_initialize(void);
 
-int chsc6540_register(FAR const char *devpath,FAR struct i2c_master_s *i2c_dev,uint8_t i2c_devaddr, int16_t irq_i16);
 
 #endif /* __INCLUDE_NUTTX_INPUT_M5TOUGH_CHSC6540_H */

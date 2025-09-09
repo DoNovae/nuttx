@@ -482,7 +482,7 @@ int board_lcd_initialize(void)
 		/*
 		 * I2C
 		 */
-		i2c = esp32_i2cbus_initialize(ILI9341_I2C_NUM);
+		i2c=esp32_i2cbus_initialize(ILI9341_I2C_NUM);
 		if (i2c == NULL)
 		{
 			lcderr("ERROR: Failed to initialize I2C%d\n",ILI9341_I2C_NUM);

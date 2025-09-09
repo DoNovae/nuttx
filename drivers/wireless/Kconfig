@@ -18,7 +18,7 @@ menuconfig DRIVERS_GENERICRADIO
 	---help---
 		This directory holds implementations of generic radio device drivers.
 		
-source drivers/wireless/generic/Kconfig
+#source drivers/wireless/generic/Kconfig
 
 config WL_CC1101
 	bool "CC1101 RF transceiver support"
